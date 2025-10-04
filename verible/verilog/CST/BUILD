@@ -884,6 +884,7 @@ cc_library(
         "//verible/common/text:symbol",
         "//verible/common/text:token-info",
         "//verible/common/text:token-info-json",
+        "//verible/common/text:tree-utils",
         "//verible/common/text:visitors",
         "//verible/common/util:value-saver",
         "//verible/verilog/parser:verilog-token",

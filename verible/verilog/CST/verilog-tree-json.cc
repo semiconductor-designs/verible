@@ -24,6 +24,7 @@
 #include "verible/common/text/symbol.h"
 #include "verible/common/text/token-info-json.h"
 #include "verible/common/text/token-info.h"
+#include "verible/common/text/tree-utils.h"
 #include "verible/common/text/visitors.h"
 #include "verible/common/util/value-saver.h"
 #include "verible/verilog/CST/verilog-nonterminals.h"  // for NodeEnumToString
@@ -80,6 +81,13 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeLeaf &leaf) {
 void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
   *value_ = json::object();
   (*value_)["tag"] = NodeEnumToString(static_cast<NodeEnum>(node.Tag().tag));
+  
+  // Extract and include the full source text for this node
+  std::string_view node_text = verible::StringSpanOfSymbol(node);
+  if (!node_text.empty()) {
+    (*value_)["text"] = std::string(node_text);
+  }
+  
   json &children = (*value_)["children"] = json::array();
 
   {
