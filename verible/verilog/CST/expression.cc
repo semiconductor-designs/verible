@@ -28,6 +28,7 @@
 #include "verible/verilog/CST/type.h"
 #include "verible/verilog/CST/verilog-matchers.h"
 #include "verible/verilog/CST/verilog-nonterminals.h"
+#include "verible/verilog/parser/verilog-token-classifications.h"
 #include "verible/verilog/parser/verilog-token-enum.h"
 
 namespace verilog {
@@ -210,6 +211,72 @@ const verible::SyntaxTreeNode *GetIncrementDecrementOperand(
   bool is_post = node.front().get()->Kind() == SymbolKind::kNode;
   return verible::GetSubtreeAsNode(
       expr, NodeEnum::kIncrementDecrementExpression, is_post ? 0 : 1);
+}
+
+std::string ExtractIdentifierFromExpression(const Symbol &expr) {
+  // Unwrap any kExpression wrapper nodes
+  const Symbol *unwrapped = UnwrapExpression(expr);
+  if (!unwrapped) return "";
+
+  // Descend through singleton nodes (nodes with only one child)
+  unwrapped = verible::DescendThroughSingletons(*unwrapped);
+  if (!unwrapped) return "";
+
+  // Handle direct identifier leaves first
+  if (unwrapped->Kind() == SymbolKind::kLeaf) {
+    const auto &leaf = down_cast<const SyntaxTreeLeaf &>(*unwrapped);
+    if (IsIdentifierLike(verilog_tokentype(leaf.Tag().tag))) {
+      return std::string(leaf.get().text());
+    }
+    return "";  // It's a leaf but not an identifier
+  }
+
+  // Must be a node
+  const auto &node = down_cast<const SyntaxTreeNode &>(*unwrapped);
+  NodeEnum tag = NodeEnum(node.Tag().tag);
+  
+  if (tag == NodeEnum::kReference) {
+    // Use existing utility to check for simple identifier
+    const verible::TokenInfo *simple_id = ReferenceIsSimpleIdentifier(*unwrapped);
+    if (simple_id) {
+      return std::string(simple_id->text());
+    }
+    // If ReferenceIsSimpleIdentifier returned null, try manual traversal
+    // Reference -> LocalRoot -> UnqualifiedId -> SymbolIdentifier
+    if (node.front()) {
+      const Symbol *local_root = node.front().get();
+      if (local_root && local_root->Kind() == SymbolKind::kNode) {
+        const auto &lr_node = down_cast<const SyntaxTreeNode &>(*local_root);
+        if (NodeEnum(lr_node.Tag().tag) == NodeEnum::kLocalRoot && lr_node.front()) {
+          const Symbol *unqual_id = lr_node.front().get();
+          if (unqual_id) {
+            // Descend through singletons again
+            const Symbol *id_symbol = verible::DescendThroughSingletons(*unqual_id);
+            if (id_symbol && id_symbol->Kind() == SymbolKind::kLeaf) {
+              const auto &id_leaf = down_cast<const SyntaxTreeLeaf &>(*id_symbol);
+              if (IsIdentifierLike(verilog_tokentype(id_leaf.Tag().tag))) {
+                return std::string(id_leaf.get().text());
+              }
+            }
+          }
+        }
+      }
+    }
+  } else if (tag == NodeEnum::kUnqualifiedId || tag == NodeEnum::kPortIdentifier) {
+    // Direct unqualified ID - get first child
+    if (node.front()) {
+      const Symbol *id_symbol = node.front().get();
+      if (id_symbol && id_symbol->Kind() == SymbolKind::kLeaf) {
+        const auto &id_leaf = down_cast<const SyntaxTreeLeaf &>(*id_symbol);
+        if (IsIdentifierLike(verilog_tokentype(id_leaf.Tag().tag))) {
+          return std::string(id_leaf.get().text());
+        }
+      }
+    }
+  }
+
+  // Could not extract simple identifier (complex expression or literal)
+  return "";
 }
 
 }  // namespace verilog

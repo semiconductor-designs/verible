@@ -40,12 +40,15 @@ TEST(VerilogTreeJsonTest, GeneratesGoodJsonTree) {
 
   const json expected_json = json::parse(R"({
     "tag": "kDescriptionList",
+    "text": "module foo;\nendmodule",
     "children": [
       {
         "tag": "kModuleDeclaration",
+        "text": "module foo;\nendmodule",
         "children": [
          {
            "tag": "kModuleHeader",
+           "text": "module foo;",
            "children": [
              { "start": 0, "end": 6, "tag": "module" },
              null,

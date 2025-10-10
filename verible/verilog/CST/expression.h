@@ -126,6 +126,12 @@ const verible::SyntaxTreeLeaf *GetIncrementDecrementOperator(
 const verible::SyntaxTreeNode *GetIncrementDecrementOperand(
     const verible::Symbol &expr);
 
+// Extracts identifier string from an expression node.
+// Returns the identifier text if the expression is a simple reference,
+// or empty string if it's a complex expression or literal.
+// This is useful for metadata generation in JSON export.
+std::string ExtractIdentifierFromExpression(const verible::Symbol &);
+
 }  // namespace verilog
 
 #endif  // VERIBLE_VERILOG_CST_EXPRESSION_H_

@@ -878,6 +878,8 @@ cc_library(
     srcs = ["verilog-tree-json.cc"],
     hdrs = ["verilog-tree-json.h"],
     deps = [
+        ":expression",
+        ":functions",
         ":verilog-nonterminals",
         "//verible/common/text:concrete-syntax-leaf",
         "//verible/common/text:concrete-syntax-tree",
@@ -886,6 +888,7 @@ cc_library(
         "//verible/common/text:token-info-json",
         "//verible/common/text:tree-utils",
         "//verible/common/text:visitors",
+        "//verible/common/util:casts",
         "//verible/common/util:value-saver",
         "//verible/verilog/parser:verilog-token",
         "//verible/verilog/parser:verilog-token-classifications",
@@ -937,6 +940,21 @@ cc_test(
     srcs = ["verilog-tree-json_test.cc"],
     deps = [
         ":verilog-tree-json",
+        "//verible/common/text:symbol",
+        "//verible/common/util:logging",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+        "@nlohmann_json//:singleheader-json",
+    ],
+)
+
+cc_test(
+    name = "verilog-tree-json-metadata_test",
+    srcs = ["verilog-tree-json-metadata_test.cc"],
+    deps = [
+        ":verilog-tree-json",
+        ":verilog-nonterminals",
         "//verible/common/text:symbol",
         "//verible/common/util:logging",
         "//verible/verilog/analysis:verilog-analyzer",
