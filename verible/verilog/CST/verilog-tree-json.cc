@@ -32,6 +32,7 @@
 #include "verible/common/util/value-saver.h"
 #include "verible/verilog/CST/expression.h"  // for UnwrapExpression, ExtractIdentifierFromExpression
 #include "verible/verilog/CST/functions.h"  // for GetFunctionCallName
+#include "verible/verilog/CST/statement.h"  // for GetProceduralTimingControlFromAlways, etc.
 #include "verible/verilog/CST/verilog-nonterminals.h"  // for NodeEnumToString
 #include "verible/verilog/parser/verilog-token-classifications.h"
 #include "verible/verilog/parser/verilog-token-enum.h"
@@ -394,6 +395,266 @@ static void AddTernaryExpressionMetadata(json &node_json,
   node_json["metadata"] = metadata;
 }
 
+// Helper method: Add metadata for always blocks (behavioral semantics)
+static void AddAlwaysBlockMetadata(json &node_json,
+                                    const verible::SyntaxTreeNode &node) {
+  json metadata = json::object();
+  
+  // 1. Detect block type from keyword
+  std::string block_type = "always";  // default
+  if (node.size() > 0 && node[0]) {
+    if (node[0]->Kind() == verible::SymbolKind::kLeaf) {
+      const auto &keyword = verible::SymbolCastToLeaf(*node[0]);
+      verilog_tokentype token = static_cast<verilog_tokentype>(keyword.get().token_enum());
+      
+      if (token == TK_always_ff) block_type = "always_ff";
+      else if (token == TK_always_comb) block_type = "always_comb";
+      else if (token == TK_always_latch) block_type = "always_latch";
+    }
+  }
+  metadata["block_type"] = block_type;
+  
+  // 2. Extract sensitivity list and detect sequential/combinational
+  json sensitivity = json::object();
+  json signals = json::array();
+  bool is_sequential = false;
+  bool has_edge = false;
+  std::string clock_signal;
+  std::string clock_edge;
+  std::string reset_signal;
+  std::string reset_edge;
+  
+  // Get procedural timing control (event control)
+  const auto *timing_ctrl = GetProceduralTimingControlFromAlways(node);
+  if (timing_ctrl) {
+    const auto *event_ctrl = GetEventControlFromProceduralTimingControl(*timing_ctrl);
+    
+    if (event_ctrl && event_ctrl->Kind() == verible::SymbolKind::kNode) {
+      const auto &event_node = verible::down_cast<const verible::SyntaxTreeNode &>(*event_ctrl);
+      
+      // Check for '@*' or '@(*)' (implicit sensitivity)
+      bool found_star = false;
+      std::function<bool(const verible::Symbol&)> find_star;
+      find_star = [&](const verible::Symbol &sym) -> bool {
+        if (sym.Kind() == verible::SymbolKind::kLeaf) {
+          const auto &leaf = verible::down_cast<const verible::SyntaxTreeLeaf &>(sym);
+          if (leaf.get().text() == "*") {
+            found_star = true;
+            return true;
+          }
+        } else if (sym.Kind() == verible::SymbolKind::kNode) {
+          const auto &n = verible::down_cast<const verible::SyntaxTreeNode &>(sym);
+          for (const auto &child : n.children()) {
+            if (child && find_star(*child)) return true;
+          }
+        }
+        return false;
+      };
+      find_star(event_node);
+      
+      if (found_star) {
+        sensitivity["type"] = "implicit";
+      } else {
+        // Parse explicit sensitivity list
+        sensitivity["type"] = "explicit";
+        
+        // Traverse to find event expressions (posedge/negedge signals)
+        std::string pending_edge;  // Track edge keyword for next identifier
+        
+        std::function<void(const verible::Symbol&)> extract_events;
+        extract_events = [&](const verible::Symbol &sym) {
+          if (sym.Kind() == verible::SymbolKind::kLeaf) {
+            const auto &leaf = verible::down_cast<const verible::SyntaxTreeLeaf &>(sym);
+            verilog_tokentype token = static_cast<verilog_tokentype>(leaf.get().token_enum());
+            std::string text(leaf.get().text());
+            
+            if (token == TK_posedge || text == "posedge") {
+              pending_edge = "posedge";
+            } else if (token == TK_negedge || text == "negedge") {
+              pending_edge = "negedge";
+            } else if (verilog::IsIdentifierLike(token)) {
+              if (!pending_edge.empty()) {
+                // This is a signal with an edge
+                json signal = json::object();
+                signal["name"] = text;
+                signal["edge"] = pending_edge;
+                signals.push_back(signal);
+                
+                has_edge = true;
+                is_sequential = true;
+                
+                // First edge signal is clock
+                if (clock_signal.empty()) {
+                  clock_signal = text;
+                  clock_edge = pending_edge;
+                } else if (reset_signal.empty()) {
+                  // Second edge signal is async reset
+                  reset_signal = text;
+                  reset_edge = pending_edge;
+                }
+                
+                pending_edge.clear();  // Reset for next signal
+              } else {
+                // Level-sensitive signal (no edge keyword)
+                json signal = json::object();
+                signal["name"] = text;
+                signal["edge"] = "level";
+                signals.push_back(signal);
+              }
+            }
+          } else if (sym.Kind() == verible::SymbolKind::kNode) {
+            const auto &n = verible::down_cast<const verible::SyntaxTreeNode &>(sym);
+            for (const auto &child : n.children()) {
+              if (child) extract_events(*child);
+            }
+          }
+        };
+        
+        extract_events(event_node);
+        
+        if (has_edge) {
+          sensitivity["type"] = "edge";
+        }
+      }
+    }
+  } else {
+    // No event control (always_comb, always_latch without @)
+    sensitivity["type"] = "implicit";
+  }
+  
+  sensitivity["signals"] = signals;
+  metadata["sensitivity"] = sensitivity;
+  
+  // 3. Sequential vs. Combinational
+  metadata["is_sequential"] = is_sequential;
+  metadata["is_combinational"] = (block_type == "always_comb") || 
+                                  (!is_sequential && block_type != "always_latch");
+  
+  // 4. Clock info (if sequential)
+  if (is_sequential && !clock_signal.empty()) {
+    json clock_info = json::object();
+    clock_info["signal"] = clock_signal;
+    clock_info["edge"] = clock_edge;
+    metadata["clock_info"] = clock_info;
+  }
+  
+  // 5. Reset info (if async reset detected OR sync reset in body)
+  if (!reset_signal.empty()) {
+    // Async reset (from sensitivity list)
+    json reset_info = json::object();
+    reset_info["signal"] = reset_signal;
+    reset_info["type"] = "async";
+    reset_info["active"] = (reset_edge == "negedge") ? "low" : "high";
+    reset_info["edge"] = reset_edge;
+    metadata["reset_info"] = reset_info;
+  } else if (is_sequential) {
+    // Try to detect synchronous reset from first if-statement in body
+    std::string sync_reset_signal;
+    bool sync_reset_active_high = true;
+    
+    std::function<bool(const verible::Symbol&)> find_first_if;
+    find_first_if = [&](const verible::Symbol &sym) -> bool {
+      if (sym.Kind() == verible::SymbolKind::kNode) {
+        const auto &n = verible::down_cast<const verible::SyntaxTreeNode &>(sym);
+        NodeEnum tag = static_cast<NodeEnum>(n.Tag().tag);
+        
+        if (tag == NodeEnum::kIfClause || tag == NodeEnum::kIfHeader) {
+          // Found an if - try to extract the condition
+          // Look for identifier in condition
+          bool negation_seen = false;
+          std::function<void(const verible::Symbol&)> extract_reset_signal;
+          extract_reset_signal = [&](const verible::Symbol &s) {
+            if (s.Kind() == verible::SymbolKind::kLeaf) {
+              const auto &leaf = verible::down_cast<const verible::SyntaxTreeLeaf &>(s);
+              verilog_tokentype token = static_cast<verilog_tokentype>(leaf.get().token_enum());
+              std::string text(leaf.get().text());
+              
+              if (text == "!" || text == "~") {
+                // Negation found - next identifier will be active low
+                negation_seen = true;
+                sync_reset_active_high = false;
+              } else if (verilog::IsIdentifierLike(token) && sync_reset_signal.empty()) {
+                sync_reset_signal = text;
+                // Use negation_seen flag to determine active level
+                if (!negation_seen) {
+                  sync_reset_active_high = true;  // No negation = active high
+                }
+                // If negation_seen is true, sync_reset_active_high is already false
+              }
+            } else if (s.Kind() == verible::SymbolKind::kNode) {
+              const auto &sn = verible::down_cast<const verible::SyntaxTreeNode &>(s);
+              for (const auto &child : sn.children()) {
+                if (child) extract_reset_signal(*child);
+                if (!sync_reset_signal.empty()) break;  // Found it
+              }
+            }
+          };
+          
+          extract_reset_signal(n);
+          return true;  // Stop searching
+        }
+        
+        // Continue searching in children
+        for (const auto &child : n.children()) {
+          if (child && find_first_if(*child)) return true;
+        }
+      }
+      return false;
+    };
+    
+    find_first_if(node);
+    
+    if (!sync_reset_signal.empty()) {
+      json reset_info = json::object();
+      reset_info["signal"] = sync_reset_signal;
+      reset_info["type"] = "sync";
+      reset_info["active"] = sync_reset_active_high ? "high" : "low";
+      reset_info["edge"] = nullptr;
+      metadata["reset_info"] = reset_info;
+    }
+  }
+  
+  // 6. Assignment type (blocking vs. non-blocking)
+  int blocking_count = 0;
+  int nonblocking_count = 0;
+  
+  std::function<void(const verible::Symbol&)> count_assignments;
+  count_assignments = [&](const verible::Symbol &sym) {
+    if (sym.Kind() == verible::SymbolKind::kNode) {
+      const auto &n = verible::down_cast<const verible::SyntaxTreeNode &>(sym);
+      NodeEnum tag = static_cast<NodeEnum>(n.Tag().tag);
+      
+      if (tag == NodeEnum::kBlockingAssignmentStatement || 
+          tag == NodeEnum::kNetVariableAssignment) {
+        blocking_count++;
+      } else if (tag == NodeEnum::kNonblockingAssignmentStatement) {
+        nonblocking_count++;
+      }
+      
+      for (const auto &child : n.children()) {
+        if (child) count_assignments(*child);
+      }
+    }
+  };
+  
+  count_assignments(node);
+  
+  std::string assignment_type;
+  if (nonblocking_count > 0 && blocking_count == 0) {
+    assignment_type = "nonblocking";
+  } else if (blocking_count > 0 && nonblocking_count == 0) {
+    assignment_type = "blocking";
+  } else if (blocking_count > 0 && nonblocking_count > 0) {
+    assignment_type = "mixed";
+  } else {
+    // Default based on block type
+    assignment_type = (block_type == "always_ff") ? "nonblocking" : "blocking";
+  }
+  metadata["assignment_type"] = assignment_type;
+  
+  node_json["metadata"] = metadata;
+}
+
 class VerilogTreeToJsonConverter : public verible::SymbolVisitor {
  public:
   explicit VerilogTreeToJsonConverter(std::string_view base);
@@ -451,7 +712,7 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
     (*value_)["text"] = std::string(node_text);
   }
   
-  // Add metadata for supported expression types
+  // Add metadata for supported node types
   NodeEnum tag = static_cast<NodeEnum>(node.Tag().tag);
   if (tag == NodeEnum::kBinaryExpression) {
     AddBinaryExpressionMetadata(node, *value_);
@@ -463,6 +724,8 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
     AddFunctionCallMetadata(*value_, node);
   } else if (tag == NodeEnum::kSystemTFCall) {
     AddFunctionCallMetadata(*value_, node);  // System functions use same format
+  } else if (tag == NodeEnum::kAlwaysStatement) {
+    AddAlwaysBlockMetadata(*value_, node);  // Phase 4: Behavioral metadata
   }
   
   json &children = (*value_)["children"] = json::array();

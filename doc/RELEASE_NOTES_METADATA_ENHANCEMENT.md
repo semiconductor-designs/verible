@@ -1,11 +1,11 @@
 # Release Notes: JSON Metadata Enhancement
 
-**Version:** Verible `head` + Metadata Enhancement v1.0  
+**Version:** Verible `head` + Metadata Enhancement v2.0  
 **Base Version:** Verible master (commit `c1271a00`)  
-**Date:** October 10, 2024  
+**Date:** October 10, 2025  
 **Repository:** https://github.com/semiconductor-designs/verible  
-**Branch:** `feature/json-text-field-export`  
-**Enhancement Commits:** `58a747ee` (implementation), `ef825c17` (docs)
+**Branch:** `master`  
+**Enhancement:** Phase 1-4 Complete (Expression + Behavioral Metadata)
 
 ---
 
@@ -15,9 +15,9 @@ This release adds **semantic metadata** to Verible's JSON CST export, providing 
 
 ---
 
-## What's New
+## What's New in v2.0
 
-### 1. Expression Metadata
+### 1. Expression Metadata (Phase 1-3)
 
 All expression nodes now include a `metadata` field with high-level semantic information:
 
@@ -27,7 +27,18 @@ All expression nodes now include a `metadata` field with high-level semantic inf
 - **Operand types** (reference, literal, expression)
 - **Identifier extraction** for simple operands
 
-### 2. Supported Expression Types
+### 2. Behavioral Block Metadata (Phase 4) ⭐ NEW!
+
+All `always` block nodes (`kAlwaysStatement`) now include rich behavioral metadata:
+
+- **Block type** (`always_ff`, `always_comb`, `always_latch`, `always`)
+- **Sequential/combinational classification**
+- **Sensitivity list** (type, signals, edges)
+- **Clock detection** (signal, edge)
+- **Reset detection** (async/sync, active-high/low)
+- **Assignment type** (blocking, nonblocking, mixed)
+
+### 3. Supported Expression Types
 
 | Expression Type | Node Tag | Operations |
 |----------------|----------|------------|
@@ -37,13 +48,26 @@ All expression nodes now include a `metadata` field with high-level semantic inf
 | Function Call | `kFunctionCall` | User-defined functions |
 | System Function | `kSystemTFCall` | $clog2, $display, etc. |
 
-### 3. Key Features
+### 4. Supported Behavioral Constructs ⭐ NEW!
 
-✅ **25+ operation types** supported  
+| Block Type | Detection | Features |
+|------------|-----------|----------|
+| `always_ff` | Keyword + edge sensitivity | Clock, reset, assignment type |
+| `always_comb` | Keyword | Implicit sensitivity |
+| `always_latch` | Keyword | Level sensitivity |
+| `always` | Keyword | Generic (legacy) |
+
+### 5. Key Features
+
+✅ **25+ operation types** for expressions  
+✅ **4 always block types** with full metadata  
+✅ **Clock and reset detection** (both async and sync)  
+✅ **Sensitivity analysis** (edge, explicit, implicit)  
 ✅ **Automatic identifier extraction**  
 ✅ **Operand role labeling** (left, right, condition, true_value, false_value, operand, argument)  
 ✅ **Operand type classification** (reference, literal, expression)  
 ✅ **System function support** ($clog2, $display, etc.)  
+✅ **118+ tests** with 100% pass rate  
 ✅ **100% backward compatible**  
 
 ---
@@ -134,7 +158,47 @@ parameter WIDTH = $clog2(DEPTH);
 }
 ```
 
-### Example 3: Ternary Expression
+### Example 3: Behavioral Block (Always_FF) ⭐ NEW!
+
+**Input:**
+```systemverilog
+always_ff @(posedge clk or negedge rst_n) begin
+  if (!rst_n) q <= 1'b0;
+  else q <= d;
+end
+```
+
+**Output (relevant portion):**
+```json
+{
+  "tag": "kAlwaysStatement",
+  "metadata": {
+    "block_type": "always_ff",
+    "is_sequential": true,
+    "is_combinational": false,
+    "sensitivity": {
+      "type": "edge",
+      "signals": [
+        {"name": "clk", "edge": "posedge"},
+        {"name": "rst_n", "edge": "negedge"}
+      ]
+    },
+    "clock_info": {
+      "signal": "clk",
+      "edge": "posedge"
+    },
+    "reset_info": {
+      "signal": "rst_n",
+      "type": "async",
+      "active": "low",
+      "edge": "negedge"
+    },
+    "assignment_type": "nonblocking"
+  }
+}
+```
+
+### Example 4: Ternary Expression
 
 **Input:**
 ```systemverilog
@@ -173,58 +237,64 @@ assign out = sel ? a : b;
 
 ### Test Coverage
 
-- **37 unit tests** covering all expression types
+- **118+ unit tests** across all suites
+  - **71 behavioral tests** (Phase 4 + Perfection)
+  - **37 expression tests** (Phase 1-3)
+  - **10+ JSON tree tests** (Backward compatibility)
+- **16 parameterized test cases** from 5 suites
 - **100% pass rate** (TDD methodology)
+- **10/10 quality score** (Schema validation, error handling, coverage)
 - **Backward compatibility** verified
 
 ### Test Categories
 
-1. **Binary Expressions (18 tests)**
-   - All arithmetic operators
-   - All logical operators
-   - All bitwise operators
-   - All comparison operators
-   - Shift operations
-   - Nested expressions
+1. **Expression Tests (37 tests)**
+   - Binary expressions (18 tests) - All arithmetic/logical/bitwise/shift/comparison operators
+   - Ternary expressions (7 tests) - Nested, literal values, complex conditions
+   - Unary expressions (7 tests) - Logical not, bitwise not, negation, reduction
+   - Function calls (5 tests) - User-defined and system functions
 
-2. **Ternary Expressions (3 tests)**
-   - Simple conditionals
-   - Expression operands
-   - Nested ternaries
+2. **Behavioral Tests (71 tests)**
+   - Basic tests (7) - Sequential, combinational, latch, mixed
+   - Edge cases (11) - Nested if-else, many signals, case statements
+   - Industrial (11) - FSM, FIFO, pipeline, CDC, memory controller
+   - Quality tests (6) - Schema validation, negative testing, stress tests
+   - Advanced tests (11) - Performance, edge syntax, parameterized designs
+   - Perfection tests (8) - Error conditions, coverage gaps
+   - Parameterized tests (16) - Block types, edges, polarity, assignments, sensitivity
+   - Helper validator (1) - Schema validation
 
-3. **Unary Expressions (9 tests)**
-   - Logical operations
-   - Bitwise operations
-   - Arithmetic operations
-   - Reduction operations
-
-4. **Function Calls (7 tests)**
-   - No arguments
-   - Single argument
-   - Multiple arguments
-   - Literal arguments
-   - Expression arguments
-   - System functions
-   - Nested calls
+3. **Parameterized Test Suites (5 suites, 16 cases)**
+   - BlockTypeParameterizedTest (4) - always_ff, always_comb, always_latch, always
+   - ClockEdgeParameterizedTest (2) - posedge, negedge
+   - ResetPolarityParameterizedTest (2) - active-high, active-low
+   - AssignmentTypeParameterizedTest (3) - blocking, nonblocking, mixed
+   - SensitivityTypeParameterizedTest (5) - edge, explicit, @*, @(*), implicit
 
 ---
 
 ## Files Modified
 
 ### Core Implementation
-- `verible/verilog/CST/verilog-tree-json.cc` - Metadata generation
+- `verible/verilog/CST/verilog-tree-json.cc` - Metadata generation (expressions + behavioral)
 - `verible/verilog/CST/expression.{cc,h}` - Utility functions
+- `verible/verilog/CST/statement.{cc,h}` - Behavioral utilities (Phase 4)
+- `verible/verilog/CST/functions.{cc,h}` - Function utilities
 - `verible/verilog/CST/BUILD` - Build configuration
 
-### Tests
-- `verible/verilog/CST/verilog-tree-json-metadata_test.cc` - New test suite (37 tests)
-- `verible/verilog/CST/verilog-tree-json_test.cc` - Backward compatibility
+### Tests (118+ tests total)
+- `verible/verilog/CST/verilog-tree-json-metadata_test.cc` - Expression tests (37 tests)
+- `verible/verilog/CST/verilog-tree-json-behavioral_test.cc` - Behavioral tests (71 tests) ⭐ NEW!
+- `verible/verilog/CST/verilog-tree-json_test.cc` - Backward compatibility (10+ tests)
 
 ### Documentation
-- `doc/JSON_METADATA_USER_GUIDE.md` - User guide
-- `doc/VERIBLE_ENHANCEMENT_REQUEST.md` - Requirements
-- `doc/VERIBLE_METADATA_ENHANCEMENT_PLAN.md` - Implementation plan
-- `doc/METADATA_ENHANCEMENT_EXECUTIVE_SUMMARY.md` - Executive summary
+- `doc/JSON_METADATA_USER_GUIDE.md` - User guide (updated for Phase 4)
+- `doc/RELEASE_NOTES_METADATA_ENHANCEMENT.md` - This document (v2.0)
+- `doc/PARAMETERIZED_TESTS_SUMMARY.md` - Parameterized test guide ⭐ NEW!
+- `doc/TEST_PERFECTION_REPORT.md` - Quality report (10/10) ⭐ NEW!
+- `doc/FINAL_COMPLETION_SUMMARY.md` - Project completion ⭐ NEW!
+- `doc/VERIBLE_PHASE4_ENHANCEMENT_REQUEST.md` - Phase 4 requirements
+- `doc/VERIBLE_PHASE4_PROMPT.md` - Phase 4 implementation guide
 - `doc/METADATA_IMPLEMENTATION_CHECKLIST.md` - Implementation tracking
 
 ---

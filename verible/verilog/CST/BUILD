@@ -880,6 +880,7 @@ cc_library(
     deps = [
         ":expression",
         ":functions",
+        ":statement",
         ":verilog-nonterminals",
         "//verible/common/text:concrete-syntax-leaf",
         "//verible/common/text:concrete-syntax-tree",
@@ -952,6 +953,21 @@ cc_test(
 cc_test(
     name = "verilog-tree-json-metadata_test",
     srcs = ["verilog-tree-json-metadata_test.cc"],
+    deps = [
+        ":verilog-tree-json",
+        ":verilog-nonterminals",
+        "//verible/common/text:symbol",
+        "//verible/common/util:logging",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+        "@nlohmann_json//:singleheader-json",
+    ],
+)
+
+cc_test(
+    name = "verilog-tree-json-behavioral_test",
+    srcs = ["verilog-tree-json-behavioral_test.cc"],
     deps = [
         ":verilog-tree-json",
         ":verilog-nonterminals",
