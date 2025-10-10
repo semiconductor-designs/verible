@@ -1,10 +1,11 @@
 # Release Notes: JSON Metadata Enhancement
 
-**Version:** 1.0  
+**Version:** Verible `head` + Metadata Enhancement v1.0  
+**Base Version:** Verible master (commit `c1271a00`)  
 **Date:** October 10, 2024  
 **Repository:** https://github.com/semiconductor-designs/verible  
 **Branch:** `feature/json-text-field-export`  
-**Commit:** `58a747ee`
+**Enhancement Commits:** `58a747ee` (implementation), `ef825c17` (docs)
 
 ---
 

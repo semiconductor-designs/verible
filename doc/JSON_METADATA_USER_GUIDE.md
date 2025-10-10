@@ -475,9 +475,11 @@ The following node tags include metadata:
 
 ## Version Information
 
-- **Feature Added:** v1.0 (October 2024)
-- **Verible Branch:** `feature/json-text-field-export`
+- **Verible Base:** master (commit `c1271a00`) - version `head`
+- **Enhancement:** Metadata v1.0 (October 10, 2024)
+- **Branch:** `feature/json-text-field-export`
 - **Repository:** https://github.com/semiconductor-designs/verible
+- **Commits:** `58a747ee` (implementation), `ef825c17` (docs)
 - **Test Coverage:** 37 unit tests, 100% pass rate
 
 ---
