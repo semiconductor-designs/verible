@@ -395,6 +395,42 @@ static void AddTernaryExpressionMetadata(json &node_json,
   node_json["metadata"] = metadata;
 }
 
+// Helper function: Check if a signal name is likely a reset signal
+static bool IsLikelyResetSignal(std::string_view signal_name) {
+  // Common reset signal name patterns
+  std::string lower_name;
+  lower_name.reserve(signal_name.size());
+  for (char c : signal_name) {
+    lower_name += std::tolower(c);
+  }
+  
+  // Check for reset-like patterns
+  return (lower_name.find("rst") != std::string::npos ||
+          lower_name.find("reset") != std::string::npos ||
+          lower_name.find("clear") != std::string::npos ||
+          lower_name.find("clr") != std::string::npos ||
+          lower_name.find("init") != std::string::npos);
+}
+
+// Helper function: Check if a signal name is likely an enable signal
+static bool IsLikelyEnableSignal(std::string_view signal_name) {
+  // Common enable signal name patterns
+  std::string lower_name;
+  lower_name.reserve(signal_name.size());
+  for (char c : signal_name) {
+    lower_name += std::tolower(c);
+  }
+  
+  // Check for enable-like patterns
+  return (lower_name.find("en") != std::string::npos ||
+          lower_name.find("enable") != std::string::npos ||
+          lower_name.find("valid") != std::string::npos ||
+          lower_name.find("ready") != std::string::npos ||
+          lower_name.find("strobe") != std::string::npos ||
+          lower_name.find("stb") != std::string::npos ||
+          lower_name.find("req") != std::string::npos);
+}
+
 // Helper method: Add metadata for always blocks (behavioral semantics)
 static void AddAlwaysBlockMetadata(json &node_json,
                                     const verible::SyntaxTreeNode &node) {
@@ -574,12 +610,16 @@ static void AddAlwaysBlockMetadata(json &node_json,
                 negation_seen = true;
                 sync_reset_active_high = false;
               } else if (verilog::IsIdentifierLike(token) && sync_reset_signal.empty()) {
-                sync_reset_signal = text;
-                // Use negation_seen flag to determine active level
-                if (!negation_seen) {
-                  sync_reset_active_high = true;  // No negation = active high
+                // Only consider this as a reset signal if it matches reset patterns
+                // and does NOT match enable patterns (to avoid false positives)
+                if (IsLikelyResetSignal(text) && !IsLikelyEnableSignal(text)) {
+                  sync_reset_signal = text;
+                  // Use negation_seen flag to determine active level
+                  if (!negation_seen) {
+                    sync_reset_active_high = true;  // No negation = active high
+                  }
+                  // If negation_seen is true, sync_reset_active_high is already false
                 }
-                // If negation_seen is true, sync_reset_active_high is already false
               }
             } else if (s.Kind() == verible::SymbolKind::kNode) {
               const auto &sn = verible::down_cast<const verible::SyntaxTreeNode &>(s);
