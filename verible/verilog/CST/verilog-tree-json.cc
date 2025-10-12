@@ -742,6 +742,51 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
     typedef_table[typedef_name] = info;
   }
   
+  // Phase 2: Resolve typedef chains recursively
+  std::function<TypedefInfo(const std::string&)> resolve_typedef_chain;
+  resolve_typedef_chain = [&](const std::string& name) -> TypedefInfo {
+    auto it = typedef_table.find(name);
+    if (it == typedef_table.end()) {
+      return TypedefInfo();  // Not found
+    }
+    
+    TypedefInfo info = it->second;
+    
+    // Check if base_type is itself a typedef
+    auto base_it = typedef_table.find(info.base_type);
+    if (base_it != typedef_table.end() && base_it->first != name) {
+      // Recursively resolve the chain
+      TypedefInfo resolved = resolve_typedef_chain(info.base_type);
+      
+      // Copy resolved metadata but preserve our own typedef name
+      info.base_type = resolved.base_type;
+      info.width = resolved.width;
+      info.is_signed = resolved.is_signed;
+      info.is_packed = resolved.is_packed;
+      info.is_enum = resolved.is_enum;
+      info.enum_member_count = resolved.enum_member_count;
+      info.is_struct = resolved.is_struct;
+      info.struct_field_count = resolved.struct_field_count;
+      info.struct_field_names = resolved.struct_field_names;
+      info.is_union = resolved.is_union;
+      info.union_member_count = resolved.union_member_count;
+      info.is_parameterized = resolved.is_parameterized;
+      info.is_array = resolved.is_array;
+      info.array_dimensions = resolved.array_dimensions;
+      info.dimension_sizes = resolved.dimension_sizes;
+      info.dimension_string = resolved.dimension_string;
+      info.resolved_type_string = resolved.resolved_type_string;
+      info.resolution_depth = resolved.resolution_depth + 1;
+    }
+    
+    return info;
+  };
+  
+  // Apply resolution to all typedefs
+  for (auto& [name, info] : typedef_table) {
+    typedef_table[name] = resolve_typedef_chain(name);
+  }
+  
   return typedef_table;
 }  // End BuildTypedefTable
 
