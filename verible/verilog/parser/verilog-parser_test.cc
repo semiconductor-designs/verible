@@ -7041,6 +7041,92 @@ endclocking : cb
   EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
 }
 
+// ============================================================================
+// SPECIFY BLOCKS TESTS (Priority 5: VeriPG Enhancement)
+// ============================================================================
+
+TEST(VerilogParserTest, Specify_BasicBlock) {
+  const std::string code = R"(
+module dff;
+  specify
+    specparam tRise = 10, tFall = 12;
+    (clk => q) = (tRise, tFall);
+    $setup(data, posedge clk, 5);
+    $hold(posedge clk, data, 3);
+  endspecify
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Specify_SpecParams) {
+  const std::string code = R"(
+module timing;
+  specify
+    specparam tpd = 10.5;
+    specparam tsetup = 5, thold = 3;
+  endspecify
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Specify_PathDelays) {
+  const std::string code = R"(
+module path_delays;
+  specify
+    (in => out) = 10;
+    (clk *> q) = (5, 6);
+  endspecify
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Specify_TimingChecks) {
+  const std::string code = R"(
+module checks;
+  specify
+    $setup(d, posedge clk, 2);
+    $hold(posedge clk, d, 1);
+    $width(posedge clk, 10);
+    $period(posedge clk, 20);
+  endspecify
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Specify_PulseStyle) {
+  const std::string code = R"(
+module pulse_control;
+  specify
+    pulsestyle_ondetect in, out;
+    showcancelled reset;
+  endspecify
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Specify_ConditionalPaths) {
+  const std::string code = R"(
+module cond_paths;
+  specify
+    if (sel) (a => out) = 5;
+    if (!sel) (b => out) = 6;
+  endspecify
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
 }  // namespace
 
 }  // namespace verilog
