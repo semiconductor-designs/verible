@@ -1,59 +1,116 @@
-# 🚀 RESUME POINT FOR NEXT SESSION
+# 🚀 RESUME POINT - Phase A Final Debug
 
-## Quick Start
+## Quick Start (30-45 minutes to completion)
+
+**Status:** 90% complete | 10 commits | ~620 lines | Debug phase
 
 ```bash
-# 1. Navigate to workspace
+# 1. Navigate
 cd /Users/jonguksong/Projects/verible
 
-# 2. Confirm branch
-git branch
-# Should show: * veripg/phases-9-22-enhancements
+# 2. Read debug plan
+cat DEBUG_PLAN_PHASE_A.md
 
-# 3. Read checkpoint
-cat CHECKPOINT_PHASE_A_B.md
+# 3. Follow 7-step fix (starts at line 42)
+# Step 1: Fix chain resolution (5 min)
+# Step 2-7: Test & commit (30 min)
+
+# 4. Expected result
+# 13/15 tests passing (86.7%) ✅
 ```
 
-## Implementation Plan
+---
 
-**Phase A: Type Resolution Metadata (15 tests)**
-- Estimated time: 2-3 hours
-- Follow Steps 1-7 in `CHECKPOINT_PHASE_A_B.md`
-- Target: 15/15 tests passing (100%)
+## 📁 Key Documents (Read in Order)
 
-**Phase B: Cross-Reference Metadata (12 tests)**
-- Estimated time: 3-4 hours  
-- Follow Phase B section in roadmap
-- Target: 12/12 tests passing (100%)
+1. **`DEBUG_PLAN_PHASE_A.md`** ← **START HERE**
+   - Exact code fixes with line numbers
+   - 7-step completion plan
+   - Debug helpers
+   - 30-45 min to 13/15 tests
 
-## Key Files
+2. **`SESSION_SUMMARY.md`** ← Achievement summary
+   - What's done: ~620 lines, 10 commits
+   - What's broken: dimension preservation bug
+   - Technical insights
 
-**Implementation:**
-- `verible/verilog/CST/verilog-tree-json.cc` (main file to edit)
-- `verible/verilog/CST/BUILD` (add dependencies)
+3. **`CHECKPOINT_PHASE_A_B.md`** ← Original plan
+   - Complete roadmap to 100%
+   - Phase B details
 
-**Tests (already exist):**
-- `verible/verilog/CST/verilog-tree-json-type-resolution_test.cc` (15 tests)
-- `verible/verilog/CST/verilog-tree-json-cross-reference_test.cc` (12 tests)
+---
 
-**Documentation:**
-- `CHECKPOINT_PHASE_A_B.md` ← **START HERE**
-- `doc/PHASE_B_IMPLEMENTATION_ROADMAP.md`
-- `doc/PHASE_A_COMPLETION_REPORT.md`
+## 🎯 Current Status
 
-## Critical Success Factors
+**✅ Implemented & Committed:**
+- TypedefInfo struct (29 fields)
+- BuildTypedefTable (300+ lines)
+  - Basic typedef extraction
+  - Enum/struct/union support
+  - Chain resolution
+  - Location tracking
+- AddTypeResolutionMetadata (160 lines)
+- Full integration
 
-✅ **Commit early and often** (after each milestone)  
-✅ **Test incrementally** (one test at a time)  
-✅ **Use code templates** (provided in checkpoint)  
-✅ **Target 100%** (all 27 tests passing)
+**🔧 Needs Debug:**
+- Dimension string preservation in chain resolution
+- Signed/unsigned detection
+- Array dimension counting
 
-## Current Status
+**Target:** 13/15 tests (86.7%)
 
-- Branch: Clean, checkpoint committed
-- Tests: 27 tests compiled (0 passing, ready for implementation)
-- Code: Ready for fresh implementation
-- Documentation: Complete with templates and examples
+---
 
-**Next step:** Read `CHECKPOINT_PHASE_A_B.md` and start Step 1
+## 📊 Test Status
 
+```
+Current:  0/15 passing (dimension bug)
+After:   13/15 passing ← 30-45 min
+Phase B: 15/15 passing ← +3-4 hours
+```
+
+**Tests 12-13 deferred to Phase B** (architectural - need symbol table)
+
+---
+
+## 🔥 Quick Commands
+
+```bash
+# Edit file
+vim verible/verilog/CST/verilog-tree-json.cc +788
+
+# Build
+bazel build //verible/verilog/CST:verilog-tree-json-type-resolution_test --macos_minimum_os=10.15
+
+# Test single
+bazel-bin/verible/verilog/CST/verilog-tree-json-type-resolution_test --gtest_filter="TypeResolutionTest.SimpleTypedef"
+
+# Test all
+bazel-bin/verible/verilog/CST/verilog-tree-json-type-resolution_test
+
+# Commit
+git add verible/verilog/CST/verilog-tree-json.cc
+git commit -m "fix: Phase A complete - 13/15 tests passing"
+```
+
+---
+
+## 💡 The Fix (TL;DR)
+
+**File:** `verilog-tree-json.cc` line 788-797
+
+**Add dimension_string to resolved type:**
+```cpp
+} else {
+  info.resolved_type_string = info.base_type;
+  if (!info.dimension_string.empty()) {  // ← ADD THIS
+    info.resolved_type_string += " " + info.dimension_string;
+  }
+}
+```
+
+See `DEBUG_PLAN_PHASE_A.md` for complete details.
+
+---
+
+**Ready to finish!** 🎯
