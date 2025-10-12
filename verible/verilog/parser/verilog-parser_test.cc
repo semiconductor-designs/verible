@@ -6550,6 +6550,267 @@ TEST(VerilogParserTestMatchAll, Library) {
   TestVerilogLibraryParserMatchAll(kLibraryTests);
 }
 
+// ============================================================================
+// FUNCTIONAL COVERAGE TESTS (Priority 2: VeriPG Enhancement)
+// ============================================================================
+
+TEST(VerilogParserTest, Coverage_BasicCovergroup) {
+  const std::string code = R"(
+covergroup basic_cg @(posedge clk);
+  data_cp: coverpoint data_in {
+    bins low = {[0:63]};
+    bins mid = {[64:127]};
+    bins high = {[128:255]};
+  }
+endgroup
+)";
+  
+  VerilogAnalyzer analyzer(code, "");
+  const auto status = analyzer.Analyze();
+  EXPECT_TRUE(status.ok()) << status.message();
+}
+
+TEST(VerilogParserTest, Coverage_CrossCoverage) {
+  const std::string code = R"(
+covergroup cg;
+  addr_cp: coverpoint addr;
+  data_cp: coverpoint data;
+  cross_cov: cross addr_cp, data_cp;
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_Options) {
+  const std::string code = R"(
+covergroup cg_with_options;
+  option.per_instance = 1;
+  option.goal = 100;
+  coverpoint signal;
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_IllegalIgnoreBins) {
+  const std::string code = R"(
+covergroup cg;
+  coverpoint data {
+    bins valid = {[0:100]};
+    illegal_bins bad = {[200:255]};
+    ignore_bins reserved = {101, 102};
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_Wildcard) {
+  const std::string code = R"(
+covergroup cg;
+  coverpoint opcode {
+    wildcard bins read = {4'b00??};
+    wildcard bins write = {4'b01??};
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_IffClause) {
+  const std::string code = R"(
+covergroup cg;
+  coverpoint data iff (enable) {
+    bins values = {[0:255]};
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_WithSample) {
+  const std::string code = R"(
+covergroup cg with function sample(input bit [7:0] val);
+  coverpoint val {
+    bins low = {[0:127]};
+    bins high = {[128:255]};
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_BinsArrayIndex) {
+  const std::string code = R"(
+covergroup cg;
+  coverpoint data {
+    bins range[4] = {[0:255]};
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_CrossWithIff) {
+  const std::string code = R"(
+covergroup cg;
+  addr: coverpoint address;
+  data: coverpoint data_bus;
+  addr_data: cross addr, data iff (valid);
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_MultipleBinsTypes) {
+  const std::string code = R"(
+covergroup cg;
+  coverpoint signal {
+    bins zero = {0};
+    bins one = {1};
+    bins range = {[2:10]};
+    bins list = {11, 12, 13};
+    illegal_bins bad = {[100:200]};
+    ignore_bins ignore = {255};
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_DefaultBins) {
+  const std::string code = R"(
+covergroup cg;
+  coverpoint signal {
+    bins specified = {[0:10]};
+    bins others = default;
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_TypeOption) {
+  const std::string code = R"(
+covergroup cg;
+  type_option.weight = 5;
+  option.comment = "Test coverage";
+  coverpoint data;
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_InModule) {
+  const std::string code = R"(
+module test;
+  logic [7:0] data;
+  logic clk;
+  
+  covergroup data_cg @(posedge clk);
+    coverpoint data {
+      bins low = {[0:127]};
+      bins high = {[128:255]};
+    }
+  endgroup
+  
+  data_cg cg_inst = new();
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_EmptyCoverpoint) {
+  const std::string code = R"(
+covergroup cg;
+  coverpoint signal;
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_CrossWithBins) {
+  const std::string code = R"(
+covergroup cg;
+  a_cp: coverpoint a;
+  b_cp: coverpoint b;
+  cross_ab: cross a_cp, b_cp {
+    bins corner = binsof(a_cp) intersect {0} && binsof(b_cp) intersect {0};
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_BinsTransitions) {
+  const std::string code = R"(
+covergroup cg;
+  coverpoint state {
+    bins trans1 = (0 => 1);
+    bins trans2 = (1 => 2 => 3);
+    bins cycle = (3 => 0);
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_ComplexExpression) {
+  const std::string code = R"(
+covergroup cg;
+  coverpoint (addr & 8'hF0) {
+    bins nibble0 = {8'h00};
+    bins nibble1 = {8'h10};
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_WildcardRange) {
+  const std::string code = R"(
+covergroup cg;
+  coverpoint opcode {
+    wildcard bins read_ops = {8'b0000_????};
+    wildcard bins write_ops = {8'b0001_????};
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_BinsOfIntersect) {
+  const std::string code = R"(
+covergroup cg;
+  addr: coverpoint address;
+  data: coverpoint data_bus;
+  cross addr, data {
+    bins low_addr_high_data = binsof(addr) intersect {[0:100]} && 
+                               binsof(data) intersect {[200:255]};
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
 }  // namespace
 
 }  // namespace verilog
