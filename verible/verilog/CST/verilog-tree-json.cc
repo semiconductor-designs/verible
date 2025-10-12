@@ -839,6 +839,56 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
       }
     }
     
+    // Count packed dimensions for array detection and extract dimension_sizes
+    if (!info.dimension_string.empty()) {
+      size_t dim_count = 0;
+      size_t pos = 0;
+      while ((pos = info.dimension_string.find('[', pos)) != std::string::npos) {
+        dim_count++;
+        // Extract size for this dimension
+        size_t end_pos = info.dimension_string.find(']', pos);
+        if (end_pos != std::string::npos) {
+          std::string dim_text = info.dimension_string.substr(pos + 1, end_pos - pos - 1);
+          size_t colon = dim_text.find(':');
+          if (colon != std::string::npos) {
+            try {
+              int msb = std::stoi(dim_text.substr(0, colon));
+              int lsb = std::stoi(dim_text.substr(colon + 1));
+              int size = std::abs(msb - lsb) + 1;
+              info.dimension_sizes.push_back(size);
+            } catch (...) {
+              // Parameterized dimension
+            }
+          }
+        }
+        pos++;
+      }
+      if (dim_count > 1) {
+        info.is_array = true;
+        info.array_dimensions = dim_count;
+      }
+    }
+    
+    // Check for unpacked dimensions (kDeclarationDimensions at child 3)
+    const verible::Symbol* unpacked_dims = GetSubtreeAsSymbol(node, NodeEnum::kTypeDeclaration, 3);
+    if (unpacked_dims && unpacked_dims->Kind() == verible::SymbolKind::kNode) {
+      const auto& unpacked_node = verible::SymbolCastToNode(*unpacked_dims);
+      if (unpacked_node.MatchesTag(NodeEnum::kDeclarationDimensions)) {
+        info.is_array = true;
+        info.is_packed = false;  // Unpacked arrays
+        // Count dimensions
+        for (const auto& child : unpacked_node.children()) {
+          if (child && child->Kind() == verible::SymbolKind::kNode) {
+            const auto& dim_node = verible::SymbolCastToNode(*child);
+            if (dim_node.MatchesTag(NodeEnum::kDimensionScalar) || 
+                dim_node.MatchesTag(NodeEnum::kDimensionRange)) {
+              info.array_dimensions++;
+            }
+          }
+        }
+      }
+    }
+    
     // Store in table
     typedef_table[typedef_name] = info;
   }
