@@ -7361,6 +7361,188 @@ endclass
   EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
 }
 
+// ============================================================================
+// MOS Transistor and Switch Primitive Tests (Bug Fix)
+// ============================================================================
+
+TEST(VerilogParserTest, GatePrimitive_PMOS) {
+  const std::string code = R"(
+module test;
+  pmos pmos_gate (out, in, enable);
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, GatePrimitive_NMOS) {
+  const std::string code = R"(
+module test;
+  nmos nmos_gate (out, in, enable);
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, GatePrimitive_CMOS) {
+  const std::string code = R"(
+module test;
+  cmos cmos_gate (out, in, nctrl, pctrl);
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, GatePrimitive_RPMOS) {
+  const std::string code = R"(
+module test;
+  rpmos rpmos_gate (out, in, enable);
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, GatePrimitive_RNMOS) {
+  const std::string code = R"(
+module test;
+  rnmos rnmos_gate (out, in, enable);
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, GatePrimitive_RCMOS) {
+  const std::string code = R"(
+module test;
+  rcmos rcmos_gate (out, in, nctrl, pctrl);
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, GatePrimitive_TRAN) {
+  const std::string code = R"(
+module test;
+  tran tran_gate (inout1, inout2);
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, GatePrimitive_TRANIF0) {
+  const std::string code = R"(
+module test;
+  tranif0 tranif0_gate (inout1, inout2, ctrl);
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, GatePrimitive_TRANIF1) {
+  const std::string code = R"(
+module test;
+  tranif1 tranif1_gate (inout1, inout2, ctrl);
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, GatePrimitive_RTRAN) {
+  const std::string code = R"(
+module test;
+  rtran rtran_gate (inout1, inout2);
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, GatePrimitive_RTRANIF0) {
+  const std::string code = R"(
+module test;
+  rtranif0 rtranif0_gate (inout1, inout2, ctrl);
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, GatePrimitive_RTRANIF1) {
+  const std::string code = R"(
+module test;
+  rtranif1 rtranif1_gate (inout1, inout2, ctrl);
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, GatePrimitive_MOSWithDelay) {
+  const std::string code = R"(
+module test;
+  pmos #(2.5, 3.0) pmos_delay (out, in, enable);
+  nmos #(1.5) nmos_delay (out, in, enable);
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, GatePrimitive_SwitchWithDelay) {
+  const std::string code = R"(
+module test;
+  tran #2 tran_delay (inout1, inout2);
+  tranif1 #(1.5, 2.0) tranif1_delay (inout1, inout2, ctrl);
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, GatePrimitive_AllMOSTypes) {
+  const std::string code = R"(
+module complete_mos_test;
+  wire out, in, enable, nctrl, pctrl;
+  
+  // MOS transistors
+  pmos m1 (out, in, enable);
+  nmos m2 (out, in, enable);
+  cmos m3 (out, in, nctrl, pctrl);
+  rpmos m4 (out, in, enable);
+  rnmos m5 (out, in, enable);
+  rcmos m6 (out, in, nctrl, pctrl);
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, GatePrimitive_AllSwitchTypes) {
+  const std::string code = R"(
+module complete_switch_test;
+  wire inout1, inout2, ctrl;
+  
+  // Bidirectional switches
+  tran s1 (inout1, inout2);
+  tranif0 s2 (inout1, inout2, ctrl);
+  tranif1 s3 (inout1, inout2, ctrl);
+  rtran s4 (inout1, inout2);
+  rtranif0 s5 (inout1, inout2, ctrl);
+  rtranif1 s6 (inout1, inout2, ctrl);
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
 }  // namespace
 
 }  // namespace verilog
