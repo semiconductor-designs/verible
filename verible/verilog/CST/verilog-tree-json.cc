@@ -485,6 +485,35 @@ static json AddLocationMetadata(const verible::Symbol &symbol,
   return location;
 }
 
+// ============================================================================
+// Phase A: Type Resolution Metadata
+// ============================================================================
+
+// Typedef information extracted from CST
+struct TypedefInfo {
+  std::string typedef_name;
+  std::string base_type;  // e.g., "logic", "bit"
+  int width;
+  bool is_signed;
+  bool is_packed;
+  bool is_enum;
+  int enum_member_count;
+  bool is_struct;
+  int struct_field_count;
+  std::vector<std::string> struct_field_names;
+  bool is_union;
+  int union_member_count;
+  bool is_parameterized;
+  bool is_array;
+  int array_dimensions;
+  std::vector<int> dimension_sizes;
+  int resolution_depth;
+  int definition_line;
+  int definition_column;
+  std::string dimension_string;
+  std::string resolved_type_string;
+};
+
 // Helper method: Add metadata for always blocks (behavioral semantics)
 static void AddAlwaysBlockMetadata(json &node_json,
                                     const verible::SyntaxTreeNode &node) {
