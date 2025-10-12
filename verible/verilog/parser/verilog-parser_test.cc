@@ -7543,6 +7543,102 @@ endmodule
   EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
 }
 
+// ============================================================================
+// ULTIMATE COMPREHENSIVE TEST: Real-World Analog/Mixed-Signal Circuit
+// ============================================================================
+
+TEST(VerilogParserTest, GatePrimitive_ComplexAnalogMixedSignal) {
+  const std::string code = R"(
+// Ultimate comprehensive test: Real-world analog/mixed-signal patterns
+module ultra_complex_analog_circuit (
+    input wire vdd, gnd,
+    input wire [3:0] sel,
+    input wire ctrl, enable,
+    inout wire [15:0] data_bus,
+    inout wire [7:0] analog_bus,
+    input wire [7:0] analog_in,
+    output wire [7:0] analog_out
+);
+
+  // SECTION 1: CMOS Transmission Gates with Min:Typ:Max Delays
+  wire [3:0] mux_en;
+  wire mux_out;
+  
+  cmos #(2.5:3.0:3.5, 2.8:3.2:3.8) tg0 (mux_out, analog_in[0], mux_en[0], ~mux_en[0]);
+  cmos #(2.5:3.0:3.5, 2.8:3.2:3.8) tg1 (mux_out, analog_in[1], mux_en[1], ~mux_en[1]);
+  rcmos #(1.8, 2.1) output_tg (analog_out[0], mux_out, enable, ~enable);
+
+  // SECTION 2: Bidirectional Bus Switches
+  wire [15:0] internal_data;
+  
+  tranif1 #(1.2, 1.5) bus_sw0  (data_bus[0],  internal_data[0],  enable);
+  tranif1 #(1.2, 1.5) bus_sw1  (data_bus[1],  internal_data[1],  enable);
+  tranif1 #(1.2, 1.5) bus_sw2  (data_bus[2],  internal_data[2],  enable);
+  tranif1 #(1.2, 1.5) bus_sw3  (data_bus[3],  internal_data[3],  enable);
+
+  // SECTION 3: Analog Crossbar with Generate Blocks
+  wire [63:0] crosspoint_enable;
+  
+  genvar i, j;
+  generate
+    for (i = 0; i < 8; i = i + 1) begin : row_gen
+      for (j = 0; j < 8; j = j + 1) begin : col_gen
+        rtranif1 #(0.8:1.0:1.2) sw (analog_bus[i], analog_in[j], crosspoint_enable[i*8 + j]);
+      end
+    end
+  endgenerate
+
+  // SECTION 4: PMOS/NMOS Dynamic Logic
+  wire [3:0] logic_node, precharge, evaluate;
+  
+  pmos #(1.0, 1.2) pc0 (logic_node[0], vdd, precharge[0]);
+  pmos #(1.0, 1.2) pc1 (logic_node[1], vdd, precharge[1]);
+  nmos #(0.8, 1.0) ev0 (logic_node[0], gnd, evaluate[0]);
+  nmos #(0.8, 1.0) ev1 (logic_node[1], gnd, evaluate[1]);
+  
+  rpmos #(5.0) keeper0 (logic_node[0], vdd, logic_node[0]);
+  rnmos #(5.0) keeper1 (logic_node[1], gnd, logic_node[1]);
+
+  // SECTION 5: Tri-state Buffers
+  wire [3:0] tristate_out;
+  
+  cmos  #(1.5, 1.8) tristate_gate0 (tristate_out[0], internal_data[0], enable, ~enable);
+  rcmos #(2.0, 2.5) tristate_gate1 (tristate_out[1], internal_data[1], enable, ~enable);
+
+  // SECTION 6: Conditional Switches (All Variants)
+  wire pass_out;
+  
+  tranif0 #(0.5) sw_if0 (pass_out, internal_data[8], ~ctrl);
+  tranif1 #(0.5) sw_if1 (pass_out, internal_data[9], ctrl);
+  rtranif0 #(1.0:1.2:1.5) rsw_if0 (pass_out, internal_data[10], ~ctrl);
+  rtranif1 #(1.0:1.2:1.5) rsw_if1 (pass_out, internal_data[11], ctrl);
+
+  // SECTION 7: Bidirectional Pass Gates
+  wire node_a, node_b, node_c;
+  
+  tran  #(0.1) resist1 (node_a, node_b);
+  rtran #(10.0) resist2 (node_b, node_c);
+  rtran #(0.05:0.08:0.12) link_switch (analog_bus[0], node_a);
+
+  // SECTION 8: Array with Parameterized Delays
+  wire [15:0] arr_in, arr_out, arr_ctrl;
+  
+  generate
+    for (i = 0; i < 16; i = i + 1) begin : mos_array
+      if (i % 2 == 0) begin : even
+        pmos #(1.0 + i*0.05) pm (arr_out[i], arr_in[i], arr_ctrl[i]);
+      end else begin : odd
+        nmos #(0.8 + i*0.04) nm (arr_out[i], arr_in[i], arr_ctrl[i]);
+      end
+    end
+  endgenerate
+
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
 }  // namespace
 
 }  // namespace verilog
