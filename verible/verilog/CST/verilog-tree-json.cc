@@ -630,17 +630,21 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
               if (enum_data_type && enum_data_type->Kind() == verible::SymbolKind::kNode) {
                 const auto& enum_dt_node = verible::SymbolCastToNode(*enum_data_type);
                 if (enum_dt_node.MatchesTag(NodeEnum::kDataType)) {
-                  // Get the primitive type (logic, bit, etc.)
-                  const verible::Symbol* enum_prim_symbol = GetBaseTypeFromDataType(enum_dt_node);
-                  if (enum_prim_symbol && enum_prim_symbol->Kind() == verible::SymbolKind::kLeaf) {
-                    const auto& enum_prim_leaf = verible::SymbolCastToLeaf(*enum_prim_symbol);
-                    info.base_type = std::string(enum_prim_leaf.get().text());
-                  }
-                  
-                  // Extract dimensions from enum base type
+                  // Directly extract primitive type from kDataType -> kDataTypePrimitive -> Leaf
                   for (const auto& child : enum_dt_node.children()) {
                     if (child && child->Kind() == verible::SymbolKind::kNode) {
                       const auto& child_node = verible::SymbolCastToNode(*child);
+                      
+                      // Extract base type from kDataTypePrimitive
+                      if (child_node.MatchesTag(NodeEnum::kDataTypePrimitive)) {
+                        const verible::Symbol* prim_leaf = GetSubtreeAsSymbol(child_node, NodeEnum::kDataTypePrimitive, 0);
+                        if (prim_leaf && prim_leaf->Kind() == verible::SymbolKind::kLeaf) {
+                          const auto& leaf = verible::SymbolCastToLeaf(*prim_leaf);
+                          info.base_type = std::string(leaf.get().text());
+                        }
+                      }
+                      
+                      // Extract dimensions from kPackedDimensions
                       if (child_node.MatchesTag(NodeEnum::kPackedDimensions)) {
                         info.dimension_string = std::string(verible::StringSpanOfSymbol(child_node));
                         // Calculate width
@@ -656,7 +660,6 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
                             info.is_parameterized = true;
                           }
                         }
-                        break;
                       }
                     }
                   }
