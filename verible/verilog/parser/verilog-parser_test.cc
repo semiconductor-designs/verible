@@ -7127,6 +7127,240 @@ endmodule
   EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
 }
 
+// ============================================================================
+// CLASS ENHANCEMENTS TESTS (Priority 6: VeriPG Enhancement)
+// ============================================================================
+
+TEST(VerilogParserTest, Class_PureVirtual) {
+  const std::string code = R"(
+virtual class base_class #(parameter WIDTH = 8);
+  pure virtual function logic [WIDTH-1:0] compute();
+  pure virtual task display();
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Class_ExternDeclarations) {
+  const std::string code = R"(
+class MyClass;
+  extern virtual task run();
+  extern function int get_value();
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Class_ParameterizedInheritance) {
+  const std::string code = R"(
+class derived extends base_class #(16);
+  function logic [15:0] compute();
+    return 0;
+  endfunction
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Class_ThisSuperNull) {
+  const std::string code = R"(
+class Example;
+  int value;
+  function new(int v = 0);
+    this.value = v;
+    if (super == null)
+      $display("No parent");
+  endfunction
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Class_StaticMembers) {
+  const std::string code = R"(
+class Counter;
+  static int count = 0;
+  static function void increment();
+    count++;
+  endfunction
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Class_LocalQualifier) {
+  const std::string code = R"(
+class Protected;
+  local int private_data;
+  protected task access_data();
+    private_data = 42;
+  endtask
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Class_VirtualMethods) {
+  const std::string code = R"(
+class Base;
+  virtual function void print();
+    $display("Base");
+  endfunction
+endclass
+
+class Child extends Base;
+  function void print();
+    $display("Child");
+  endfunction
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+// ============================================================================
+// CONSTRAINT ENHANCEMENTS TESTS (Priority 7: VeriPG Enhancement)
+// ============================================================================
+
+TEST(VerilogParserTest, Constraint_BasicConstraints) {
+  const std::string code = R"(
+class packet;
+  rand logic [7:0] length;
+  rand logic [31:0] payload[];
+  
+  constraint length_c {
+    length inside {[1:255]};
+    length % 4 == 0;
+  }
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Constraint_DistConstraint) {
+  const std::string code = R"(
+class weighted;
+  rand int value;
+  constraint dist_c {
+    value dist {0:/40, [1:254]:/20, 255:/40};
+  }
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Constraint_SolveBefore) {
+  const std::string code = R"(
+class ordered;
+  rand int a, b;
+  constraint solve_c {
+    solve a before b;
+    a < b;
+  }
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Constraint_ForeachConstraint) {
+  const std::string code = R"(
+class array_class;
+  rand int arr[10];
+  constraint foreach_c {
+    foreach(arr[i]) {
+      arr[i] inside {[0:100]};
+    }
+  }
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Constraint_UniqueConstraint) {
+  const std::string code = R"(
+class unique_array;
+  rand int arr[5];
+  constraint unique_c {
+    unique {arr};
+  }
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Constraint_SoftConstraint) {
+  const std::string code = R"(
+class soft_constraints;
+  rand int x;
+  constraint soft_c {
+    soft x < 100;
+    soft x > 0;
+  }
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Constraint_DisableConstraint) {
+  const std::string code = R"(
+class with_disable;
+  rand int value;
+  constraint valid_c {
+    value inside {[0:100]};
+  }
+  
+  function void allow_invalid();
+    valid_c.constraint_mode(0);
+  endfunction
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Constraint_RandRandc) {
+  const std::string code = R"(
+class cyclic;
+  rand int normal;
+  randc bit [3:0] cyclic_value;
+  
+  constraint bounds {
+    normal inside {[0:100]};
+  }
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Constraint_ImplicationConstraint) {
+  const std::string code = R"(
+class conditional;
+  rand bit enable;
+  rand int data;
+  
+  constraint imply_c {
+    enable -> data inside {[1:10]};
+    !enable -> data == 0;
+  }
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
 }  // namespace
 
 }  // namespace verilog
