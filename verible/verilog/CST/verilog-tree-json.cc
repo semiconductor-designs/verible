@@ -624,23 +624,47 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
             // Check for enum type
             if (prim_child_node.MatchesTag(NodeEnum::kEnumType)) {
               info.is_enum = true;
-              info.base_type = "enum";
               
-              // Extract enum base type (e.g., logic [1:0])
-              const verible::Symbol* enum_base = GetSubtreeAsSymbol(prim_child_node, NodeEnum::kEnumType, 0);
-              if (enum_base && enum_base->Kind() == verible::SymbolKind::kNode) {
-                const auto& enum_base_node = verible::SymbolCastToNode(*enum_base);
-                if (enum_base_node.MatchesTag(NodeEnum::kDataTypePrimitive)) {
-                  const verible::Symbol* enum_prim = GetSubtreeAsSymbol(enum_base_node, NodeEnum::kDataTypePrimitive, 0);
-                  if (enum_prim && enum_prim->Kind() == verible::SymbolKind::kLeaf) {
-                    const auto& enum_prim_leaf = verible::SymbolCastToLeaf(*enum_prim);
+              // Extract enum base type from child 1 (kDataType)
+              const verible::Symbol* enum_data_type = GetSubtreeAsSymbol(prim_child_node, NodeEnum::kEnumType, 1);
+              if (enum_data_type && enum_data_type->Kind() == verible::SymbolKind::kNode) {
+                const auto& enum_dt_node = verible::SymbolCastToNode(*enum_data_type);
+                if (enum_dt_node.MatchesTag(NodeEnum::kDataType)) {
+                  // Get the primitive type (logic, bit, etc.)
+                  const verible::Symbol* enum_prim_symbol = GetBaseTypeFromDataType(enum_dt_node);
+                  if (enum_prim_symbol && enum_prim_symbol->Kind() == verible::SymbolKind::kLeaf) {
+                    const auto& enum_prim_leaf = verible::SymbolCastToLeaf(*enum_prim_symbol);
                     info.base_type = std::string(enum_prim_leaf.get().text());
+                  }
+                  
+                  // Extract dimensions from enum base type
+                  for (const auto& child : enum_dt_node.children()) {
+                    if (child && child->Kind() == verible::SymbolKind::kNode) {
+                      const auto& child_node = verible::SymbolCastToNode(*child);
+                      if (child_node.MatchesTag(NodeEnum::kPackedDimensions)) {
+                        info.dimension_string = std::string(verible::StringSpanOfSymbol(child_node));
+                        // Calculate width
+                        std::string dim_text = info.dimension_string;
+                        size_t colon = dim_text.find(':');
+                        if (colon != std::string::npos) {
+                          try {
+                            int msb = std::stoi(dim_text.substr(1, colon - 1));
+                            int lsb = std::stoi(dim_text.substr(colon + 1, dim_text.find(']') - colon - 1));
+                            info.width = std::abs(msb - lsb) + 1;
+                            info.is_packed = true;
+                          } catch (...) {
+                            info.is_parameterized = true;
+                          }
+                        }
+                        break;
+                      }
+                    }
                   }
                 }
               }
               
-              // Count enum members
-              const verible::Symbol* brace_group = GetSubtreeAsSymbol(prim_child_node, NodeEnum::kEnumType, 1);
+              // Count enum members from child 2 (kBraceGroup)
+              const verible::Symbol* brace_group = GetSubtreeAsSymbol(prim_child_node, NodeEnum::kEnumType, 2);
               if (brace_group && brace_group->Kind() == verible::SymbolKind::kNode) {
                 const auto& brace_node = verible::SymbolCastToNode(*brace_group);
                 if (brace_node.MatchesTag(NodeEnum::kBraceGroup) && brace_node.size() > 1) {
