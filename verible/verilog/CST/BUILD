@@ -1019,3 +1019,34 @@ cc_test(
         "@nlohmann_json//:singleheader-json",
     ],
 )
+
+cc_test(
+    name = "verilog-tree-json-scope_test",
+    srcs = ["verilog-tree-json-scope_test.cc"],
+    deps = [
+        ":verilog-tree-json",
+        ":verilog-nonterminals",
+        "//verible/common/text:concrete-syntax-tree",
+        "//verible/common/text:symbol",
+        "//verible/common/util:logging",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+        "@nlohmann_json//:singleheader-json",
+    ],
+)
+
+cc_test(
+    name = "verilog-tree-json-dataflow_test",
+    srcs = ["verilog-tree-json-dataflow_test.cc"],
+    deps = [
+        ":verilog-tree-json",
+        ":verilog-nonterminals",
+        "//verible/common/text:symbol",
+        "//verible/common/util:logging",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+        "@nlohmann_json//:singleheader-json",
+    ],
+)

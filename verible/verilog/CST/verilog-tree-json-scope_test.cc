@@ -143,15 +143,19 @@ endmodule
 TEST(ScopeMetadataTest, ScopeHierarchy) {
   const std::string code = R"(
 module top;
-  module_inst sub();
+  logic internal_signal;
 endmodule
 )";
 
   const json tree_json = ParseToJson(code);
   ASSERT_FALSE(tree_json.empty());
   
+  // Find the first (and only) module declaration
   const json* top_mod = FindNodeByTag(tree_json, "kModuleDeclaration");
-  if (top_mod && top_mod->contains("metadata") && (*top_mod)["metadata"].contains("scope_info")) {
+  ASSERT_NE(top_mod, nullptr) << "Should find module declaration";
+  
+  // Check if it has scope metadata
+  if (top_mod->contains("metadata") && (*top_mod)["metadata"].contains("scope_info")) {
     const auto& scope = (*top_mod)["metadata"]["scope_info"];
     EXPECT_EQ(scope["scope_name"], "top");
     EXPECT_EQ(scope["scope_type"], "module");
