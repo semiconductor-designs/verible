@@ -693,8 +693,8 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
               info.is_struct = true;
               info.base_type = "struct";
               
-              // Check for packed keyword
-              const verible::Symbol* signing = GetSubtreeAsSymbol(base_node, NodeEnum::kDataTypePrimitive, 1);
+              // Check for packed keyword at child 1
+              const verible::Symbol* signing = GetSubtreeAsSymbol(prim_child_node, NodeEnum::kStructType, 1);
               if (signing && signing->Kind() == verible::SymbolKind::kNode) {
                 const auto& signing_node = verible::SymbolCastToNode(*signing);
                 if (signing_node.MatchesTag(NodeEnum::kPackedSigning)) {
@@ -705,8 +705,8 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
                 }
               }
               
-              // Extract struct fields
-              const verible::Symbol* brace_group = GetSubtreeAsSymbol(prim_child_node, NodeEnum::kStructType, 1);
+              // Extract struct fields from child 2
+              const verible::Symbol* brace_group = GetSubtreeAsSymbol(prim_child_node, NodeEnum::kStructType, 2);
               if (brace_group && brace_group->Kind() == verible::SymbolKind::kNode) {
                 const auto& brace_node = verible::SymbolCastToNode(*brace_group);
                 if (brace_node.MatchesTag(NodeEnum::kBraceGroup) && brace_node.size() > 1) {
@@ -719,12 +719,12 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
                           const auto& child_node = verible::SymbolCastToNode(*child);
                           if (child_node.MatchesTag(NodeEnum::kStructUnionMember)) {
                             info.struct_field_count++;
-                            // Extract field name
+                            // Extract field name from child 1 -> child 2 (Leaf)
                             const verible::Symbol* field_dims = GetSubtreeAsSymbol(child_node, NodeEnum::kStructUnionMember, 1);
                             if (field_dims && field_dims->Kind() == verible::SymbolKind::kNode) {
                               const auto& dims_node = verible::SymbolCastToNode(*field_dims);
                               if (dims_node.MatchesTag(NodeEnum::kDataTypeImplicitIdDimensions)) {
-                                const verible::Symbol* id = GetSubtreeAsSymbol(dims_node, NodeEnum::kDataTypeImplicitIdDimensions, 0);
+                                const verible::Symbol* id = GetSubtreeAsSymbol(dims_node, NodeEnum::kDataTypeImplicitIdDimensions, 2);
                                 if (id && id->Kind() == verible::SymbolKind::kLeaf) {
                                   const auto& id_leaf = verible::SymbolCastToLeaf(*id);
                                   info.struct_field_names.push_back(std::string(id_leaf.get().text()));
@@ -744,8 +744,8 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
               info.is_union = true;
               info.base_type = "union";
               
-              // Check for packed keyword
-              const verible::Symbol* signing = GetSubtreeAsSymbol(base_node, NodeEnum::kDataTypePrimitive, 1);
+              // Check for packed keyword at child 2 (union has optional "tagged" at child 1)
+              const verible::Symbol* signing = GetSubtreeAsSymbol(prim_child_node, NodeEnum::kUnionType, 2);
               if (signing && signing->Kind() == verible::SymbolKind::kNode) {
                 const auto& signing_node = verible::SymbolCastToNode(*signing);
                 if (signing_node.MatchesTag(NodeEnum::kPackedSigning)) {
@@ -756,8 +756,8 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
                 }
               }
               
-              // Count union members
-              const verible::Symbol* brace_group = GetSubtreeAsSymbol(prim_child_node, NodeEnum::kUnionType, 1);
+              // Count union members from child 3
+              const verible::Symbol* brace_group = GetSubtreeAsSymbol(prim_child_node, NodeEnum::kUnionType, 3);
               if (brace_group && brace_group->Kind() == verible::SymbolKind::kNode) {
                 const auto& brace_node = verible::SymbolCastToNode(*brace_group);
                 if (brace_node.MatchesTag(NodeEnum::kBraceGroup) && brace_node.size() > 1) {
@@ -813,9 +813,9 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
           info.resolved_type_string += " " + info.dimension_string;
         }
       } else if (info.is_struct) {
-        info.resolved_type_string = info.is_packed ? "packed struct" : "struct";
+        info.resolved_type_string = info.is_packed ? "struct packed" : "struct";
       } else if (info.is_union) {
-        info.resolved_type_string = info.is_packed ? "packed union" : "union";
+        info.resolved_type_string = info.is_packed ? "union packed" : "union";
       } else {
         info.resolved_type_string = info.base_type;
         if (!info.dimension_string.empty()) {
@@ -870,9 +870,9 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
           info.resolved_type_string += " " + info.dimension_string;
         }
       } else if (info.is_struct) {
-        info.resolved_type_string = info.is_packed ? "packed struct" : "struct";
+        info.resolved_type_string = info.is_packed ? "struct packed" : "struct";
       } else if (info.is_union) {
-        info.resolved_type_string = info.is_packed ? "packed union" : "union";
+        info.resolved_type_string = info.is_packed ? "union packed" : "union";
       } else {
         info.resolved_type_string = info.base_type;
         if (!info.dimension_string.empty()) {
@@ -1009,7 +1009,9 @@ static void AddTypeResolutionMetadata(
       if (!info.struct_field_names.empty()) {
         json fields = json::array();
         for (const auto& field : info.struct_field_names) {
-          fields.push_back(field);
+          json field_obj = json::object();
+          field_obj["name"] = field;
+          fields.push_back(field_obj);
         }
         type_info["struct_fields"] = fields;
       }
