@@ -576,7 +576,7 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
       info.definition_column = column;
     }
     
-    // Get base type - BASIC VERSION (will be enhanced)
+    // Get base type with enum/struct/union support
     const verible::Symbol* base_type_symbol = GetBaseTypeFromDataType(*ref_type);
     if (base_type_symbol) {
       if (base_type_symbol->Kind() == verible::SymbolKind::kLeaf) {
@@ -592,8 +592,139 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
             info.base_type = std::string(prim_leaf.get().text());
           } else if (prim_child && prim_child->Kind() == verible::SymbolKind::kNode) {
             const auto& prim_child_node = verible::SymbolCastToNode(*prim_child);
+            
+            // Check for enum type
+            if (prim_child_node.MatchesTag(NodeEnum::kEnumType)) {
+              info.is_enum = true;
+              info.base_type = "enum";
+              
+              // Extract enum base type (e.g., logic [1:0])
+              const verible::Symbol* enum_base = GetSubtreeAsSymbol(prim_child_node, NodeEnum::kEnumType, 0);
+              if (enum_base && enum_base->Kind() == verible::SymbolKind::kNode) {
+                const auto& enum_base_node = verible::SymbolCastToNode(*enum_base);
+                if (enum_base_node.MatchesTag(NodeEnum::kDataTypePrimitive)) {
+                  const verible::Symbol* enum_prim = GetSubtreeAsSymbol(enum_base_node, NodeEnum::kDataTypePrimitive, 0);
+                  if (enum_prim && enum_prim->Kind() == verible::SymbolKind::kLeaf) {
+                    const auto& enum_prim_leaf = verible::SymbolCastToLeaf(*enum_prim);
+                    info.base_type = std::string(enum_prim_leaf.get().text());
+                  }
+                }
+              }
+              
+              // Count enum members
+              const verible::Symbol* brace_group = GetSubtreeAsSymbol(prim_child_node, NodeEnum::kEnumType, 1);
+              if (brace_group && brace_group->Kind() == verible::SymbolKind::kNode) {
+                const auto& brace_node = verible::SymbolCastToNode(*brace_group);
+                if (brace_node.MatchesTag(NodeEnum::kBraceGroup) && brace_node.size() > 1) {
+                  const verible::Symbol* enum_list = brace_node[1].get();
+                  if (enum_list && enum_list->Kind() == verible::SymbolKind::kNode) {
+                    const auto& enum_list_node = verible::SymbolCastToNode(*enum_list);
+                    if (enum_list_node.MatchesTag(NodeEnum::kEnumNameList)) {
+                      for (const auto& child : enum_list_node.children()) {
+                        if (child && child->Kind() == verible::SymbolKind::kNode) {
+                          const auto& child_node = verible::SymbolCastToNode(*child);
+                          if (child_node.MatchesTag(NodeEnum::kEnumName)) {
+                            info.enum_member_count++;
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            // Check for struct type
+            else if (prim_child_node.MatchesTag(NodeEnum::kStructType)) {
+              info.is_struct = true;
+              info.base_type = "struct";
+              
+              // Check for packed keyword
+              const verible::Symbol* signing = GetSubtreeAsSymbol(base_node, NodeEnum::kDataTypePrimitive, 1);
+              if (signing && signing->Kind() == verible::SymbolKind::kNode) {
+                const auto& signing_node = verible::SymbolCastToNode(*signing);
+                if (signing_node.MatchesTag(NodeEnum::kPackedSigning)) {
+                  std::string_view signing_text = verible::StringSpanOfSymbol(signing_node);
+                  if (signing_text.find("packed") != std::string_view::npos) {
+                    info.is_packed = true;
+                  }
+                }
+              }
+              
+              // Extract struct fields
+              const verible::Symbol* brace_group = GetSubtreeAsSymbol(prim_child_node, NodeEnum::kStructType, 1);
+              if (brace_group && brace_group->Kind() == verible::SymbolKind::kNode) {
+                const auto& brace_node = verible::SymbolCastToNode(*brace_group);
+                if (brace_node.MatchesTag(NodeEnum::kBraceGroup) && brace_node.size() > 1) {
+                  const verible::Symbol* member_list = brace_node[1].get();
+                  if (member_list && member_list->Kind() == verible::SymbolKind::kNode) {
+                    const auto& member_list_node = verible::SymbolCastToNode(*member_list);
+                    if (member_list_node.MatchesTag(NodeEnum::kStructUnionMemberList)) {
+                      for (const auto& child : member_list_node.children()) {
+                        if (child && child->Kind() == verible::SymbolKind::kNode) {
+                          const auto& child_node = verible::SymbolCastToNode(*child);
+                          if (child_node.MatchesTag(NodeEnum::kStructUnionMember)) {
+                            info.struct_field_count++;
+                            // Extract field name
+                            const verible::Symbol* field_dims = GetSubtreeAsSymbol(child_node, NodeEnum::kStructUnionMember, 1);
+                            if (field_dims && field_dims->Kind() == verible::SymbolKind::kNode) {
+                              const auto& dims_node = verible::SymbolCastToNode(*field_dims);
+                              if (dims_node.MatchesTag(NodeEnum::kDataTypeImplicitIdDimensions)) {
+                                const verible::Symbol* id = GetSubtreeAsSymbol(dims_node, NodeEnum::kDataTypeImplicitIdDimensions, 0);
+                                if (id && id->Kind() == verible::SymbolKind::kLeaf) {
+                                  const auto& id_leaf = verible::SymbolCastToLeaf(*id);
+                                  info.struct_field_names.push_back(std::string(id_leaf.get().text()));
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            // Check for union type
+            else if (prim_child_node.MatchesTag(NodeEnum::kUnionType)) {
+              info.is_union = true;
+              info.base_type = "union";
+              
+              // Check for packed keyword
+              const verible::Symbol* signing = GetSubtreeAsSymbol(base_node, NodeEnum::kDataTypePrimitive, 1);
+              if (signing && signing->Kind() == verible::SymbolKind::kNode) {
+                const auto& signing_node = verible::SymbolCastToNode(*signing);
+                if (signing_node.MatchesTag(NodeEnum::kPackedSigning)) {
+                  std::string_view signing_text = verible::StringSpanOfSymbol(signing_node);
+                  if (signing_text.find("packed") != std::string_view::npos) {
+                    info.is_packed = true;
+                  }
+                }
+              }
+              
+              // Count union members
+              const verible::Symbol* brace_group = GetSubtreeAsSymbol(prim_child_node, NodeEnum::kUnionType, 1);
+              if (brace_group && brace_group->Kind() == verible::SymbolKind::kNode) {
+                const auto& brace_node = verible::SymbolCastToNode(*brace_group);
+                if (brace_node.MatchesTag(NodeEnum::kBraceGroup) && brace_node.size() > 1) {
+                  const verible::Symbol* member_list = brace_node[1].get();
+                  if (member_list && member_list->Kind() == verible::SymbolKind::kNode) {
+                    const auto& member_list_node = verible::SymbolCastToNode(*member_list);
+                    if (member_list_node.MatchesTag(NodeEnum::kStructUnionMemberList)) {
+                      for (const auto& child : member_list_node.children()) {
+                        if (child && child->Kind() == verible::SymbolKind::kNode) {
+                          const auto& child_node = verible::SymbolCastToNode(*child);
+                          if (child_node.MatchesTag(NodeEnum::kStructUnionMember)) {
+                            info.union_member_count++;
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
             // Check for typedef reference (kUnqualifiedId)
-            if (prim_child_node.MatchesTag(NodeEnum::kUnqualifiedId)) {
+            else if (prim_child_node.MatchesTag(NodeEnum::kUnqualifiedId)) {
               std::string_view id_text = verible::StringSpanOfSymbol(prim_child_node);
               info.base_type = std::string(id_text);
             }
