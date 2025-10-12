@@ -6962,6 +6962,85 @@ endprimitive
   EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
 }
 
+// ============================================================================
+// CLOCKING BLOCKS TESTS (Priority 4: VeriPG Enhancement)
+// ============================================================================
+
+TEST(VerilogParserTest, Clocking_BasicBlock) {
+  const std::string code = R"(
+clocking cb @(posedge clk);
+  default input #1step output #0;
+  input data_in;
+  output data_out;
+  inout bidir;
+endclocking
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Clocking_DefaultClocking) {
+  const std::string code = R"(
+default clocking @(posedge clk);
+  input sig_in;
+  output sig_out;
+endclocking
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Clocking_WithSkew) {
+  const std::string code = R"(
+clocking cb @(posedge clk);
+  default input #1ns output #2ns;
+  input #1step data_in;
+  output #0 data_out;
+endclocking
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Clocking_InModule) {
+  const std::string code = R"(
+module test;
+  logic clk, data_in, data_out;
+  
+  clocking cb @(posedge clk);
+    input data_in;
+    output data_out;
+  endclocking
+  
+  initial begin
+    ##1 cb.data_out <= 1;
+  end
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Clocking_InputOutputSkew) {
+  const std::string code = R"(
+clocking cb @(posedge clk);
+  input #1step output #0 data;
+endclocking
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Clocking_WithLabel) {
+  const std::string code = R"(
+clocking cb @(negedge clk);
+  input data;
+endclocking : cb
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
 }  // namespace
 
 }  // namespace verilog
