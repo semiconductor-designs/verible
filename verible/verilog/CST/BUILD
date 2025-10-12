@@ -878,9 +878,13 @@ cc_library(
     srcs = ["verilog-tree-json.cc"],
     hdrs = ["verilog-tree-json.h"],
     deps = [
+        ":declaration",
         ":expression",
         ":functions",
+        ":identifier",
         ":statement",
+        ":type",
+        ":verilog-matchers",
         ":verilog-nonterminals",
         "//verible/common/text:concrete-syntax-leaf",
         "//verible/common/text:concrete-syntax-tree",
@@ -972,6 +976,42 @@ cc_test(
         ":verilog-tree-json",
         ":verilog-nonterminals",
         "//verible/common/text:symbol",
+        "//verible/common/util:logging",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+        "@nlohmann_json//:singleheader-json",
+    ],
+)
+
+cc_test(
+    name = "verilog-tree-json-type-resolution_test",
+    srcs = ["verilog-tree-json-type-resolution_test.cc"],
+    deps = [
+        ":verilog-tree-json",
+        ":verilog-nonterminals",
+        "//verible/common/analysis:syntax-tree-search",
+        "//verible/common/text:concrete-syntax-tree",
+        "//verible/common/text:symbol",
+        "//verible/common/text:text-structure",
+        "//verible/common/util:logging",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+        "@nlohmann_json//:singleheader-json",
+    ],
+)
+
+cc_test(
+    name = "verilog-tree-json-cross-reference_test",
+    srcs = ["verilog-tree-json-cross-reference_test.cc"],
+    deps = [
+        ":verilog-tree-json",
+        ":verilog-nonterminals",
+        "//verible/common/analysis:syntax-tree-search",
+        "//verible/common/text:concrete-syntax-tree",
+        "//verible/common/text:symbol",
+        "//verible/common/text:text-structure",
         "//verible/common/util:logging",
         "//verible/verilog/analysis:verilog-analyzer",
         "@googletest//:gtest",
