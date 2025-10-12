@@ -6550,6 +6550,817 @@ TEST(VerilogParserTestMatchAll, Library) {
   TestVerilogLibraryParserMatchAll(kLibraryTests);
 }
 
+// ============================================================================
+// FUNCTIONAL COVERAGE TESTS (Priority 2: VeriPG Enhancement)
+// ============================================================================
+
+TEST(VerilogParserTest, Coverage_BasicCovergroup) {
+  const std::string code = R"(
+covergroup basic_cg @(posedge clk);
+  data_cp: coverpoint data_in {
+    bins low = {[0:63]};
+    bins mid = {[64:127]};
+    bins high = {[128:255]};
+  }
+endgroup
+)";
+  
+  VerilogAnalyzer analyzer(code, "");
+  const auto status = analyzer.Analyze();
+  EXPECT_TRUE(status.ok()) << status.message();
+}
+
+TEST(VerilogParserTest, Coverage_CrossCoverage) {
+  const std::string code = R"(
+covergroup cg;
+  addr_cp: coverpoint addr;
+  data_cp: coverpoint data;
+  cross_cov: cross addr_cp, data_cp;
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_Options) {
+  const std::string code = R"(
+covergroup cg_with_options;
+  option.per_instance = 1;
+  option.goal = 100;
+  coverpoint signal;
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_IllegalIgnoreBins) {
+  const std::string code = R"(
+covergroup cg;
+  coverpoint data {
+    bins valid = {[0:100]};
+    illegal_bins bad = {[200:255]};
+    ignore_bins reserved = {101, 102};
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_Wildcard) {
+  const std::string code = R"(
+covergroup cg;
+  coverpoint opcode {
+    wildcard bins read = {4'b00??};
+    wildcard bins write = {4'b01??};
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_IffClause) {
+  const std::string code = R"(
+covergroup cg;
+  coverpoint data iff (enable) {
+    bins values = {[0:255]};
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_WithSample) {
+  const std::string code = R"(
+covergroup cg with function sample(input bit [7:0] val);
+  coverpoint val {
+    bins low = {[0:127]};
+    bins high = {[128:255]};
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_BinsArrayIndex) {
+  const std::string code = R"(
+covergroup cg;
+  coverpoint data {
+    bins range[4] = {[0:255]};
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_CrossWithIff) {
+  const std::string code = R"(
+covergroup cg;
+  addr: coverpoint address;
+  data: coverpoint data_bus;
+  addr_data: cross addr, data iff (valid);
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_MultipleBinsTypes) {
+  const std::string code = R"(
+covergroup cg;
+  coverpoint signal {
+    bins zero = {0};
+    bins one = {1};
+    bins range = {[2:10]};
+    bins list = {11, 12, 13};
+    illegal_bins bad = {[100:200]};
+    ignore_bins ignore = {255};
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_DefaultBins) {
+  const std::string code = R"(
+covergroup cg;
+  coverpoint signal {
+    bins specified = {[0:10]};
+    bins others = default;
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_TypeOption) {
+  const std::string code = R"(
+covergroup cg;
+  type_option.weight = 5;
+  option.comment = "Test coverage";
+  coverpoint data;
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_InModule) {
+  const std::string code = R"(
+module test;
+  logic [7:0] data;
+  logic clk;
+  
+  covergroup data_cg @(posedge clk);
+    coverpoint data {
+      bins low = {[0:127]};
+      bins high = {[128:255]};
+    }
+  endgroup
+  
+  data_cg cg_inst = new();
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_EmptyCoverpoint) {
+  const std::string code = R"(
+covergroup cg;
+  coverpoint signal;
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_CrossWithBins) {
+  const std::string code = R"(
+covergroup cg;
+  a_cp: coverpoint a;
+  b_cp: coverpoint b;
+  cross_ab: cross a_cp, b_cp {
+    bins corner = binsof(a_cp) intersect {0} && binsof(b_cp) intersect {0};
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_BinsTransitions) {
+  const std::string code = R"(
+covergroup cg;
+  coverpoint state {
+    bins trans1 = (0 => 1);
+    bins trans2 = (1 => 2 => 3);
+    bins cycle = (3 => 0);
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_ComplexExpression) {
+  const std::string code = R"(
+covergroup cg;
+  coverpoint (addr & 8'hF0) {
+    bins nibble0 = {8'h00};
+    bins nibble1 = {8'h10};
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_WildcardRange) {
+  const std::string code = R"(
+covergroup cg;
+  coverpoint opcode {
+    wildcard bins read_ops = {8'b0000_????};
+    wildcard bins write_ops = {8'b0001_????};
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Coverage_BinsOfIntersect) {
+  const std::string code = R"(
+covergroup cg;
+  addr: coverpoint address;
+  data: coverpoint data_bus;
+  cross addr, data {
+    bins low_addr_high_data = binsof(addr) intersect {[0:100]} && 
+                               binsof(data) intersect {[200:255]};
+  }
+endgroup
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+// ============================================================================
+// UDP (User-Defined Primitives) TESTS (Priority 3: VeriPG Enhancement)
+// Note: Verible supports UDP primitives with separate port declarations
+// ============================================================================
+
+TEST(VerilogParserTest, UDP_BasicCombinational) {
+  const std::string code = R"(
+primitive and_prim (out, a, b);
+  output out;
+  input a, b;
+  table
+    0 0 : 0;
+    0 1 : 0;
+    1 0 : 0;
+    1 1 : 1;
+  endtable
+endprimitive
+)";
+  
+  const auto status = VerilogAnalyzer(code, "").Analyze();
+  EXPECT_TRUE(status.ok()) << status.message();
+}
+
+TEST(VerilogParserTest, UDP_Sequential) {
+  const std::string code = R"(
+primitive dff (q, clk, d);
+  output q;
+  input clk, d;
+  reg q;
+  table
+    r 0 : ? : 0;
+    r 1 : ? : 1;
+    f ? : ? : -;
+  endtable
+endprimitive
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_WithInitial) {
+  const std::string code = R"(
+primitive latch (q, en, d);
+  output q;
+  input en, d;
+  reg q;
+  initial q = 1'b0;
+  table
+    1 0 : ? : 0;
+    1 1 : ? : 1;
+    0 ? : ? : -;
+  endtable
+endprimitive
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_EdgeSensitive) {
+  const std::string code = R"(
+primitive edge_ff (q, clk, d);
+  output q;
+  input clk, d;
+  reg q;
+  table
+    (01) 0 : ? : 0;
+    (01) 1 : ? : 1;
+    (0x) 1 : 1 : 1;
+    (0x) 0 : 0 : 0;
+    (?0) ? : ? : -;
+  endtable
+endprimitive
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_ThreeInputs) {
+  const std::string code = R"(
+primitive mux4 (o, s1, s0, i0, i1, i2, i3);
+  output o;
+  input s1, s0, i0, i1, i2, i3;
+  table
+    0 0 0 ? ? ? : 0;
+    0 0 1 ? ? ? : 1;
+    0 1 ? 0 ? ? : 0;
+    0 1 ? 1 ? ? : 1;
+    1 0 ? ? 0 ? : 0;
+    1 0 ? ? 1 ? : 1;
+    1 1 ? ? ? 0 : 0;
+    1 1 ? ? ? 1 : 1;
+  endtable
+endprimitive
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_InModule) {
+  const std::string code = R"(
+primitive or_prim (out, a, b);
+  output out;
+  input a, b;
+  table
+    0 0 : 0;
+    0 1 : 1;
+    1 ? : 1;
+  endtable
+endprimitive
+
+module test;
+  wire a, b, c;
+  or_prim u1 (c, a, b);
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_WithLabel) {
+  const std::string code = R"(
+primitive buf_udp (y, a);
+  output y;
+  input a;
+  table
+    0 : 0;
+    1 : 1;
+  endtable
+endprimitive : buf_udp
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_WithReg) {
+  const std::string code = R"(
+primitive latch_p (q, gate, data);
+  output q;
+  input gate, data;
+  reg q;
+  table
+    1 0 : ? : 0;
+    1 1 : ? : 1;
+    0 ? : ? : -;
+  endtable
+endprimitive
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+// ============================================================================
+// CLOCKING BLOCKS TESTS (Priority 4: VeriPG Enhancement)
+// ============================================================================
+
+TEST(VerilogParserTest, Clocking_BasicBlock) {
+  const std::string code = R"(
+clocking cb @(posedge clk);
+  default input #1step output #0;
+  input data_in;
+  output data_out;
+  inout bidir;
+endclocking
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Clocking_DefaultClocking) {
+  const std::string code = R"(
+default clocking @(posedge clk);
+  input sig_in;
+  output sig_out;
+endclocking
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Clocking_WithSkew) {
+  const std::string code = R"(
+clocking cb @(posedge clk);
+  default input #1ns output #2ns;
+  input #1step data_in;
+  output #0 data_out;
+endclocking
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Clocking_InModule) {
+  const std::string code = R"(
+module test;
+  logic clk, data_in, data_out;
+  
+  clocking cb @(posedge clk);
+    input data_in;
+    output data_out;
+  endclocking
+  
+  initial begin
+    ##1 cb.data_out <= 1;
+  end
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Clocking_InputOutputSkew) {
+  const std::string code = R"(
+clocking cb @(posedge clk);
+  input #1step output #0 data;
+endclocking
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Clocking_WithLabel) {
+  const std::string code = R"(
+clocking cb @(negedge clk);
+  input data;
+endclocking : cb
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+// ============================================================================
+// SPECIFY BLOCKS TESTS (Priority 5: VeriPG Enhancement)
+// ============================================================================
+
+TEST(VerilogParserTest, Specify_BasicBlock) {
+  const std::string code = R"(
+module dff;
+  specify
+    specparam tRise = 10, tFall = 12;
+    (clk => q) = (tRise, tFall);
+    $setup(data, posedge clk, 5);
+    $hold(posedge clk, data, 3);
+  endspecify
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Specify_SpecParams) {
+  const std::string code = R"(
+module timing;
+  specify
+    specparam tpd = 10.5;
+    specparam tsetup = 5, thold = 3;
+  endspecify
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Specify_PathDelays) {
+  const std::string code = R"(
+module path_delays;
+  specify
+    (in => out) = 10;
+    (clk *> q) = (5, 6);
+  endspecify
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Specify_TimingChecks) {
+  const std::string code = R"(
+module checks;
+  specify
+    $setup(d, posedge clk, 2);
+    $hold(posedge clk, d, 1);
+    $width(posedge clk, 10);
+    $period(posedge clk, 20);
+  endspecify
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Specify_PulseStyle) {
+  const std::string code = R"(
+module pulse_control;
+  specify
+    pulsestyle_ondetect in, out;
+    showcancelled reset;
+  endspecify
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Specify_ConditionalPaths) {
+  const std::string code = R"(
+module cond_paths;
+  specify
+    if (sel) (a => out) = 5;
+    if (!sel) (b => out) = 6;
+  endspecify
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+// ============================================================================
+// CLASS ENHANCEMENTS TESTS (Priority 6: VeriPG Enhancement)
+// ============================================================================
+
+TEST(VerilogParserTest, Class_PureVirtual) {
+  const std::string code = R"(
+virtual class base_class #(parameter WIDTH = 8);
+  pure virtual function logic [WIDTH-1:0] compute();
+  pure virtual task display();
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Class_ExternDeclarations) {
+  const std::string code = R"(
+class MyClass;
+  extern virtual task run();
+  extern function int get_value();
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Class_ParameterizedInheritance) {
+  const std::string code = R"(
+class derived extends base_class #(16);
+  function logic [15:0] compute();
+    return 0;
+  endfunction
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Class_ThisSuperNull) {
+  const std::string code = R"(
+class Example;
+  int value;
+  function new(int v = 0);
+    this.value = v;
+    if (super == null)
+      $display("No parent");
+  endfunction
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Class_StaticMembers) {
+  const std::string code = R"(
+class Counter;
+  static int count = 0;
+  static function void increment();
+    count++;
+  endfunction
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Class_LocalQualifier) {
+  const std::string code = R"(
+class Protected;
+  local int private_data;
+  protected task access_data();
+    private_data = 42;
+  endtask
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Class_VirtualMethods) {
+  const std::string code = R"(
+class Base;
+  virtual function void print();
+    $display("Base");
+  endfunction
+endclass
+
+class Child extends Base;
+  function void print();
+    $display("Child");
+  endfunction
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+// ============================================================================
+// CONSTRAINT ENHANCEMENTS TESTS (Priority 7: VeriPG Enhancement)
+// ============================================================================
+
+TEST(VerilogParserTest, Constraint_BasicConstraints) {
+  const std::string code = R"(
+class packet;
+  rand logic [7:0] length;
+  rand logic [31:0] payload[];
+  
+  constraint length_c {
+    length inside {[1:255]};
+    length % 4 == 0;
+  }
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Constraint_DistConstraint) {
+  const std::string code = R"(
+class weighted;
+  rand int value;
+  constraint dist_c {
+    value dist {0:/40, [1:254]:/20, 255:/40};
+  }
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Constraint_SolveBefore) {
+  const std::string code = R"(
+class ordered;
+  rand int a, b;
+  constraint solve_c {
+    solve a before b;
+    a < b;
+  }
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Constraint_ForeachConstraint) {
+  const std::string code = R"(
+class array_class;
+  rand int arr[10];
+  constraint foreach_c {
+    foreach(arr[i]) {
+      arr[i] inside {[0:100]};
+    }
+  }
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Constraint_UniqueConstraint) {
+  const std::string code = R"(
+class unique_array;
+  rand int arr[5];
+  constraint unique_c {
+    unique {arr};
+  }
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Constraint_SoftConstraint) {
+  const std::string code = R"(
+class soft_constraints;
+  rand int x;
+  constraint soft_c {
+    soft x < 100;
+    soft x > 0;
+  }
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Constraint_DisableConstraint) {
+  const std::string code = R"(
+class with_disable;
+  rand int value;
+  constraint valid_c {
+    value inside {[0:100]};
+  }
+  
+  function void allow_invalid();
+    valid_c.constraint_mode(0);
+  endfunction
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Constraint_RandRandc) {
+  const std::string code = R"(
+class cyclic;
+  rand int normal;
+  randc bit [3:0] cyclic_value;
+  
+  constraint bounds {
+    normal inside {[0:100]};
+  }
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, Constraint_ImplicationConstraint) {
+  const std::string code = R"(
+class conditional;
+  rand bit enable;
+  rand int data;
+  
+  constraint imply_c {
+    enable -> data inside {[1:10]};
+    !enable -> data == 0;
+  }
+endclass
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
 }  // namespace
 
 }  // namespace verilog

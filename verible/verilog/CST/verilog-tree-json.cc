@@ -431,6 +431,53 @@ static bool IsLikelyEnableSignal(std::string_view signal_name) {
           lower_name.find("req") != std::string::npos);
 }
 
+// Helper function: Add location metadata (line and column numbers)
+static json AddLocationMetadata(const verible::Symbol &symbol, 
+                                  std::string_view base) {
+  json location = json::object();
+  
+  // Get text span for this symbol
+  auto text_span = verible::StringSpanOfSymbol(symbol);
+  if (text_span.empty() || base.empty()) {
+    return location;  // No location info available
+  }
+  
+  // Calculate byte offsets
+  size_t start_offset = text_span.begin() - base.begin();
+  size_t end_offset = text_span.end() - base.begin();
+  
+  // Calculate line and column numbers
+  int start_line = 1, start_col = 1;
+  int end_line = 1, end_col = 1;
+  
+  for (size_t i = 0; i < start_offset && i < base.size(); ++i) {
+    if (base[i] == '\n') {
+      start_line++;
+      start_col = 1;
+    } else {
+      start_col++;
+    }
+  }
+  
+  end_line = start_line;
+  end_col = start_col;
+  for (size_t i = start_offset; i < end_offset && i < base.size(); ++i) {
+    if (base[i] == '\n') {
+      end_line++;
+      end_col = 1;
+    } else {
+      end_col++;
+    }
+  }
+  
+  location["start_line"] = start_line;
+  location["start_column"] = start_col;
+  location["end_line"] = end_line;
+  location["end_column"] = end_col;
+  
+  return location;
+}
+
 // Helper method: Add metadata for always blocks (behavioral semantics)
 static void AddAlwaysBlockMetadata(json &node_json,
                                     const verible::SyntaxTreeNode &node) {
@@ -740,11 +787,21 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeLeaf &leaf) {
   const bool include_text =
       verilog::IsIdentifierLike(tokentype) || (leaf.get().text() != type_str);
   *value_ = verible::ToJson(leaf.get(), context_, include_text);
+  
+  // Add location metadata
+  if (!context_.base.empty()) {
+    (*value_)["location"] = AddLocationMetadata(leaf, context_.base);
+  }
 }
 
 void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
   *value_ = json::object();
   (*value_)["tag"] = NodeEnumToString(static_cast<NodeEnum>(node.Tag().tag));
+  
+  // Add location metadata
+  if (!context_.base.empty()) {
+    (*value_)["location"] = AddLocationMetadata(node, context_.base);
+  }
   
   // Extract and include the full source text for this node
   std::string_view node_text = verible::StringSpanOfSymbol(node);
