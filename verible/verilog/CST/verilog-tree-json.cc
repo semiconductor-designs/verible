@@ -1217,7 +1217,8 @@ static void AddAlwaysBlockMetadata(json &node_json,
 
 class VerilogTreeToJsonConverter : public verible::SymbolVisitor {
  public:
-  explicit VerilogTreeToJsonConverter(std::string_view base);
+  explicit VerilogTreeToJsonConverter(std::string_view base,
+                                     const std::unordered_map<std::string, TypedefInfo>& typedef_table);
 
   void Visit(const verible::SyntaxTreeLeaf &) final;
   void Visit(const verible::SyntaxTreeNode &) final;
@@ -1233,6 +1234,9 @@ class VerilogTreeToJsonConverter : public verible::SymbolVisitor {
   // Range of text spanned by syntax tree, used for offset calculation.
   const verible::TokenInfo::Context context_;
 
+  // Typedef lookup table for type resolution (Phase A)
+  const std::unordered_map<std::string, TypedefInfo>& typedef_table_;
+
   // JSON tree root
   json json_;
 
@@ -1241,11 +1245,13 @@ class VerilogTreeToJsonConverter : public verible::SymbolVisitor {
   json *value_;
 };
 
-VerilogTreeToJsonConverter::VerilogTreeToJsonConverter(std::string_view base)
+VerilogTreeToJsonConverter::VerilogTreeToJsonConverter(std::string_view base,
+                                                       const std::unordered_map<std::string, TypedefInfo>& typedef_table)
     : context_(base,
                [](std::ostream &stream, int e) {
                  stream << TokenTypeToString(static_cast<verilog_tokentype>(e));
                }),
+      typedef_table_(typedef_table),
       value_(&json_) {}
 
 void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeLeaf &leaf) {
@@ -1296,6 +1302,8 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
     AddFunctionCallMetadata(*value_, node);  // System functions use same format
   } else if (tag == NodeEnum::kAlwaysStatement) {
     AddAlwaysBlockMetadata(*value_, node);  // Phase 4: Behavioral metadata
+  } else if (tag == NodeEnum::kDataDeclaration) {
+    AddTypeResolutionMetadata(*value_, node, typedef_table_, context_.base);  // Phase A: Type resolution
   }
   
   json &children = (*value_)["children"] = json::array();
@@ -1386,7 +1394,10 @@ void VerilogTreeToJsonConverter::AddBinaryExpressionMetadata(
 
 json ConvertVerilogTreeToJson(const verible::Symbol &root,
                               std::string_view base) {
-  VerilogTreeToJsonConverter converter(base);
+  // Build typedef table for type resolution (Phase A)
+  auto typedef_table = BuildTypedefTable(root, base);
+  
+  VerilogTreeToJsonConverter converter(base, typedef_table);
   root.Accept(&converter);
   return converter.TakeJsonValue();
 }
