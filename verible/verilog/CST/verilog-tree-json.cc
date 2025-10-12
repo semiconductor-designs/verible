@@ -586,6 +586,29 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
         const auto& base_node = verible::SymbolCastToNode(*base_type_symbol);
         
         if (base_node.MatchesTag(NodeEnum::kDataTypePrimitive)) {
+          // Extract packed dimensions for width calculation
+          const verible::Symbol* packed_dims = GetSubtreeAsSymbol(*ref_type, NodeEnum::kDataType, 1);
+          if (packed_dims && packed_dims->Kind() == verible::SymbolKind::kNode) {
+            const auto& dims_node = verible::SymbolCastToNode(*packed_dims);
+            if (dims_node.MatchesTag(NodeEnum::kPackedDimensions)) {
+              // Extract dimension string
+              info.dimension_string = std::string(verible::StringSpanOfSymbol(dims_node));
+              // Calculate width from first dimension [msb:lsb]
+              std::string dim_text = info.dimension_string;
+              size_t colon = dim_text.find(':');
+              if (colon != std::string::npos) {
+                try {
+                  int msb = std::stoi(dim_text.substr(1, colon - 1));
+                  int lsb = std::stoi(dim_text.substr(colon + 1, dim_text.find(']') - colon - 1));
+                  info.width = std::abs(msb - lsb) + 1;
+                  info.is_packed = true;
+                } catch (...) {
+                  info.is_parameterized = true;
+                }
+              }
+            }
+          }
+          
           const verible::Symbol* prim_child = GetSubtreeAsSymbol(base_node, NodeEnum::kDataTypePrimitive, 0);
           if (prim_child && prim_child->Kind() == verible::SymbolKind::kLeaf) {
             const auto& prim_leaf = verible::SymbolCastToLeaf(*prim_child);
@@ -733,9 +756,23 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
       }
     }
     
-    // Build resolved type string
+    // Build resolved type string with dimensions
     if (!info.base_type.empty()) {
-      info.resolved_type_string = info.base_type;
+      if (info.is_enum) {
+        info.resolved_type_string = "enum " + info.base_type;
+        if (!info.dimension_string.empty()) {
+          info.resolved_type_string += " " + info.dimension_string;
+        }
+      } else if (info.is_struct) {
+        info.resolved_type_string = info.is_packed ? "packed struct" : "struct";
+      } else if (info.is_union) {
+        info.resolved_type_string = info.is_packed ? "packed union" : "union";
+      } else {
+        info.resolved_type_string = info.base_type;
+        if (!info.dimension_string.empty()) {
+          info.resolved_type_string += " " + info.dimension_string;
+        }
+      }
     }
     
     // Store in table
@@ -775,8 +812,18 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
       info.array_dimensions = resolved.array_dimensions;
       info.dimension_sizes = resolved.dimension_sizes;
       info.dimension_string = resolved.dimension_string;
-      info.resolved_type_string = resolved.resolved_type_string;
       info.resolution_depth = resolved.resolution_depth + 1;
+      
+      // Rebuild resolved_type_string based on final metadata
+      if (info.is_enum) {
+        info.resolved_type_string = "enum " + info.base_type;
+      } else if (info.is_struct) {
+        info.resolved_type_string = info.is_packed ? "packed struct" : "struct";
+      } else if (info.is_union) {
+        info.resolved_type_string = info.is_packed ? "packed union" : "union";
+      } else {
+        info.resolved_type_string = info.base_type;
+      }
     }
     
     return info;
