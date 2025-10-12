@@ -790,6 +790,167 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
   return typedef_table;
 }  // End BuildTypedefTable
 
+// Helper: Add type resolution metadata to kDataDeclaration nodes (Phase A)
+static void AddTypeResolutionMetadata(
+    json &node_json,
+    const verible::SyntaxTreeNode &node,
+    const std::unordered_map<std::string, TypedefInfo>& typedef_table,
+    std::string_view source_text) {
+  
+  json type_info = json::object();
+  
+  // Step 1: Get the kInstantiationBase child
+  const verible::Symbol* inst_base = GetSubtreeAsSymbol(node, NodeEnum::kDataDeclaration, 1);
+  if (!inst_base || inst_base->Kind() != verible::SymbolKind::kNode) {
+    return;
+  }
+  
+  const auto& inst_base_node = verible::SymbolCastToNode(*inst_base);
+  if (!inst_base_node.MatchesTag(NodeEnum::kInstantiationBase)) {
+    return;
+  }
+  
+  // Step 2: Get kDataType (child 0 of kInstantiationBase)
+  const verible::Symbol* data_type = GetSubtreeAsSymbol(inst_base_node, NodeEnum::kInstantiationBase, 0);
+  if (!data_type) {
+    return;
+  }
+  
+  // Step 3: Extract declared type name
+  std::string_view declared_type_text = verible::StringSpanOfSymbol(*data_type);
+  std::string declared_type(declared_type_text);
+  
+  // Remove whitespace
+  declared_type.erase(std::remove_if(declared_type.begin(), declared_type.end(), ::isspace), declared_type.end());
+  
+  type_info["declared_type"] = declared_type;
+  
+  // Step 4: Check for package-scoped types (e.g., my_pkg::word_t)
+  bool is_package_scoped = false;
+  std::string package_name;
+  std::string unqualified_name = declared_type;
+  
+  size_t scope_pos = declared_type.find("::");
+  if (scope_pos != std::string::npos) {
+    is_package_scoped = true;
+    package_name = declared_type.substr(0, scope_pos);
+    unqualified_name = declared_type.substr(scope_pos + 2);
+    type_info["is_package_scoped"] = true;
+    type_info["package_name"] = package_name;
+  }
+  
+  // Step 5: Look up in typedef table
+  auto it = typedef_table.find(is_package_scoped ? unqualified_name : declared_type);
+  
+  if (it != typedef_table.end()) {
+    // Found in typedef table
+    const TypedefInfo& info = it->second;
+    
+    type_info["is_typedef"] = true;
+    type_info["resolved_type"] = info.resolved_type_string;
+    type_info["base_type"] = info.base_type;
+    type_info["width"] = info.width;
+    type_info["signed"] = info.is_signed;
+    type_info["packed"] = info.is_packed;
+    type_info["is_parameterized"] = info.is_parameterized;
+    type_info["is_array"] = info.is_array;
+    type_info["array_dimensions"] = info.array_dimensions;
+    type_info["resolution_depth"] = info.resolution_depth;
+    
+    // Add definition location
+    if (info.definition_line > 0) {
+      type_info["definition_location"] = {
+        {"line", info.definition_line},
+        {"column", info.definition_column}
+      };
+    }
+    
+    // Detect forward reference: usage location < definition location
+    bool is_forward_ref = false;
+    if (info.definition_line > 0) {
+      // Extract usage location
+      std::string_view usage_text = verible::StringSpanOfSymbol(node);
+      if (!source_text.empty() && usage_text.data() >= source_text.data() &&
+          usage_text.data() < source_text.data() + source_text.size()) {
+        size_t offset = usage_text.data() - source_text.data();
+        int usage_line = 1;
+        for (size_t i = 0; i < offset && i < source_text.size(); ++i) {
+          if (source_text[i] == '\n') {
+            usage_line++;
+          }
+        }
+        // Forward reference if usage comes before definition
+        is_forward_ref = (usage_line < info.definition_line);
+      }
+    }
+    type_info["is_forward_reference"] = is_forward_ref;
+    
+    // Add dimension sizes
+    if (!info.dimension_sizes.empty()) {
+      json dims = json::array();
+      for (int size : info.dimension_sizes) {
+        dims.push_back(size);
+      }
+      type_info["dimension_sizes"] = dims;
+    }
+    
+    // Add enum metadata
+    if (info.is_enum) {
+      type_info["is_enum"] = true;
+      type_info["enum_member_count"] = info.enum_member_count;
+    }
+    
+    // Add struct metadata
+    if (info.is_struct) {
+      type_info["is_struct"] = true;
+      type_info["struct_field_count"] = info.struct_field_count;
+      if (!info.struct_field_names.empty()) {
+        json fields = json::array();
+        for (const auto& field : info.struct_field_names) {
+          fields.push_back(field);
+        }
+        type_info["struct_fields"] = fields;
+      }
+    }
+    
+    // Add union metadata
+    if (info.is_union) {
+      type_info["is_union"] = true;
+      type_info["union_member_count"] = info.union_member_count;
+    }
+  } else {
+    // Not found in typedef table
+    type_info["is_typedef"] = false;
+    
+    // Check if it's a built-in type
+    static const std::vector<std::string> builtin_types = {
+      "logic", "bit", "byte", "shortint", "int", "longint", "integer",
+      "reg", "wire", "time", "real", "realtime", "shortreal", "string"
+    };
+    
+    bool is_builtin = false;
+    for (const auto& builtin : builtin_types) {
+      if (declared_type.find(builtin) != std::string::npos) {
+        is_builtin = true;
+        type_info["base_type"] = builtin;
+        break;
+      }
+    }
+    
+    if (!is_builtin) {
+      // Unresolved typedef (might be forward reference or package import issue)
+      type_info["is_unresolved"] = true;
+      type_info["is_forward_reference"] = true;  // Placeholder - true detection needs symbol table
+    }
+  }
+  
+  // Add type_info to metadata
+  if (!node_json.contains("metadata")) {
+    node_json["metadata"] = json::object();
+  }
+  node_json["metadata"]["type_info"] = type_info;
+}  // End AddTypeResolutionMetadata
+
 // Helper method: Add metadata for always blocks (behavioral semantics)
 static void AddAlwaysBlockMetadata(json &node_json,
                                     const verible::SyntaxTreeNode &node) {
