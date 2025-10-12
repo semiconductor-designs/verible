@@ -586,24 +586,29 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
         const auto& base_node = verible::SymbolCastToNode(*base_type_symbol);
         
         if (base_node.MatchesTag(NodeEnum::kDataTypePrimitive)) {
-          // Extract packed dimensions for width calculation
-          const verible::Symbol* packed_dims = GetSubtreeAsSymbol(*ref_type, NodeEnum::kDataType, 1);
-          if (packed_dims && packed_dims->Kind() == verible::SymbolKind::kNode) {
-            const auto& dims_node = verible::SymbolCastToNode(*packed_dims);
-            if (dims_node.MatchesTag(NodeEnum::kPackedDimensions)) {
-              // Extract dimension string
-              info.dimension_string = std::string(verible::StringSpanOfSymbol(dims_node));
-              // Calculate width from first dimension [msb:lsb]
-              std::string dim_text = info.dimension_string;
-              size_t colon = dim_text.find(':');
-              if (colon != std::string::npos) {
-                try {
-                  int msb = std::stoi(dim_text.substr(1, colon - 1));
-                  int lsb = std::stoi(dim_text.substr(colon + 1, dim_text.find(']') - colon - 1));
-                  info.width = std::abs(msb - lsb) + 1;
-                  info.is_packed = true;
-                } catch (...) {
-                  info.is_parameterized = true;
+          // Extract packed dimensions - search through all children of ref_type (kDataType)
+          if (ref_type->Kind() == verible::SymbolKind::kNode) {
+            const auto& data_type_node = verible::SymbolCastToNode(*ref_type);
+            for (const auto& child : data_type_node.children()) {
+              if (child && child->Kind() == verible::SymbolKind::kNode) {
+                const auto& child_node = verible::SymbolCastToNode(*child);
+                if (child_node.MatchesTag(NodeEnum::kPackedDimensions)) {
+                  // Extract dimension string
+                  info.dimension_string = std::string(verible::StringSpanOfSymbol(child_node));
+                  // Calculate width from first dimension [msb:lsb]
+                  std::string dim_text = info.dimension_string;
+                  size_t colon = dim_text.find(':');
+                  if (colon != std::string::npos) {
+                    try {
+                      int msb = std::stoi(dim_text.substr(1, colon - 1));
+                      int lsb = std::stoi(dim_text.substr(colon + 1, dim_text.find(']') - colon - 1));
+                      info.width = std::abs(msb - lsb) + 1;
+                      info.is_packed = true;
+                    } catch (...) {
+                      info.is_parameterized = true;
+                    }
+                  }
+                  break;  // Found dimensions, stop searching
                 }
               }
             }
@@ -753,6 +758,23 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
             }
           }
         }
+        // Handle `kUnqualifiedId` directly (typedef referencing another typedef)
+        else if (base_node.MatchesTag(NodeEnum::kUnqualifiedId)) {
+          // This is a typedef reference (e.g., typedef byte_t small_t;)
+          std::string_view id_text = verible::StringSpanOfSymbol(base_node);
+          info.base_type = std::string(id_text);
+        }
+        // Handle `kLocalRoot` -> `kUnqualifiedId` (alternate structure)
+        else if (base_node.MatchesTag(NodeEnum::kLocalRoot)) {
+          const verible::Symbol* unqual_id = GetSubtreeAsSymbol(base_node, NodeEnum::kLocalRoot, 0);
+          if (unqual_id && unqual_id->Kind() == verible::SymbolKind::kNode) {
+            const auto& unqual_id_node = verible::SymbolCastToNode(*unqual_id);
+            if (unqual_id_node.MatchesTag(NodeEnum::kUnqualifiedId)) {
+              std::string_view id_text = verible::StringSpanOfSymbol(unqual_id_node);
+              info.base_type = std::string(id_text);
+            }
+          }
+        }
       }
     }
     
@@ -817,12 +839,18 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
       // Rebuild resolved_type_string based on final metadata
       if (info.is_enum) {
         info.resolved_type_string = "enum " + info.base_type;
+        if (!info.dimension_string.empty()) {
+          info.resolved_type_string += " " + info.dimension_string;
+        }
       } else if (info.is_struct) {
         info.resolved_type_string = info.is_packed ? "packed struct" : "struct";
       } else if (info.is_union) {
         info.resolved_type_string = info.is_packed ? "packed union" : "union";
       } else {
         info.resolved_type_string = info.base_type;
+        if (!info.dimension_string.empty()) {
+          info.resolved_type_string += " " + info.dimension_string;
+        }
       }
     }
     
