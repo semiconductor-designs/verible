@@ -681,9 +681,22 @@ static std::unordered_map<std::string, SymbolInfo> BuildSymbolTable(
       const auto* param_type = node[1].get();
       if (param_type && param_type->Kind() == verible::SymbolKind::kNode) {
         const auto& param_type_node = verible::SymbolCastToNode(*param_type);
-        // Parameter name is child 2 (Leaf with SymbolIdentifier)
+        // Parameter name is at child 2, could be direct Leaf or kUnqualifiedId
         if (param_type_node.size() > 2 && param_type_node[2]) {
-          const auto* name_symbol = param_type_node[2].get();
+          const auto* name_node = param_type_node[2].get();
+          const verible::Symbol* name_symbol = nullptr;
+          
+          if (name_node->Kind() == verible::SymbolKind::kLeaf) {
+            // Direct Leaf (e.g., parameter int WIDTH = 8)
+            name_symbol = name_node;
+          } else if (name_node->Kind() == verible::SymbolKind::kNode) {
+            // kUnqualifiedId (e.g., parameter WIDTH = 8)
+            const auto& unqual_node = verible::SymbolCastToNode(*name_node);
+            if (unqual_node.MatchesTag(NodeEnum::kUnqualifiedId) && unqual_node.size() > 0 && unqual_node[0]) {
+              name_symbol = unqual_node[0].get();
+            }
+          }
+          
           if (name_symbol && name_symbol->Kind() == verible::SymbolKind::kLeaf) {
             const auto& name_leaf = verible::SymbolCastToLeaf(*name_symbol);
             std::string symbol_name(name_leaf.get().text());
@@ -1821,7 +1834,20 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
       if (param_type && param_type->Kind() == verible::SymbolKind::kNode) {
         const auto& param_type_node = verible::SymbolCastToNode(*param_type);
         if (param_type_node.size() > 2 && param_type_node[2]) {
-          const auto* name_symbol = param_type_node[2].get();
+          const auto* name_node = param_type_node[2].get();
+          const verible::Symbol* name_symbol = nullptr;
+          
+          if (name_node->Kind() == verible::SymbolKind::kLeaf) {
+            // Direct Leaf (e.g., parameter int WIDTH = 8)
+            name_symbol = name_node;
+          } else if (name_node->Kind() == verible::SymbolKind::kNode) {
+            // kUnqualifiedId (e.g., parameter WIDTH = 8)
+            const auto& unqual_node = verible::SymbolCastToNode(*name_node);
+            if (unqual_node.MatchesTag(NodeEnum::kUnqualifiedId) && unqual_node.size() > 0 && unqual_node[0]) {
+              name_symbol = unqual_node[0].get();
+            }
+          }
+          
           if (name_symbol && name_symbol->Kind() == verible::SymbolKind::kLeaf) {
             const auto& name_leaf = verible::SymbolCastToLeaf(*name_symbol);
             std::string symbol_name(name_leaf.get().text());
