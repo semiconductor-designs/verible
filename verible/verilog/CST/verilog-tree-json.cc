@@ -14,11 +14,14 @@
 
 #include "verible/verilog/CST/verilog-tree-json.h"
 
+#include <functional>
 #include <ostream>
+#include <regex>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "nlohmann/json.hpp"
 #include "verible/common/text/concrete-syntax-leaf.h"
@@ -30,9 +33,13 @@
 #include "verible/common/text/visitors.h"
 #include "verible/common/util/casts.h"
 #include "verible/common/util/value-saver.h"
+#include "verible/verilog/CST/declaration.h"  // for declaration utilities
 #include "verible/verilog/CST/expression.h"  // for UnwrapExpression, ExtractIdentifierFromExpression
 #include "verible/verilog/CST/functions.h"  // for GetFunctionCallName
+#include "verible/verilog/CST/identifier.h"  // for AutoUnwrapIdentifier
 #include "verible/verilog/CST/statement.h"  // for GetProceduralTimingControlFromAlways, etc.
+#include "verible/verilog/CST/type.h"  // for type utilities
+#include "verible/verilog/CST/verilog-matchers.h"  // for NodekTypeDeclaration
 #include "verible/verilog/CST/verilog-nonterminals.h"  // for NodeEnumToString
 #include "verible/verilog/parser/verilog-token-classifications.h"
 #include "verible/verilog/parser/verilog-token-enum.h"
