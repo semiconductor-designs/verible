@@ -531,6 +531,23 @@ struct SymbolInfo {
   bool has_redeclaration;
 };
 
+// Scope information for hierarchy tracking (Phase C - lightweight)
+struct ScopeInfo {
+  std::string scope_name;
+  std::string scope_type;  // "module", "function", "task", "block"
+  std::string parent_scope;
+  int definition_line;
+};
+
+// Dataflow information for signal tracking (Phase D - lightweight)
+struct DataflowInfo {
+  std::string signal_name;
+  bool has_driver;
+  std::string driver_type;  // "continuous", "blocking", "nonblocking"
+  bool is_used;
+  int driver_line;
+};
+
 // Helper: Calculate line number from symbol position in source text
 // Uses same logic as AddLocationMetadata for consistency
 static int CalculateLineNumber(const verible::Symbol& symbol, std::string_view base) {
@@ -1828,6 +1845,63 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
     AddFunctionCallMetadata(*value_, node);
   } else if (tag == NodeEnum::kSystemTFCall) {
     AddFunctionCallMetadata(*value_, node);  // System functions use same format
+  } else if (tag == NodeEnum::kModuleDeclaration) {
+    // Phase C: Add scope metadata for modules
+    // Extract module name from node structure
+    auto name_matches = verible::SearchSyntaxTree(node, NodekUnqualifiedId());
+    if (!name_matches.empty() && name_matches[0].match) {
+      std::string_view mod_name = verible::StringSpanOfSymbol(*name_matches[0].match);
+      
+      json scope_info = json::object();
+      scope_info["scope_type"] = "module";
+      scope_info["scope_name"] = std::string(mod_name);
+      
+      if (!value_->contains("metadata")) {
+        (*value_)["metadata"] = json::object();
+      }
+      (*value_)["metadata"]["scope_info"] = scope_info;
+    }
+  } else if (tag == NodeEnum::kFunctionDeclaration || tag == NodeEnum::kTaskDeclaration) {
+    // Phase C: Add scope metadata for functions/tasks
+    auto name_matches = verible::SearchSyntaxTree(node, NodekUnqualifiedId());
+    if (!name_matches.empty() && name_matches[0].match) {
+      std::string_view func_name = verible::StringSpanOfSymbol(*name_matches[0].match);
+      
+      json scope_info = json::object();
+      scope_info["scope_type"] = (tag == NodeEnum::kFunctionDeclaration) ? "function" : "task";
+      scope_info["scope_name"] = std::string(func_name);
+      
+      if (!value_->contains("metadata")) {
+        (*value_)["metadata"] = json::object();
+      }
+      (*value_)["metadata"]["scope_info"] = scope_info;
+    }
+  } else if (tag == NodeEnum::kNetVariableAssignment || tag == NodeEnum::kBlockingAssignmentStatement || tag == NodeEnum::kNonblockingAssignmentStatement) {
+    // Phase D: Add dataflow metadata for assignments
+    std::string driver_type = "unknown";
+    if (tag == NodeEnum::kNetVariableAssignment) {
+      driver_type = "continuous";
+    } else if (tag == NodeEnum::kBlockingAssignmentStatement) {
+      driver_type = "blocking";
+    } else if (tag == NodeEnum::kNonblockingAssignmentStatement) {
+      driver_type = "nonblocking";
+    }
+    
+    // Extract target signal from LHS
+    // Child 0 is typically the LHS
+    if (node.size() > 0 && node[0]) {
+      std::string_view lhs_text = verible::StringSpanOfSymbol(*node[0]);
+      
+      json dataflow_info = json::object();
+      dataflow_info["has_driver"] = true;
+      dataflow_info["driver_type"] = driver_type;
+      dataflow_info["target_signal"] = std::string(lhs_text);
+      
+      if (!value_->contains("metadata")) {
+        (*value_)["metadata"] = json::object();
+      }
+      (*value_)["metadata"]["dataflow_info"] = dataflow_info;
+    }
   } else if (tag == NodeEnum::kAlwaysStatement) {
     AddAlwaysBlockMetadata(*value_, node);  // Phase 4: Behavioral metadata
   } else if (tag == NodeEnum::kDataDeclaration) {
