@@ -522,10 +522,13 @@ struct SymbolInfo {
   int definition_column;
   std::vector<int> usage_lines;  // Lines where symbol is used
   std::vector<int> usage_columns;
+  std::vector<int> redeclaration_lines;  // Lines with duplicate declarations
+  std::vector<int> redeclaration_columns;
   bool is_port;
   std::string port_direction;  // "input", "output", "inout"
   bool is_parameter;
   bool has_definition;
+  bool has_redeclaration;
 };
 
 // Helper: Calculate line number from symbol position in source text
@@ -599,21 +602,31 @@ static std::unordered_map<std::string, SymbolInfo> BuildSymbolTable(
         if (name_symbol && name_symbol->Kind() == verible::SymbolKind::kLeaf) {
           const auto& name_leaf = verible::SymbolCastToLeaf(*name_symbol);
           std::string_view symbol_name_view = name_leaf.get().text();
-          std::string symbol_name(symbol_name_view);
-          
-          // Skip if already in table
-          if (symbol_table.find(symbol_name) != symbol_table.end()) continue;
-          
-          SymbolInfo info;
-          info.symbol_name = symbol_name;
-          info.symbol_type = "variable";
-          info.definition_line = CalculateLineNumber(*name_symbol, source_text);
-          info.definition_column = CalculateColumnNumber(*name_symbol, source_text);
-          info.is_port = false;
-          info.is_parameter = false;
-          info.has_definition = true;
-          
-          symbol_table[symbol_name] = info;
+            std::string symbol_name(symbol_name_view);
+            
+            // Check if already in table (redeclaration)
+            auto existing = symbol_table.find(symbol_name);
+            if (existing != symbol_table.end()) {
+              // Track redeclaration
+              int redecl_line = CalculateLineNumber(*name_symbol, source_text);
+              int redecl_column = CalculateColumnNumber(*name_symbol, source_text);
+              existing->second.redeclaration_lines.push_back(redecl_line);
+              existing->second.redeclaration_columns.push_back(redecl_column);
+              existing->second.has_redeclaration = true;
+              continue;
+            }
+            
+            SymbolInfo info;
+            info.symbol_name = symbol_name;
+            info.symbol_type = "variable";
+            info.definition_line = CalculateLineNumber(*name_symbol, source_text);
+            info.definition_column = CalculateColumnNumber(*name_symbol, source_text);
+            info.is_port = false;
+            info.is_parameter = false;
+            info.has_definition = true;
+            info.has_redeclaration = false;
+            
+            symbol_table[symbol_name] = info;
         }
       }
     }
@@ -1391,10 +1404,32 @@ static void AddCrossReferenceMetadata(
   bool is_definition = (current_line == info.definition_line && 
                        current_column == info.definition_column);
   
+  // Check if this is a redeclaration
+  bool is_redeclaration = false;
+  for (size_t i = 0; i < info.redeclaration_lines.size(); ++i) {
+    if (current_line == info.redeclaration_lines[i] && 
+        current_column == info.redeclaration_columns[i]) {
+      is_redeclaration = true;
+      is_definition = true;  // Redeclarations are also definitions
+      break;
+    }
+  }
+  
+  // Determine if this is a forward reference (usage before definition)
+  bool is_forward_ref = false;
+  if (!is_definition && info.has_definition) {
+    is_forward_ref = (current_line < info.definition_line);
+  }
+  
   // Build cross_ref metadata
   json cross_ref = json::object();
   cross_ref["symbol"] = current_symbol;
   cross_ref["ref_type"] = is_definition ? "definition" : "usage";
+  
+  // Add forward reference flag for usages
+  if (!is_definition) {
+    cross_ref["is_forward_reference"] = is_forward_ref;
+  }
   
   // Add definition location
   if (info.has_definition) {
@@ -1424,6 +1459,11 @@ static void AddCrossReferenceMetadata(
   // Add usage count for definitions
   if (is_definition) {
     cross_ref["usage_count"] = static_cast<int>(info.usage_lines.size());
+  }
+  
+  // Add redeclaration flag
+  if (is_redeclaration) {
+    cross_ref["is_redeclaration"] = true;
   }
   
   // Add to node JSON
@@ -1856,22 +1896,87 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
         }
       }
     }
+  } else if (tag == NodeEnum::kHierarchyExtension) {
+    // Phase B: Cross-reference metadata for hierarchical extension nodes
+    // Reconstruct full path by looking backward in source for the base identifier
+    std::string_view hier_text = verible::StringSpanOfSymbol(node);
+    
+    // hier_text is like ".internal_signal"
+    // We need to find the identifier before the dot in the source
+    if (!context_.base.empty() && !hier_text.empty()) {
+      size_t hier_offset = hier_text.data() - context_.base.data();
+      
+      // Search backward to find the identifier before the dot
+      std::string base_identifier;
+      if (hier_offset > 0) {
+        size_t scan_pos = hier_offset - 1;
+        // Skip whitespace
+        while (scan_pos > 0 && std::isspace(context_.base[scan_pos])) {
+          scan_pos--;
+        }
+        // Extract identifier
+        size_t id_end = scan_pos + 1;
+        while (scan_pos > 0 && (std::isalnum(context_.base[scan_pos]) || context_.base[scan_pos] == '_')) {
+          scan_pos--;
+        }
+        if (!std::isalnum(context_.base[scan_pos]) && context_.base[scan_pos] != '_') {
+          scan_pos++;
+        }
+        base_identifier = std::string(context_.base.substr(scan_pos, id_end - scan_pos));
+      }
+      
+      std::string full_path = base_identifier + std::string(hier_text);
+      
+      json cross_ref = json::object();
+      cross_ref["ref_type"] = "hierarchical_usage";
+      cross_ref["hierarchical_path"] = full_path;
+      
+      if (!value_->contains("metadata")) {
+        (*value_)["metadata"] = json::object();
+      }
+      (*value_)["metadata"]["cross_ref"] = cross_ref;
+    }
   } else if (tag == NodeEnum::kReference) {
     // Phase B: Cross-reference metadata for references (usages)
     std::string_view ref_text = verible::StringSpanOfSymbol(node);
     std::string symbol_name(ref_text);
     
-    // Extract just the identifier (remove array indices, field access, etc.)
-    size_t bracket_pos = symbol_name.find('[');
-    if (bracket_pos != std::string::npos) {
-      symbol_name = symbol_name.substr(0, bracket_pos);
-    }
-    size_t dot_pos = symbol_name.find('.');
-    if (dot_pos != std::string::npos) {
-      symbol_name = symbol_name.substr(0, dot_pos);
+    // Check if this is a hierarchical reference (contains kHierarchyExtension)
+    bool has_hierarchy = false;
+    for (const auto& child : node.children()) {
+      if (child && child->Kind() == verible::SymbolKind::kNode) {
+        const auto& child_node = verible::SymbolCastToNode(*child);
+        if (child_node.MatchesTag(NodeEnum::kHierarchyExtension)) {
+          has_hierarchy = true;
+          break;
+        }
+      }
     }
     
-    AddCrossReferenceMetadata(*value_, node, symbol_table_, context_.base, symbol_name);
+    if (has_hierarchy) {
+      // This is a hierarchical reference (e.g., module.signal)
+      json cross_ref = json::object();
+      cross_ref["ref_type"] = "hierarchical_usage";
+      cross_ref["hierarchical_path"] = std::string(ref_text);
+      
+      if (!value_->contains("metadata")) {
+        (*value_)["metadata"] = json::object();
+      }
+      (*value_)["metadata"]["cross_ref"] = cross_ref;
+    } else {
+      // Regular reference
+      // Extract just the identifier (remove array indices, field access, etc.)
+      size_t bracket_pos = symbol_name.find('[');
+      if (bracket_pos != std::string::npos) {
+        symbol_name = symbol_name.substr(0, bracket_pos);
+      }
+      size_t dot_pos = symbol_name.find('.');
+      if (dot_pos != std::string::npos) {
+        symbol_name = symbol_name.substr(0, dot_pos);
+      }
+      
+      AddCrossReferenceMetadata(*value_, node, symbol_table_, context_.base, symbol_name);
+    }
   }
   
   json &children = (*value_)["children"] = json::array();
