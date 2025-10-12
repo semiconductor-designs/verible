@@ -7357,11 +7357,12 @@ udp_primitive
   | TK_primitive GenericIdentifier
       '(' TK_output TK_reg_opt GenericIdentifier udp_initial_expr_opt ','
       udp_input_declaration_list ')' ';'
+      udp_init_opt
       udp_body
     TK_endprimitive label_opt
     { $$ = MakeTaggedNode(N::kUdpPrimitive, $1, $2,
                           MakeParenGroup($3, MakeNode($4, $5, $6, $7, $8, $9), $10),
-                          $11, $12, $13, $14); }
+                          $11, $12, $13, $14, $15); }
   ;
 lifetime
   : TK_automatic

@@ -6963,6 +6963,201 @@ endprimitive
 }
 
 // ============================================================================
+// UDP ANSI-STYLE TESTS (Bug Fix: veripg-phases-9-22-v1.2)
+// ============================================================================
+
+TEST(VerilogParserTest, UDP_ANSIStyle_WithInitial) {
+  const std::string code = R"(
+primitive dff_ansi (output reg q, input clk, input d);
+  initial q = 1'b0;
+  table
+    r 0 : ? : 0;
+    r 1 : ? : 1;
+    f ? : ? : -;
+  endtable
+endprimitive
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_ANSIStyle_EdgeShorthand_R_F) {
+  const std::string code = R"(
+primitive edge_dff (output reg q, input clk, input d);
+  table
+    r 0 : ? : 0;  // Rising edge
+    r 1 : ? : 1;
+    f ? : ? : -;  // Falling edge
+  endtable
+endprimitive
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_ANSIStyle_EdgeShorthand_P_N) {
+  const std::string code = R"(
+primitive edge_any (output reg q, input clk, input d);
+  table
+    p 0 : ? : 0;  // Positive edge (01, 0x, x1)
+    p 1 : ? : 1;
+    n ? : ? : -;  // Negative edge (10, 1x, x0)
+  endtable
+endprimitive
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_ANSIStyle_EdgeShorthand_Star) {
+  const std::string code = R"(
+primitive any_transition (output reg q, input clk, input d);
+  table
+    * 0 : ? : 0;  // Any transition
+    * 1 : ? : 1;
+  endtable
+endprimitive
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_ANSIStyle_AllEdgeShorthand) {
+  const std::string code = R"(
+primitive all_edges (output reg q, input clk, input d);
+  initial q = 1'b0;
+  table
+    r 0 : ? : 0;  // Rising
+    f 0 : ? : 0;  // Falling
+    p 1 : ? : 1;  // Positive
+    n 1 : ? : 1;  // Negative
+    * ? : 1 : 1;  // Any edge, hold
+  endtable
+endprimitive
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_ANSIStyle_FourInputCombinational) {
+  const std::string code = R"(
+primitive and4 (output out, input a, input b, input c, input d);
+  table
+    0 0 0 0 : 0;
+    0 0 0 1 : 0;
+    0 0 1 0 : 0;
+    0 0 1 1 : 0;
+    0 1 0 0 : 0;
+    0 1 0 1 : 0;
+    0 1 1 0 : 0;
+    0 1 1 1 : 0;
+    1 0 0 0 : 0;
+    1 0 0 1 : 0;
+    1 0 1 0 : 0;
+    1 0 1 1 : 0;
+    1 1 0 0 : 0;
+    1 1 0 1 : 0;
+    1 1 1 0 : 0;
+    1 1 1 1 : 1;
+  endtable
+endprimitive
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_ANSIStyle_FiveInputCombinational) {
+  const std::string code = R"(
+primitive majority5 (output out, input a, input b, input c, input d, input e);
+  table
+    0 0 0 0 0 : 0;
+    1 1 1 ? ? : 1;  // 3 or more high
+    1 1 ? 1 ? : 1;
+    1 1 ? ? 1 : 1;
+    1 ? 1 1 ? : 1;
+    1 ? 1 ? 1 : 1;
+    1 ? ? 1 1 : 1;
+    ? 1 1 1 ? : 1;
+    ? 1 1 ? 1 : 1;
+    ? 1 ? 1 1 : 1;
+    ? ? 1 1 1 : 1;
+    1 1 1 1 1 : 1;
+  endtable
+endprimitive
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_ANSIStyle_WithAsyncReset) {
+  const std::string code = R"(
+primitive dff_async_rst (output reg q, input clk, input d, input rst_n);
+  initial q = 1'b0;
+  table
+    ?    ?    0 : ? : 0;  // Async reset
+    r    0    1 : ? : 0;
+    r    1    1 : ? : 1;
+    f    ?    1 : ? : -;
+    ?    ?    1 : 0 : 0;  // Hold state
+    ?    ?    1 : 1 : 1;
+  endtable
+endprimitive
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_ANSIStyle_ComplexSequential) {
+  const std::string code = R"(
+primitive complex_seq (output reg q, input clk, input d, input preset, input clear);
+  initial q = 1'bx;
+  table
+    // clk d preset clear : q : q'
+       ?   ? 1      ?    : ? : 1;  // Preset
+       ?   ? ?      1    : ? : 0;  // Clear
+       r   0 0      0    : ? : 0;  // Normal operation
+       r   1 0      0    : ? : 1;
+       p   ? 0      0    : ? : -;  // Hold on positive edge
+       n   ? 0      0    : ? : -;  // Hold on negative edge
+       ?   ? 0      0    : 0 : 0;  // State retention
+       ?   ? 0      0    : 1 : 1;
+  endtable
+endprimitive
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_ANSIStyle_InlineInitializer) {
+  const std::string code = R"(
+primitive latch_inline (output reg q = 1'b0, input gate, input data);
+  table
+    1 0 : ? : 0;
+    1 1 : ? : 1;
+    0 ? : ? : -;
+  endtable
+endprimitive
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_ANSIStyle_BothInitialStyles) {
+  const std::string code = R"(
+primitive both_init (output reg q = 1'bx, input clk, input d);
+  initial q = 1'b0;  // Separate initial overrides inline
+  table
+    r 0 : ? : 0;
+    r 1 : ? : 1;
+    f ? : ? : -;
+  endtable
+endprimitive
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+// ============================================================================
 // CLOCKING BLOCKS TESTS (Priority 4: VeriPG Enhancement)
 // ============================================================================
 
