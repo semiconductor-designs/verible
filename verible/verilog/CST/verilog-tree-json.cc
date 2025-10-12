@@ -606,10 +606,24 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
                       info.is_packed = true;
                     } catch (...) {
                       info.is_parameterized = true;
+                      info.width = -1;  // Unknown width for parameterized types
                     }
                   }
                   break;  // Found dimensions, stop searching
                 }
+              }
+            }
+          }
+          
+          // Check for signed/unsigned keywords in kDataTypePrimitive children
+          for (const auto& child : base_node.children()) {
+            if (child && child->Kind() == verible::SymbolKind::kLeaf) {
+              const auto& leaf = verible::SymbolCastToLeaf(*child);
+              std::string_view text = leaf.get().text();
+              if (text == "signed") {
+                info.is_signed = true;
+              } else if (text == "unsigned") {
+                info.is_signed = false;
               }
             }
           }
@@ -658,6 +672,7 @@ static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
                             info.is_packed = true;
                           } catch (...) {
                             info.is_parameterized = true;
+                            info.width = -1;  // Unknown width for parameterized types
                           }
                         }
                       }
