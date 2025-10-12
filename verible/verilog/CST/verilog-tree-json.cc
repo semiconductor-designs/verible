@@ -514,6 +514,236 @@ struct TypedefInfo {
   std::string resolved_type_string;
 };
 
+// Symbol information for cross-reference tracking (Phase B)
+struct SymbolInfo {
+  std::string symbol_name;
+  std::string symbol_type;  // "variable", "port", "parameter", "module", etc.
+  int definition_line;
+  int definition_column;
+  std::vector<int> usage_lines;  // Lines where symbol is used
+  std::vector<int> usage_columns;
+  bool is_port;
+  std::string port_direction;  // "input", "output", "inout"
+  bool is_parameter;
+  bool has_definition;
+};
+
+// Helper: Calculate line number from symbol position in source text
+// Uses same logic as AddLocationMetadata for consistency
+static int CalculateLineNumber(const verible::Symbol& symbol, std::string_view base) {
+  auto text_span = verible::StringSpanOfSymbol(symbol);
+  if (text_span.empty() || base.empty()) {
+    return 1;
+  }
+  
+  // Calculate start offset (same as AddLocationMetadata)
+  size_t start_offset = text_span.begin() - base.begin();
+  
+  // Calculate line number
+  int line = 1;
+  for (size_t i = 0; i < start_offset && i < base.size(); ++i) {
+    if (base[i] == '\n') {
+      line++;
+    }
+  }
+  
+  return line;
+}
+
+// Helper: Calculate column number from symbol position
+// Uses same logic as AddLocationMetadata for consistency
+static int CalculateColumnNumber(const verible::Symbol& symbol, std::string_view base) {
+  auto text_span = verible::StringSpanOfSymbol(symbol);
+  if (text_span.empty() || base.empty()) {
+    return 1;
+  }
+  
+  // Calculate start offset (same as AddLocationMetadata)
+  size_t start_offset = text_span.begin() - base.begin();
+  
+  // Calculate column number
+  int column = 1;
+  for (size_t i = 0; i < start_offset && i < base.size(); ++i) {
+    if (base[i] == '\n') {
+      column = 1;  // Reset column after newline
+    } else {
+      column++;
+    }
+  }
+  
+  return column;
+}
+
+// Helper: Build a symbol table from the syntax tree (Phase B)
+static std::unordered_map<std::string, SymbolInfo> BuildSymbolTable(
+    const verible::Symbol& root, std::string_view source_text) {
+  std::unordered_map<std::string, SymbolInfo> symbol_table;
+  
+  // Track variable declarations (kDataDeclaration -> kRegisterVariable)
+  auto var_decls = verible::SearchSyntaxTree(root, NodekDataDeclaration());
+  for (const auto& match : var_decls) {
+    const auto* decl_node = match.match;
+    if (!decl_node || decl_node->Kind() != verible::SymbolKind::kNode) continue;
+    
+    // Search for kRegisterVariable nodes within the declaration
+    auto reg_var_matches = verible::SearchSyntaxTree(*decl_node, NodekRegisterVariable());
+    for (const auto& reg_match : reg_var_matches) {
+      const auto* reg_node = reg_match.match;
+      if (!reg_node || reg_node->Kind() != verible::SymbolKind::kNode) continue;
+      
+      const auto& reg_var_node = verible::SymbolCastToNode(*reg_node);
+      
+      // The variable name is typically the first leaf (SymbolIdentifier)
+      if (reg_var_node.size() > 0 && reg_var_node[0]) {
+        const auto* name_symbol = reg_var_node[0].get();
+        if (name_symbol && name_symbol->Kind() == verible::SymbolKind::kLeaf) {
+          const auto& name_leaf = verible::SymbolCastToLeaf(*name_symbol);
+          std::string_view symbol_name_view = name_leaf.get().text();
+          std::string symbol_name(symbol_name_view);
+          
+          // Skip if already in table
+          if (symbol_table.find(symbol_name) != symbol_table.end()) continue;
+          
+          SymbolInfo info;
+          info.symbol_name = symbol_name;
+          info.symbol_type = "variable";
+          info.definition_line = CalculateLineNumber(*name_symbol, source_text);
+          info.definition_column = CalculateColumnNumber(*name_symbol, source_text);
+          info.is_port = false;
+          info.is_parameter = false;
+          info.has_definition = true;
+          
+          symbol_table[symbol_name] = info;
+        }
+      }
+    }
+  }
+  
+  // Track port declarations (kPortDeclaration)
+  auto port_decls = verible::SearchSyntaxTree(root, NodekPortDeclaration());
+  for (const auto& match : port_decls) {
+    const auto* port_node = match.match;
+    if (!port_node || port_node->Kind() != verible::SymbolKind::kNode) continue;
+    
+    const auto& node = verible::SymbolCastToNode(*port_node);
+    
+    // Extract port direction from child 0 (input/output/inout)
+    std::string port_direction = "unknown";
+    if (node.size() > 0 && node[0]) {
+      const auto* dir_symbol = node[0].get();
+      if (dir_symbol && dir_symbol->Kind() == verible::SymbolKind::kLeaf) {
+        const auto& dir_leaf = verible::SymbolCastToLeaf(*dir_symbol);
+        port_direction = std::string(dir_leaf.get().text());
+      }
+    }
+    
+    // Extract port name from child 3 (kUnqualifiedId)
+    if (node.size() > 3 && node[3]) {
+      const auto* id_node = node[3].get();
+      if (id_node && id_node->Kind() == verible::SymbolKind::kNode) {
+        const auto& unqual_id_node = verible::SymbolCastToNode(*id_node);
+        if (unqual_id_node.MatchesTag(NodeEnum::kUnqualifiedId) && unqual_id_node.size() > 0 && unqual_id_node[0]) {
+          const auto* name_symbol = unqual_id_node[0].get();
+          if (name_symbol && name_symbol->Kind() == verible::SymbolKind::kLeaf) {
+            const auto& name_leaf = verible::SymbolCastToLeaf(*name_symbol);
+            std::string symbol_name(name_leaf.get().text());
+            
+            // Skip if already in table
+            if (symbol_table.find(symbol_name) != symbol_table.end()) continue;
+            
+            SymbolInfo info;
+            info.symbol_name = symbol_name;
+            info.symbol_type = "port";
+            info.definition_line = CalculateLineNumber(*name_symbol, source_text);
+            info.definition_column = CalculateColumnNumber(*name_symbol, source_text);
+            info.is_port = true;
+            info.port_direction = port_direction;
+            info.is_parameter = false;
+            info.has_definition = true;
+            
+            symbol_table[symbol_name] = info;
+          }
+        }
+      }
+    }
+  }
+  
+  // Track parameter declarations (kParamDeclaration -> kParamType -> Leaf)
+  auto param_decls = verible::SearchSyntaxTree(root, NodekParamDeclaration());
+  for (const auto& match : param_decls) {
+    const auto* param_node = match.match;
+    if (!param_node || param_node->Kind() != verible::SymbolKind::kNode) continue;
+    
+    const auto& node = verible::SymbolCastToNode(*param_node);
+    
+    // Get kParamType (child 1)
+    if (node.size() > 1 && node[1]) {
+      const auto* param_type = node[1].get();
+      if (param_type && param_type->Kind() == verible::SymbolKind::kNode) {
+        const auto& param_type_node = verible::SymbolCastToNode(*param_type);
+        // Parameter name is child 2 (Leaf with SymbolIdentifier)
+        if (param_type_node.size() > 2 && param_type_node[2]) {
+          const auto* name_symbol = param_type_node[2].get();
+          if (name_symbol && name_symbol->Kind() == verible::SymbolKind::kLeaf) {
+            const auto& name_leaf = verible::SymbolCastToLeaf(*name_symbol);
+            std::string symbol_name(name_leaf.get().text());
+            
+            // Skip if already in table
+            if (symbol_table.find(symbol_name) != symbol_table.end()) continue;
+            
+            SymbolInfo info;
+            info.symbol_name = symbol_name;
+            info.symbol_type = "parameter";
+            info.definition_line = CalculateLineNumber(*name_symbol, source_text);
+            info.definition_column = CalculateColumnNumber(*name_symbol, source_text);
+            info.is_port = false;
+            info.is_parameter = true;
+            info.has_definition = true;
+            
+            symbol_table[symbol_name] = info;
+          }
+        }
+      }
+    }
+  }
+  
+  // Track all kReference nodes as usages
+  auto references = verible::SearchSyntaxTree(root, NodekReference());
+  for (const auto& match : references) {
+    const auto* ref_node = match.match;
+    if (!ref_node) continue;
+    
+    std::string_view ref_text = verible::StringSpanOfSymbol(*ref_node);
+    std::string symbol_name(ref_text);
+    
+    // Extract just the identifier (remove array indices, field access, etc.)
+    size_t bracket_pos = symbol_name.find('[');
+    if (bracket_pos != std::string::npos) {
+      symbol_name = symbol_name.substr(0, bracket_pos);
+    }
+    size_t dot_pos = symbol_name.find('.');
+    if (dot_pos != std::string::npos) {
+      symbol_name = symbol_name.substr(0, dot_pos);
+    }
+    
+    // Add usage location if symbol exists in table
+    auto it = symbol_table.find(symbol_name);
+    if (it != symbol_table.end()) {
+      int usage_line = CalculateLineNumber(*ref_node, source_text);
+      int usage_column = CalculateColumnNumber(*ref_node, source_text);
+      
+      // Don't add if this is the definition itself
+      if (usage_line != it->second.definition_line || 
+          usage_column != it->second.definition_column) {
+        it->second.usage_lines.push_back(usage_line);
+        it->second.usage_columns.push_back(usage_column);
+      }
+    }
+  }
+  
+  return symbol_table;
+}
+
 // Helper: Build a typedef table from the syntax tree (Phase A - basic version)
 static std::unordered_map<std::string, TypedefInfo> BuildTypedefTable(
     const verible::Symbol& root, std::string_view source_text) {
@@ -1120,6 +1350,76 @@ static void AddTypeResolutionMetadata(
   node_json["metadata"]["type_info"] = type_info;
 }  // End AddTypeResolutionMetadata
 
+// Helper: Add cross-reference metadata (Phase B)
+static void AddCrossReferenceMetadata(
+    json &node_json,
+    const verible::Symbol &symbol,
+    const std::unordered_map<std::string, SymbolInfo>& symbol_table,
+    std::string_view source_text,
+    const std::string& current_symbol) {
+  
+  // Skip empty symbols
+  if (current_symbol.empty()) return;
+  
+  // Look up symbol in table
+  auto it = symbol_table.find(current_symbol);
+  if (it == symbol_table.end()) {
+    // Symbol not found in table - might be undefined or external
+    return;
+  }
+  
+  const SymbolInfo& info = it->second;
+  
+  // Calculate current location
+  int current_line = CalculateLineNumber(symbol, source_text);
+  int current_column = CalculateColumnNumber(symbol, source_text);
+  
+  // Determine if this is definition or usage
+  bool is_definition = (current_line == info.definition_line && 
+                       current_column == info.definition_column);
+  
+  // Build cross_ref metadata
+  json cross_ref = json::object();
+  cross_ref["symbol"] = current_symbol;
+  cross_ref["ref_type"] = is_definition ? "definition" : "usage";
+  
+  // Add definition location
+  if (info.has_definition) {
+    cross_ref["definition_location"] = {
+      {"line", info.definition_line},
+      {"column", info.definition_column}
+    };
+  }
+  
+  // Add symbol type info
+  cross_ref["symbol_type"] = info.symbol_type;
+  
+  // Add port-specific metadata
+  if (info.is_port) {
+    cross_ref["is_port"] = true;
+    cross_ref["port_direction"] = info.port_direction;
+    cross_ref["is_input"] = (info.port_direction == "input");
+    cross_ref["is_output"] = (info.port_direction == "output");
+    cross_ref["is_inout"] = (info.port_direction == "inout");
+  }
+  
+  // Add parameter-specific metadata
+  if (info.is_parameter) {
+    cross_ref["is_parameter"] = true;
+  }
+  
+  // Add usage count for definitions
+  if (is_definition) {
+    cross_ref["usage_count"] = static_cast<int>(info.usage_lines.size());
+  }
+  
+  // Add to node JSON
+  if (!node_json.contains("metadata")) {
+    node_json["metadata"] = json::object();
+  }
+  node_json["metadata"]["cross_ref"] = cross_ref;
+}  // End AddCrossReferenceMetadata
+
 // Helper method: Add metadata for always blocks (behavioral semantics)
 static void AddAlwaysBlockMetadata(json &node_json,
                                     const verible::SyntaxTreeNode &node) {
@@ -1387,7 +1687,8 @@ static void AddAlwaysBlockMetadata(json &node_json,
 class VerilogTreeToJsonConverter : public verible::SymbolVisitor {
  public:
   explicit VerilogTreeToJsonConverter(std::string_view base,
-                                     const std::unordered_map<std::string, TypedefInfo>& typedef_table);
+                                     const std::unordered_map<std::string, TypedefInfo>& typedef_table,
+                                     const std::unordered_map<std::string, SymbolInfo>& symbol_table);
 
   void Visit(const verible::SyntaxTreeLeaf &) final;
   void Visit(const verible::SyntaxTreeNode &) final;
@@ -1406,6 +1707,9 @@ class VerilogTreeToJsonConverter : public verible::SymbolVisitor {
   // Typedef lookup table for type resolution (Phase A)
   const std::unordered_map<std::string, TypedefInfo>& typedef_table_;
 
+  // Symbol table for cross-reference tracking (Phase B)
+  const std::unordered_map<std::string, SymbolInfo>& symbol_table_;
+
   // JSON tree root
   json json_;
 
@@ -1415,12 +1719,14 @@ class VerilogTreeToJsonConverter : public verible::SymbolVisitor {
 };
 
 VerilogTreeToJsonConverter::VerilogTreeToJsonConverter(std::string_view base,
-                                                       const std::unordered_map<std::string, TypedefInfo>& typedef_table)
+                                                       const std::unordered_map<std::string, TypedefInfo>& typedef_table,
+                                                       const std::unordered_map<std::string, SymbolInfo>& symbol_table)
     : context_(base,
                [](std::ostream &stream, int e) {
                  stream << TokenTypeToString(static_cast<verilog_tokentype>(e));
                }),
       typedef_table_(typedef_table),
+      symbol_table_(symbol_table),
       value_(&json_) {}
 
 void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeLeaf &leaf) {
@@ -1473,6 +1779,73 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
     AddAlwaysBlockMetadata(*value_, node);  // Phase 4: Behavioral metadata
   } else if (tag == NodeEnum::kDataDeclaration) {
     AddTypeResolutionMetadata(*value_, node, typedef_table_, context_.base);  // Phase A: Type resolution
+    
+    // Phase B: Cross-reference metadata for variable declarations
+    auto reg_var_matches = verible::SearchSyntaxTree(node, NodekRegisterVariable());
+    if (!reg_var_matches.empty()) {
+      const auto* reg_node = reg_var_matches[0].match;
+      if (reg_node && reg_node->Kind() == verible::SymbolKind::kNode) {
+        const auto& reg_var_node = verible::SymbolCastToNode(*reg_node);
+        if (reg_var_node.size() > 0 && reg_var_node[0]) {
+          const auto* name_symbol = reg_var_node[0].get();
+          if (name_symbol && name_symbol->Kind() == verible::SymbolKind::kLeaf) {
+            const auto& name_leaf = verible::SymbolCastToLeaf(*name_symbol);
+            std::string symbol_name(name_leaf.get().text());
+            AddCrossReferenceMetadata(*value_, *name_symbol, symbol_table_, context_.base, symbol_name);
+          }
+        }
+      }
+    }
+  } else if (tag == NodeEnum::kPortDeclaration) {
+    // Phase B: Cross-reference metadata for port declarations
+    // Extract port name from child 3 (kUnqualifiedId)
+    if (node.size() > 3 && node[3]) {
+      const auto* id_node = node[3].get();
+      if (id_node && id_node->Kind() == verible::SymbolKind::kNode) {
+        const auto& unqual_id_node = verible::SymbolCastToNode(*id_node);
+        if (unqual_id_node.MatchesTag(NodeEnum::kUnqualifiedId) && unqual_id_node.size() > 0 && unqual_id_node[0]) {
+          const auto* name_symbol = unqual_id_node[0].get();
+          if (name_symbol && name_symbol->Kind() == verible::SymbolKind::kLeaf) {
+            const auto& name_leaf = verible::SymbolCastToLeaf(*name_symbol);
+            std::string symbol_name(name_leaf.get().text());
+            AddCrossReferenceMetadata(*value_, *name_symbol, symbol_table_, context_.base, symbol_name);
+          }
+        }
+      }
+    }
+  } else if (tag == NodeEnum::kParamDeclaration) {
+    // Phase B: Cross-reference metadata for parameter declarations
+    // Extract from kParamType (child 1) -> name (child 2)
+    if (node.size() > 1 && node[1]) {
+      const auto* param_type = node[1].get();
+      if (param_type && param_type->Kind() == verible::SymbolKind::kNode) {
+        const auto& param_type_node = verible::SymbolCastToNode(*param_type);
+        if (param_type_node.size() > 2 && param_type_node[2]) {
+          const auto* name_symbol = param_type_node[2].get();
+          if (name_symbol && name_symbol->Kind() == verible::SymbolKind::kLeaf) {
+            const auto& name_leaf = verible::SymbolCastToLeaf(*name_symbol);
+            std::string symbol_name(name_leaf.get().text());
+            AddCrossReferenceMetadata(*value_, *name_symbol, symbol_table_, context_.base, symbol_name);
+          }
+        }
+      }
+    }
+  } else if (tag == NodeEnum::kReference) {
+    // Phase B: Cross-reference metadata for references (usages)
+    std::string_view ref_text = verible::StringSpanOfSymbol(node);
+    std::string symbol_name(ref_text);
+    
+    // Extract just the identifier (remove array indices, field access, etc.)
+    size_t bracket_pos = symbol_name.find('[');
+    if (bracket_pos != std::string::npos) {
+      symbol_name = symbol_name.substr(0, bracket_pos);
+    }
+    size_t dot_pos = symbol_name.find('.');
+    if (dot_pos != std::string::npos) {
+      symbol_name = symbol_name.substr(0, dot_pos);
+    }
+    
+    AddCrossReferenceMetadata(*value_, node, symbol_table_, context_.base, symbol_name);
   }
   
   json &children = (*value_)["children"] = json::array();
@@ -1566,7 +1939,10 @@ json ConvertVerilogTreeToJson(const verible::Symbol &root,
   // Build typedef table for type resolution (Phase A)
   auto typedef_table = BuildTypedefTable(root, base);
   
-  VerilogTreeToJsonConverter converter(base, typedef_table);
+  // Build symbol table for cross-reference tracking (Phase B)
+  auto symbol_table = BuildSymbolTable(root, base);
+  
+  VerilogTreeToJsonConverter converter(base, typedef_table, symbol_table);
   root.Accept(&converter);
   return converter.TakeJsonValue();
 }

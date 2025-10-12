@@ -49,7 +49,8 @@ static json ParseModuleToJson(const std::string &code) {
   const auto &tree = analyzer.SyntaxTree();
   if (!tree) return json();
   
-  return ConvertVerilogTreeToJson(*tree, code);
+  // Use analyzer's internal buffer (Data().Contents()) for correct pointer arithmetic
+  return ConvertVerilogTreeToJson(*tree, analyzer.Data().Contents());
 }
 
 // Helper: Find node by tag and containing text (recursive search)
