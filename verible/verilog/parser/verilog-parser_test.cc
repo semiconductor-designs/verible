@@ -6811,6 +6811,157 @@ endgroup
   EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
 }
 
+// ============================================================================
+// UDP (User-Defined Primitives) TESTS (Priority 3: VeriPG Enhancement)
+// Note: Verible supports UDP primitives with separate port declarations
+// ============================================================================
+
+TEST(VerilogParserTest, UDP_BasicCombinational) {
+  const std::string code = R"(
+primitive and_prim (out, a, b);
+  output out;
+  input a, b;
+  table
+    0 0 : 0;
+    0 1 : 0;
+    1 0 : 0;
+    1 1 : 1;
+  endtable
+endprimitive
+)";
+  
+  const auto status = VerilogAnalyzer(code, "").Analyze();
+  EXPECT_TRUE(status.ok()) << status.message();
+}
+
+TEST(VerilogParserTest, UDP_Sequential) {
+  const std::string code = R"(
+primitive dff (q, clk, d);
+  output q;
+  input clk, d;
+  reg q;
+  table
+    r 0 : ? : 0;
+    r 1 : ? : 1;
+    f ? : ? : -;
+  endtable
+endprimitive
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_WithInitial) {
+  const std::string code = R"(
+primitive latch (q, en, d);
+  output q;
+  input en, d;
+  reg q;
+  initial q = 1'b0;
+  table
+    1 0 : ? : 0;
+    1 1 : ? : 1;
+    0 ? : ? : -;
+  endtable
+endprimitive
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_EdgeSensitive) {
+  const std::string code = R"(
+primitive edge_ff (q, clk, d);
+  output q;
+  input clk, d;
+  reg q;
+  table
+    (01) 0 : ? : 0;
+    (01) 1 : ? : 1;
+    (0x) 1 : 1 : 1;
+    (0x) 0 : 0 : 0;
+    (?0) ? : ? : -;
+  endtable
+endprimitive
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_ThreeInputs) {
+  const std::string code = R"(
+primitive mux4 (o, s1, s0, i0, i1, i2, i3);
+  output o;
+  input s1, s0, i0, i1, i2, i3;
+  table
+    0 0 0 ? ? ? : 0;
+    0 0 1 ? ? ? : 1;
+    0 1 ? 0 ? ? : 0;
+    0 1 ? 1 ? ? : 1;
+    1 0 ? ? 0 ? : 0;
+    1 0 ? ? 1 ? : 1;
+    1 1 ? ? ? 0 : 0;
+    1 1 ? ? ? 1 : 1;
+  endtable
+endprimitive
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_InModule) {
+  const std::string code = R"(
+primitive or_prim (out, a, b);
+  output out;
+  input a, b;
+  table
+    0 0 : 0;
+    0 1 : 1;
+    1 ? : 1;
+  endtable
+endprimitive
+
+module test;
+  wire a, b, c;
+  or_prim u1 (c, a, b);
+endmodule
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_WithLabel) {
+  const std::string code = R"(
+primitive buf_udp (y, a);
+  output y;
+  input a;
+  table
+    0 : 0;
+    1 : 1;
+  endtable
+endprimitive : buf_udp
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+TEST(VerilogParserTest, UDP_WithReg) {
+  const std::string code = R"(
+primitive latch_p (q, gate, data);
+  output q;
+  input gate, data;
+  reg q;
+  table
+    1 0 : ? : 0;
+    1 1 : ? : 1;
+    0 ? : ? : -;
+  endtable
+endprimitive
+)";
+  
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
 }  // namespace
 
 }  // namespace verilog
