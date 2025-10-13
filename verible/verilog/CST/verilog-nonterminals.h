@@ -83,6 +83,7 @@ enum class NodeEnum {
   kMacroModuleDeclaration,
   kProgramDeclaration,
   kInterfaceDeclaration,
+  kCheckerDeclaration,
   kBegin,
   kEnd,
   kStatement,

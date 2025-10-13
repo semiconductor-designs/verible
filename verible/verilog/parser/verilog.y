@@ -5849,7 +5849,8 @@ package_or_generate_item_declaration
     { $$ = std::move($1); }
   | specparam_declaration
     { $$ = std::move($1); }
-  /* TODO(fangism): checker_declaration */
+  | checker_declaration
+    { $$ = std::move($1); }
   | dpi_import_export
     { $$ = std::move($1); }
   | ';'
@@ -8705,6 +8706,14 @@ case_item_expression_list
 case_item_expression
   : expression
     { $$ = std::move($1); }
+  ;
+
+/* Minimal checker support (Option B-Lite) - basic structure */
+checker_declaration
+  : TK_checker GenericIdentifier ';' TK_endchecker label_opt
+    { $$ = MakeTaggedNode(N::kCheckerDeclaration, $1, $2, $3, $4, $5); }
+  | TK_checker GenericIdentifier TK_endchecker label_opt
+    { $$ = MakeTaggedNode(N::kCheckerDeclaration, $1, $2, $3, $4); }
   ;
 
 %%

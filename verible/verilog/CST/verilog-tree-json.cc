@@ -2036,6 +2036,21 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
       (*value_)["metadata"] = json::object();
     }
     (*value_)["metadata"]["concurrent_assertion_info"] = cover_sequence;
+  } else if (tag == NodeEnum::kCheckerDeclaration) {
+    // Option B-Lite: Minimal Checker Support
+    json checker_info = json::object();
+    checker_info["construct_type"] = "checker_declaration";
+    
+    // Extract checker name (typically at child 1)
+    if (node.size() > 1 && node[1]) {
+      std::string_view checker_name = verible::StringSpanOfSymbol(*node[1]);
+      checker_info["checker_name"] = std::string(checker_name);
+    }
+    
+    if (!value_->contains("metadata")) {
+      (*value_)["metadata"] = json::object();
+    }
+    (*value_)["metadata"]["checker_info"] = checker_info;
   } else if (tag == NodeEnum::kDPIImportItem) {
     // Phase DPI-1: DPI-C Import
     json dpi_info = json::object();
