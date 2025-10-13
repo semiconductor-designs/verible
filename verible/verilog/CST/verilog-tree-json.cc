@@ -2036,6 +2036,163 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
       (*value_)["metadata"] = json::object();
     }
     (*value_)["metadata"]["concurrent_assertion_info"] = cover_sequence;
+  } else if (tag == NodeEnum::kDPIImportItem) {
+    // Phase DPI-1: DPI-C Import
+    json dpi_info = json::object();
+    dpi_info["direction"] = "import";
+    dpi_info["spec"] = "DPI-C";
+    
+    // Extract spec string (child 1 - should be "DPI-C")
+    if (node.size() > 1 && node[1]) {
+      std::string_view spec_str = verible::StringSpanOfSymbol(*node[1]);
+      // Remove quotes from "DPI-C"
+      if (!spec_str.empty() && spec_str.front() == '"' && spec_str.back() == '"') {
+        spec_str = spec_str.substr(1, spec_str.size() - 2);
+      }
+      dpi_info["spec"] = std::string(spec_str);
+    }
+    
+    // Check for context or pure modifiers (child 2)
+    dpi_info["is_context"] = false;
+    dpi_info["is_pure"] = false;
+    if (node.size() > 2 && node[2]) {
+      std::string_view modifier = verible::StringSpanOfSymbol(*node[2]);
+      if (modifier.find("context") != std::string_view::npos) {
+        dpi_info["is_context"] = true;
+      }
+      if (modifier.find("pure") != std::string_view::npos) {
+        dpi_info["is_pure"] = true;
+      }
+    }
+    
+    // Determine if it's a task or function by checking for kTaskPrototype child
+    dpi_info["is_task"] = false;
+    for (size_t i = 0; i < node.size(); i++) {
+      if (node[i] && node[i]->Kind() == verible::SymbolKind::kNode) {
+        const auto& child_node = verible::SymbolCastToNode(*node[i]);
+        if (static_cast<verilog::NodeEnum>(child_node.Tag().tag) == NodeEnum::kTaskPrototype) {
+          dpi_info["is_task"] = true;
+          break;
+        }
+      }
+    }
+    
+    // Extract function/task name and return type from prototype
+    // The prototype structure varies, so we extract from the text
+    std::string_view full_text = verible::StringSpanOfSymbol(node);
+    
+    // Try to find function/task name (identifier after "function" or "task")
+    size_t func_pos = full_text.find("function");
+    size_t task_pos = full_text.find("task");
+    size_t keyword_pos = (func_pos != std::string_view::npos) ? func_pos : task_pos;
+    
+    if (keyword_pos != std::string_view::npos) {
+      // Skip past "function" or "task"
+      size_t start = full_text.find_first_not_of(" \t", keyword_pos + (func_pos != std::string_view::npos ? 8 : 4));
+      
+      // Find the identifier (function/task name) - look for the part before '('
+      size_t paren_pos = full_text.find('(', start);
+      if (paren_pos != std::string_view::npos) {
+        // Work backwards from '(' to find the identifier
+        size_t name_end = full_text.find_last_not_of(" \t", paren_pos - 1);
+        if (name_end != std::string_view::npos) {
+          size_t name_start = full_text.find_last_of(" \t", name_end);
+          if (name_start != std::string_view::npos) {
+            std::string_view func_name = full_text.substr(name_start + 1, name_end - name_start);
+            dpi_info["function_name"] = std::string(func_name);
+          }
+        }
+      }
+    }
+    
+    if (!value_->contains("metadata")) {
+      (*value_)["metadata"] = json::object();
+    }
+    (*value_)["metadata"]["dpi_info"] = dpi_info;
+  } else if (tag == NodeEnum::kDPIExportItem) {
+    // Phase DPI-1: DPI-C Export
+    json dpi_info = json::object();
+    dpi_info["direction"] = "export";
+    dpi_info["spec"] = "DPI-C";
+    
+    // Extract spec string (child 1)
+    if (node.size() > 1 && node[1]) {
+      std::string_view spec_str = verible::StringSpanOfSymbol(*node[1]);
+      // Remove quotes
+      if (!spec_str.empty() && spec_str.front() == '"' && spec_str.back() == '"') {
+        spec_str = spec_str.substr(1, spec_str.size() - 2);
+      }
+      dpi_info["spec"] = std::string(spec_str);
+    }
+    
+    // Check if it's a task or function
+    dpi_info["is_task"] = false;
+    std::string_view full_text = verible::StringSpanOfSymbol(node);
+    if (full_text.find("task") != std::string_view::npos) {
+      dpi_info["is_task"] = true;
+    }
+    
+    // Extract C linkage name and function name
+    // Structure: export "DPI-C" [c_name =] function sv_name;
+    // Child[2] = c_name (if present), Child[3] = '=' (if present), Child[4+] = function prototype
+    bool has_c_linkage = false;
+    if (node.size() > 3 && node[3] && node[3]->Kind() == verible::SymbolKind::kLeaf) {
+      const auto& eq_leaf = verible::SymbolCastToLeaf(*node[3]);
+      if (eq_leaf.get().text() == "=") {
+        has_c_linkage = true;
+        // Extract C linkage name from child[2]
+        if (node[2] && node[2]->Kind() == verible::SymbolKind::kLeaf) {
+          const auto& c_name_leaf = verible::SymbolCastToLeaf(*node[2]);
+          dpi_info["c_linkage_name"] = std::string(c_name_leaf.get().text());
+        }
+      }
+    }
+    
+    // Extract SV function/task name from the prototype
+    // Look for kFunctionPrototype or kTaskPrototype child
+    for (size_t i = 0; i < node.size(); i++) {
+      if (node[i] && node[i]->Kind() == verible::SymbolKind::kNode) {
+        const auto& child_node = verible::SymbolCastToNode(*node[i]);
+        auto child_tag = static_cast<verilog::NodeEnum>(child_node.Tag().tag);
+        
+        if (child_tag == NodeEnum::kFunctionPrototype || child_tag == NodeEnum::kTaskPrototype) {
+          // Try to get function/task name from the prototype
+          // It's usually in a kUnqualifiedId node within the prototype
+          for (size_t j = 0; j < child_node.size(); j++) {
+            if (child_node[j] && child_node[j]->Kind() == verible::SymbolKind::kNode) {
+              const auto& proto_child = verible::SymbolCastToNode(*child_node[j]);
+              if (static_cast<verilog::NodeEnum>(proto_child.Tag().tag) == NodeEnum::kUnqualifiedId) {
+                std::string_view func_name = verible::StringSpanOfSymbol(proto_child);
+                dpi_info["function_name"] = std::string(func_name);
+                break;
+              }
+            }
+          }
+          break;
+        }
+      }
+    }
+    
+    // Fallback: extract from text if not found in CST
+    if (!dpi_info.contains("function_name") || dpi_info["function_name"].get<std::string>().empty()) {
+      size_t func_pos = full_text.find("function");
+      size_t task_pos = full_text.find("task");
+      size_t keyword_pos = (func_pos != std::string_view::npos) ? func_pos + 8 : task_pos + 4;
+      size_t name_start = full_text.find_first_not_of(" \t", keyword_pos);
+      if (name_start != std::string_view::npos) {
+        size_t semi_pos = full_text.find(';', name_start);
+        if (semi_pos != std::string_view::npos) {
+          size_t name_end = full_text.find_last_not_of(" \t;", semi_pos - 1);
+          std::string_view func_name = full_text.substr(name_start, name_end - name_start + 1);
+          dpi_info["function_name"] = std::string(func_name);
+        }
+      }
+    }
+    
+    if (!value_->contains("metadata")) {
+      (*value_)["metadata"] = json::object();
+    }
+    (*value_)["metadata"]["dpi_info"] = dpi_info;
   } else if (tag == NodeEnum::kDataDeclaration) {
     AddTypeResolutionMetadata(*value_, node, typedef_table_, context_.base);  // Phase A: Type resolution
     
