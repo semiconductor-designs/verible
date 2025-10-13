@@ -2419,6 +2419,117 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
       (*value_)["metadata"] = json::object();
     }
     (*value_)["metadata"]["class_info"] = class_info;
+  } else if (tag == NodeEnum::kInterfaceDeclaration) {
+    // Phase 2: Interfaces & Modports
+    json interface_info = json::object();
+    
+    // Look for kModuleHeader child (child[0]) - interfaces use same header structure as modules
+    if (node.size() > 0 && node[0] && node[0]->Kind() == verible::SymbolKind::kNode) {
+      const auto& header = verible::SymbolCastToNode(*node[0]);
+      
+      // Extract interface name - scan for SymbolIdentifier after "interface" keyword
+      bool found_interface_keyword = false;
+      for (size_t i = 0; i < header.size(); i++) {
+        if (header[i] && header[i]->Kind() == verible::SymbolKind::kLeaf) {
+          const auto& leaf = verible::SymbolCastToLeaf(*header[i]);
+          if (leaf.get().text() == "interface") {
+            found_interface_keyword = true;
+          } else if (found_interface_keyword && leaf.get().token_enum() == verilog_tokentype::SymbolIdentifier) {
+            // First identifier after "interface" keyword is the interface name
+            interface_info["interface_name"] = std::string(leaf.get().text());
+            break;
+          }
+        }
+      }
+      
+      // Check for parameters in header (look for kFormalParameterListDeclaration)
+      interface_info["has_parameters"] = false;
+      for (size_t i = 0; i < header.size(); i++) {
+        if (header[i] && header[i]->Kind() == verible::SymbolKind::kNode) {
+          const auto& child_node = verible::SymbolCastToNode(*header[i]);
+          auto child_tag = static_cast<verilog::NodeEnum>(child_node.Tag().tag);
+          if (child_tag == NodeEnum::kFormalParameterListDeclaration) {
+            interface_info["has_parameters"] = true;
+            break;
+          }
+        }
+      }
+      
+      // Check for ports in header (look for kParenGroup containing kPortDeclarationList)
+      interface_info["has_ports"] = false;
+      for (size_t i = 0; i < header.size(); i++) {
+        if (header[i] && header[i]->Kind() == verible::SymbolKind::kNode) {
+          const auto& child_node = verible::SymbolCastToNode(*header[i]);
+          auto child_tag = static_cast<verilog::NodeEnum>(child_node.Tag().tag);
+          if (child_tag == NodeEnum::kParenGroup) {
+            // Check if this ParenGroup contains port declarations
+            for (size_t j = 0; j < child_node.size(); j++) {
+              if (child_node[j] && child_node[j]->Kind() == verible::SymbolKind::kNode) {
+                const auto& paren_child = verible::SymbolCastToNode(*child_node[j]);
+                auto paren_child_tag = static_cast<verilog::NodeEnum>(paren_child.Tag().tag);
+                if (paren_child_tag == NodeEnum::kPortDeclarationList) {
+                  interface_info["has_ports"] = true;
+                  break;
+                }
+              }
+            }
+            if (interface_info["has_ports"]) break;
+          }
+        }
+      }
+    }
+    
+    // Count signals, modports, and check for clocking blocks in kModuleItemList
+    int signal_count = 0;
+    int modport_count = 0;
+    bool has_clocking_blocks = false;
+    std::vector<std::string> modport_names;
+    
+    // Look for kModuleItemList (child[1])
+    if (node.size() > 1 && node[1] && node[1]->Kind() == verible::SymbolKind::kNode) {
+      const auto& item_list = verible::SymbolCastToNode(*node[1]);
+      
+      for (size_t i = 0; i < item_list.size(); i++) {
+        if (item_list[i] && item_list[i]->Kind() == verible::SymbolKind::kNode) {
+          const auto& item = verible::SymbolCastToNode(*item_list[i]);
+          auto item_tag = static_cast<verilog::NodeEnum>(item.Tag().tag);
+          
+          if (item_tag == NodeEnum::kDataDeclaration) {
+            signal_count++;
+          } else if (item_tag == NodeEnum::kModportDeclaration) {
+            modport_count++;
+            
+            // Extract modport names from kModportItemList
+            if (item.size() > 1 && item[1] && item[1]->Kind() == verible::SymbolKind::kNode) {
+              const auto& modport_items = verible::SymbolCastToNode(*item[1]);
+              for (size_t j = 0; j < modport_items.size(); j++) {
+                if (modport_items[j] && modport_items[j]->Kind() == verible::SymbolKind::kNode) {
+                  const auto& modport_item = verible::SymbolCastToNode(*modport_items[j]);
+                  // kModportItem has identifier at child[0]
+                  if (modport_item.size() > 0 && modport_item[0] &&
+                      modport_item[0]->Kind() == verible::SymbolKind::kLeaf) {
+                    const auto& name_leaf = verible::SymbolCastToLeaf(*modport_item[0]);
+                    modport_names.push_back(std::string(name_leaf.get().text()));
+                  }
+                }
+              }
+            }
+          } else if (item_tag == NodeEnum::kClockingDeclaration) {
+            has_clocking_blocks = true;
+          }
+        }
+      }
+    }
+    
+    interface_info["signal_count"] = signal_count;
+    interface_info["modport_count"] = modport_count;
+    interface_info["modport_names"] = modport_names;
+    interface_info["has_clocking_blocks"] = has_clocking_blocks;
+    
+    if (!value_->contains("metadata")) {
+      (*value_)["metadata"] = json::object();
+    }
+    (*value_)["metadata"]["interface_info"] = interface_info;
   } else if (tag == NodeEnum::kDataDeclaration) {
     AddTypeResolutionMetadata(*value_, node, typedef_table_, context_.base);  // Phase A: Type resolution
     
