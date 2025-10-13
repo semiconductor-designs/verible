@@ -2314,6 +2314,111 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
       (*value_)["metadata"] = json::object();
     }
     (*value_)["metadata"]["coverage_info"] = coverage_info;
+  } else if (tag == NodeEnum::kClassDeclaration) {
+    // Phase OOP-1: Class & Object-Oriented Programming
+    json class_info = json::object();
+    
+    // Look for kClassHeader child (child[0])
+    if (node.size() > 0 && node[0] && node[0]->Kind() == verible::SymbolKind::kNode) {
+      const auto& header = verible::SymbolCastToNode(*node[0]);
+      
+      // Check for "virtual" modifier at beginning
+      class_info["is_virtual"] = false;
+      if (header.size() > 0 && header[0] && header[0]->Kind() == verible::SymbolKind::kLeaf) {
+        const auto& first_leaf = verible::SymbolCastToLeaf(*header[0]);
+        if (first_leaf.get().text() == "virtual") {
+          class_info["is_virtual"] = true;
+        }
+      }
+      
+      // Extract class name - scan for SymbolIdentifier after "class" keyword
+      bool found_class_keyword = false;
+      for (size_t i = 0; i < header.size(); i++) {
+        if (header[i] && header[i]->Kind() == verible::SymbolKind::kLeaf) {
+          const auto& leaf = verible::SymbolCastToLeaf(*header[i]);
+          if (leaf.get().text() == "class") {
+            found_class_keyword = true;
+          } else if (found_class_keyword && leaf.get().token_enum() == verilog_tokentype::SymbolIdentifier) {
+            // First identifier after "class" keyword is the class name
+            class_info["class_name"] = std::string(leaf.get().text());
+            break;
+          }
+        }
+      }
+      
+      // Check for parent class - look for kExtendsList
+      class_info["parent_class"] = nullptr;
+      for (size_t i = 0; i < header.size(); i++) {
+        if (header[i] && header[i]->Kind() == verible::SymbolKind::kNode) {
+          const auto& child_node = verible::SymbolCastToNode(*header[i]);
+          auto child_tag = static_cast<verilog::NodeEnum>(child_node.Tag().tag);
+          if (child_tag == NodeEnum::kExtendsList) {
+            // Parent class name is in kUnqualifiedId within kExtendsList
+            if (child_node.size() > 1 && child_node[1] && 
+                child_node[1]->Kind() == verible::SymbolKind::kNode) {
+              const auto& unqual = verible::SymbolCastToNode(*child_node[1]);
+              if (unqual.size() > 0 && unqual[0] && 
+                  unqual[0]->Kind() == verible::SymbolKind::kLeaf) {
+                const auto& parent_leaf = verible::SymbolCastToLeaf(*unqual[0]);
+                class_info["parent_class"] = std::string(parent_leaf.get().text());
+              }
+            }
+            break;
+          }
+        }
+      }
+    }
+    
+    // Count properties and methods in kClassItems
+    int property_count = 0;
+    int method_count = 0;
+    bool constructor_present = false;
+    int rand_variable_count = 0;
+    bool has_constraints = false;
+    
+    // Look for kClassItems (child[1])
+    if (node.size() > 1 && node[1] && node[1]->Kind() == verible::SymbolKind::kNode) {
+      const auto& class_items = verible::SymbolCastToNode(*node[1]);
+      
+      for (size_t i = 0; i < class_items.size(); i++) {
+        if (class_items[i] && class_items[i]->Kind() == verible::SymbolKind::kNode) {
+          const auto& item = verible::SymbolCastToNode(*class_items[i]);
+          auto item_tag = static_cast<verilog::NodeEnum>(item.Tag().tag);
+          
+          if (item_tag == NodeEnum::kDataDeclaration) {
+            property_count++;
+            // Check for rand/randc variables
+            std::string_view item_text = verible::StringSpanOfSymbol(item);
+            if (item_text.find("rand ") != std::string_view::npos ||
+                item_text.find("randc ") != std::string_view::npos) {
+              rand_variable_count++;
+            }
+          } else if (item_tag == NodeEnum::kClassConstructor) {
+            constructor_present = true;
+          } else if (item_tag == NodeEnum::kFunctionDeclaration) {
+            method_count++;
+          } else if (item_tag == NodeEnum::kTaskDeclaration) {
+            method_count++;
+          } else if (item_tag == NodeEnum::kConstraintDeclaration) {
+            has_constraints = true;
+          }
+        }
+      }
+    }
+    
+    class_info["property_count"] = property_count;
+    class_info["method_count"] = method_count;
+    class_info["constructor_present"] = constructor_present;
+    class_info["has_constraints"] = has_constraints;
+    class_info["rand_variable_count"] = rand_variable_count;
+    
+    // Placeholder for inheritance chain and depth (requires semantic analysis)
+    class_info["inheritance_depth"] = class_info["parent_class"].is_null() ? 0 : 1;
+    
+    if (!value_->contains("metadata")) {
+      (*value_)["metadata"] = json::object();
+    }
+    (*value_)["metadata"]["class_info"] = class_info;
   } else if (tag == NodeEnum::kDataDeclaration) {
     AddTypeResolutionMetadata(*value_, node, typedef_table_, context_.base);  // Phase A: Type resolution
     
