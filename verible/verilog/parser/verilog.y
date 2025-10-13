@@ -1190,6 +1190,14 @@ class_item
                               MakeTaggedNode(N::kInstantiationType, $3),
                               $4),
                           $5); }
+  | TK_untyped list_of_variable_decl_assignments ';'
+    { $$ = MakeDataDeclaration(
+                          qualifier_placeholder,
+                          MakeInstantiationBase(
+                              MakeTaggedNode(N::kInstantiationType,
+                                  MakeTaggedNode(N::kDataTypeImplicitBasicId, $1)),
+                              $2),
+                          $3); }
   | interface_data_declaration
   /* TODO(fangism): this should allow a property_qualifier_list_opt prefix */
     { $$ = std::move($1); }
@@ -3337,6 +3345,11 @@ tf_port_item
                           MakeTypeIdDimensionsTuple(
                               MakeDataType($2),
                               $3, MakeUnpackedDimensionsNode($4)),
+                          $5); }
+  | tf_port_direction_opt TK_untyped GenericIdentifier decl_dimensions_opt
+    tf_port_item_expr_opt
+    { $$ = MakeTaskFunctionPortItem($1,
+                          MakeTaggedNode(N::kDataTypeImplicitBasicId, $2, $3),
                           $5); }
   ;
 tf_port_item_expr_opt

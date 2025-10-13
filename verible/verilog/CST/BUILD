@@ -1106,6 +1106,19 @@ cc_test(
 )
 
 cc_test(
+    name = "verilog-tree-json-untyped_test",
+    srcs = ["verilog-tree-json-untyped_test.cc"],
+    deps = [
+        ":verilog-tree-json",
+        ":verilog-nonterminals",
+        "//verible/common/util:logging",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
     name = "verilog-tree-json-dpi_test",
     srcs = ["verilog-tree-json-dpi_test.cc"],
     deps = [
