@@ -792,6 +792,178 @@ endmodule
   EXPECT_EQ(seq_count, 2) << "Should find 2 sequence declarations";
 }
 
+// ============================================================================
+// PHASE 4: Temporal Operators & Advanced Features
+// ============================================================================
+
+// Test 33: Property with overlapped implication (|->)
+TEST(TemporalOperatorsTest, OverlappedImplication) {
+  const std::string code = R"(
+module test;
+  logic clk, req, gnt;
+  
+  property p_req_gnt;
+    @(posedge clk) req |-> gnt;
+  endproperty
+  
+  assert property (p_req_gnt);
+endmodule
+)";
+  
+  json tree = ParseModuleToJson(code);
+  ASSERT_FALSE(tree.empty());
+  
+  const json* prop_decl = FindNodeByTag(tree, "kPropertyDeclaration");
+  EXPECT_TRUE(prop_decl != nullptr);
+}
+
+// Test 34: Property with non-overlapped implication (|=>)
+TEST(TemporalOperatorsTest, NonOverlappedImplication) {
+  const std::string code = R"(
+module test;
+  logic clk, req, ack;
+  
+  property p_req_ack;
+    @(posedge clk) req |=> ack;
+  endproperty
+  
+  assert property (p_req_ack);
+endmodule
+)";
+  
+  json tree = ParseModuleToJson(code);
+  ASSERT_FALSE(tree.empty());
+  
+  const json* prop_decl = FindNodeByTag(tree, "kPropertyDeclaration");
+  EXPECT_TRUE(prop_decl != nullptr);
+}
+
+// Test 35: Property with $rose system function
+TEST(TemporalOperatorsTest, RoseFunction) {
+  const std::string code = R"(
+module test;
+  logic clk, signal, response;
+  
+  property p_rose;
+    @(posedge clk) $rose(signal) |-> response;
+  endproperty
+  
+  assert property (p_rose);
+endmodule
+)";
+  
+  json tree = ParseModuleToJson(code);
+  ASSERT_FALSE(tree.empty());
+  
+  const json* prop_decl = FindNodeByTag(tree, "kPropertyDeclaration");
+  EXPECT_TRUE(prop_decl != nullptr);
+}
+
+// Test 36: Property with $fell system function
+TEST(TemporalOperatorsTest, FellFunction) {
+  const std::string code = R"(
+module test;
+  logic clk, signal, response;
+  
+  property p_fell;
+    @(posedge clk) $fell(signal) |-> response;
+  endproperty
+  
+  assert property (p_fell);
+endmodule
+)";
+  
+  json tree = ParseModuleToJson(code);
+  ASSERT_FALSE(tree.empty());
+  
+  const json* prop_decl = FindNodeByTag(tree, "kPropertyDeclaration");
+  EXPECT_TRUE(prop_decl != nullptr);
+}
+
+// Test 37: Property with $stable system function
+TEST(TemporalOperatorsTest, StableFunction) {
+  const std::string code = R"(
+module test;
+  logic clk, signal, check;
+  
+  property p_stable;
+    @(posedge clk) $stable(signal) |-> check;
+  endproperty
+  
+  assert property (p_stable);
+endmodule
+)";
+  
+  json tree = ParseModuleToJson(code);
+  ASSERT_FALSE(tree.empty());
+  
+  const json* prop_decl = FindNodeByTag(tree, "kPropertyDeclaration");
+  EXPECT_TRUE(prop_decl != nullptr);
+}
+
+// Test 38: Property with $past system function
+TEST(TemporalOperatorsTest, PastFunction) {
+  const std::string code = R"(
+module test;
+  logic clk, data, check;
+  
+  property p_past;
+    @(posedge clk) $past(data) == check;
+  endproperty
+  
+  assert property (p_past);
+endmodule
+)";
+  
+  json tree = ParseModuleToJson(code);
+  ASSERT_FALSE(tree.empty());
+  
+  const json* prop_decl = FindNodeByTag(tree, "kPropertyDeclaration");
+  EXPECT_TRUE(prop_decl != nullptr);
+}
+
+// Test 39: Complex temporal expression
+TEST(TemporalOperatorsTest, ComplexTemporalExpression) {
+  const std::string code = R"(
+module test;
+  logic clk, a, b, c, d;
+  
+  property p_complex;
+    @(posedge clk) (a ##1 b) |-> ##[1:5] (c && d);
+  endproperty
+  
+  assert property (p_complex);
+endmodule
+)";
+  
+  json tree = ParseModuleToJson(code);
+  ASSERT_FALSE(tree.empty());
+  
+  const json* prop_decl = FindNodeByTag(tree, "kPropertyDeclaration");
+  EXPECT_TRUE(prop_decl != nullptr);
+}
+
+// Test 40: Nested implications
+TEST(TemporalOperatorsTest, NestedImplications) {
+  const std::string code = R"(
+module test;
+  logic clk, req, gnt, done;
+  
+  property p_nested;
+    @(posedge clk) req |-> (gnt |=> done);
+  endproperty
+  
+  assert property (p_nested);
+endmodule
+)";
+  
+  json tree = ParseModuleToJson(code);
+  ASSERT_FALSE(tree.empty());
+  
+  const json* prop_decl = FindNodeByTag(tree, "kPropertyDeclaration");
+  EXPECT_TRUE(prop_decl != nullptr);
+}
+
 }  // namespace
 }  // namespace verilog
 
