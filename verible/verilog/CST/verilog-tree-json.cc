@@ -2866,14 +2866,19 @@ void VerilogTreeToJsonConverter::AddBinaryExpressionMetadata(
 
   if (node.size() < 3) return;  // Invalid structure
 
-  json metadata = json::object();
-
   // Extract operator from node[1]
   const auto *op_symbol = node[1].get();
   if (!op_symbol || op_symbol->Kind() != verible::SymbolKind::kLeaf) return;
 
   const auto &op_leaf = verible::SymbolCastToLeaf(*op_symbol);
   std::string_view operator_text = op_leaf.get().text();
+
+  // Skip metadata for SVA temporal operators - they have different operand structures
+  if (operator_text == "throughout" || operator_text == "within") {
+    return;
+  }
+
+  json metadata = json::object();
 
   metadata["operation"] = MapOperatorToOperation(operator_text);
   metadata["operator"] = std::string(operator_text);
