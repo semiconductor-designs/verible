@@ -1095,3 +1095,18 @@ cc_test(
         "@nlohmann_json//:singleheader-json",
     ],
 )
+
+cc_test(
+    name = "verilog-tree-json-coverage_test",
+    srcs = ["verilog-tree-json-coverage_test.cc"],
+    deps = [
+        ":verilog-tree-json",
+        ":verilog-nonterminals",
+        "//verible/common/text:symbol",
+        "//verible/common/util:logging",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+        "@nlohmann_json//:singleheader-json",
+    ],
+)

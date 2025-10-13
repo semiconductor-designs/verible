@@ -2135,11 +2135,9 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
     // Extract C linkage name and function name
     // Structure: export "DPI-C" [c_name =] function sv_name;
     // Child[2] = c_name (if present), Child[3] = '=' (if present), Child[4+] = function prototype
-    bool has_c_linkage = false;
     if (node.size() > 3 && node[3] && node[3]->Kind() == verible::SymbolKind::kLeaf) {
       const auto& eq_leaf = verible::SymbolCastToLeaf(*node[3]);
       if (eq_leaf.get().text() == "=") {
-        has_c_linkage = true;
         // Extract C linkage name from child[2]
         if (node[2] && node[2]->Kind() == verible::SymbolKind::kLeaf) {
           const auto& c_name_leaf = verible::SymbolCastToLeaf(*node[2]);
@@ -2256,6 +2254,66 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
       (*value_)["metadata"] = json::object();
     }
     (*value_)["metadata"]["program_info"] = program_info;
+  } else if (tag == NodeEnum::kCovergroupDeclaration) {
+    // Phase COVERAGE-1: Functional Coverage
+    json coverage_info = json::object();
+    
+    // Look for kCovergroupHeader child (child[0])
+    if (node.size() > 0 && node[0] && node[0]->Kind() == verible::SymbolKind::kNode) {
+      const auto& header = verible::SymbolCastToNode(*node[0]);
+      
+      // Extract covergroup name - typically child[1] in header
+      if (header.size() > 1 && header[1]) {
+        std::string_view cg_name = verible::StringSpanOfSymbol(*header[1]);
+        coverage_info["covergroup_name"] = std::string(cg_name);
+      }
+      
+      // Check for trigger event - look for kEventControl
+      coverage_info["has_trigger_event"] = false;
+      for (size_t i = 0; i < header.size(); i++) {
+        if (header[i] && header[i]->Kind() == verible::SymbolKind::kNode) {
+          const auto& child_node = verible::SymbolCastToNode(*header[i]);
+          auto child_tag = static_cast<verilog::NodeEnum>(child_node.Tag().tag);
+          if (child_tag == NodeEnum::kEventControl) {
+            coverage_info["has_trigger_event"] = true;
+            std::string_view trigger = verible::StringSpanOfSymbol(child_node);
+            coverage_info["trigger_event"] = std::string(trigger);
+            break;
+          }
+        }
+      }
+    }
+    
+    // Count coverpoints and cross items
+    int coverpoint_count = 0;
+    int cross_count = 0;
+    bool has_options = false;
+    
+    for (size_t i = 1; i < node.size(); i++) {
+      if (node[i] && node[i]->Kind() == verible::SymbolKind::kNode) {
+        const auto& child_node = verible::SymbolCastToNode(*node[i]);
+        auto child_tag = static_cast<verilog::NodeEnum>(child_node.Tag().tag);
+        
+        // Count different coverage constructs
+        if (child_tag == NodeEnum::kCoverPoint) {
+          coverpoint_count++;
+        } else if (child_tag == NodeEnum::kCoverCross) {
+          cross_count++;
+        } else if (child_tag == NodeEnum::kCoverageOption || 
+                   child_tag == NodeEnum::kCoverageSpecOptionList) {
+          has_options = true;
+        }
+      }
+    }
+    
+    coverage_info["coverpoint_count"] = coverpoint_count;
+    coverage_info["cross_count"] = cross_count;
+    coverage_info["has_options"] = has_options;
+    
+    if (!value_->contains("metadata")) {
+      (*value_)["metadata"] = json::object();
+    }
+    (*value_)["metadata"]["coverage_info"] = coverage_info;
   } else if (tag == NodeEnum::kDataDeclaration) {
     AddTypeResolutionMetadata(*value_, node, typedef_table_, context_.base);  // Phase A: Type resolution
     
