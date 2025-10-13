@@ -1904,6 +1904,70 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
     }
   } else if (tag == NodeEnum::kAlwaysStatement) {
     AddAlwaysBlockMetadata(*value_, node);  // Phase 4: Behavioral metadata
+  } else if (tag == NodeEnum::kAssertionStatement || 
+             tag == NodeEnum::kAssumeStatement || 
+             tag == NodeEnum::kCoverStatement) {
+    // Phase SVA-1: Immediate Assertions
+    // Add basic assertion metadata
+    json assertion_info = json::object();
+    
+    std::string assertion_type;
+    if (tag == NodeEnum::kAssertionStatement) {
+      assertion_type = "assert";
+    } else if (tag == NodeEnum::kAssumeStatement) {
+      assertion_type = "assume";
+    } else {
+      assertion_type = "cover";
+    }
+    
+    assertion_info["assertion_type"] = assertion_type;
+    
+    // Extract assertion condition from the clause/header structure
+    // Structure: kAssertionStatement -> kAssertionClause -> kAssertionHeader -> expression
+    if (node.size() > 0 && node[0]) {
+      const auto* clause = node[0].get();
+      if (clause && clause->Kind() == verible::SymbolKind::kNode) {
+        const auto& clause_node = verible::SymbolCastToNode(*clause);
+        if (clause_node.size() > 0 && clause_node[0]) {
+          const auto* header = clause_node[0].get();
+          if (header && header->Kind() == verible::SymbolKind::kNode) {
+            const auto& header_node = verible::SymbolCastToNode(*header);
+            // Header contains: keyword, timing (optional), paren group with expression
+            // Try to extract the condition expression
+            for (size_t i = 0; i < header_node.size(); i++) {
+              if (header_node[i] && header_node[i]->Kind() == verible::SymbolKind::kNode) {
+                const auto& child = verible::SymbolCastToNode(*header_node[i]);
+                // Look for paren group or expression
+                std::string_view expr_text = verible::StringSpanOfSymbol(child);
+                if (!expr_text.empty() && expr_text.find('(') != std::string_view::npos) {
+                  assertion_info["condition"] = std::string(expr_text);
+                  break;
+                }
+              }
+            }
+          }
+        }
+        
+        // Check if there's an action block (else clause)
+        if (clause_node.size() > 1 && clause_node[1]) {
+          assertion_info["has_action_block"] = true;
+        } else {
+          assertion_info["has_action_block"] = false;
+        }
+      }
+    }
+    
+    // Check for else clause (failure action)
+    if (node.size() > 1 && node[1]) {
+      assertion_info["has_else_clause"] = true;
+    } else {
+      assertion_info["has_else_clause"] = false;
+    }
+    
+    if (!value_->contains("metadata")) {
+      (*value_)["metadata"] = json::object();
+    }
+    (*value_)["metadata"]["assertion_info"] = assertion_info;
   } else if (tag == NodeEnum::kDataDeclaration) {
     AddTypeResolutionMetadata(*value_, node, typedef_table_, context_.base);  // Phase A: Type resolution
     
