@@ -2051,6 +2051,92 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
       (*value_)["metadata"] = json::object();
     }
     (*value_)["metadata"]["checker_info"] = checker_info;
+  } else if (tag == NodeEnum::kConfigDeclaration) {
+    // Phase LRM-1: Config Block Support (IEEE 1800-2017 legacy feature)
+    json config_info = json::object();
+    config_info["construct_type"] = "config_declaration";
+    
+    // Extract config name (typically at child 1)
+    if (node.size() > 1 && node[1]) {
+      std::string_view config_name = verible::StringSpanOfSymbol(*node[1]);
+      config_info["config_name"] = std::string(config_name);
+    }
+    
+    // Search for design statement
+    auto design_matches = verible::SearchSyntaxTree(node, NodekDesignStatement());
+    if (!design_matches.empty()) {
+      config_info["has_design_statement"] = true;
+      if (design_matches[0].match) {
+        std::string_view design_text = verible::StringSpanOfSymbol(*design_matches[0].match);
+        config_info["design"] = std::string(design_text);
+      }
+    } else {
+      config_info["has_design_statement"] = false;
+    }
+    
+    // Search for instance and cell clauses
+    auto inst_matches = verible::SearchSyntaxTree(node, NodekInstClause());
+    auto cell_matches = verible::SearchSyntaxTree(node, NodekCellClause());
+    config_info["instance_count"] = static_cast<int>(inst_matches.size());
+    config_info["cell_count"] = static_cast<int>(cell_matches.size());
+    
+    if (!value_->contains("metadata")) {
+      (*value_)["metadata"] = json::object();
+    }
+    (*value_)["metadata"]["config_info"] = config_info;
+  } else if (tag == NodeEnum::kSpecifyBlock) {
+    // Phase LRM-2: Specify Block Support (IEEE 1800-2017 timing feature)
+    json specify_info = json::object();
+    specify_info["construct_type"] = "specify_block";
+    
+    // Count specify items
+    auto specify_items = verible::SearchSyntaxTree(node, NodekSpecifyItem());
+    specify_info["item_count"] = static_cast<int>(specify_items.size());
+    
+    // Check for path declarations
+    auto path_decls = verible::SearchSyntaxTree(node, NodekSpecifyPathDeclaration());
+    specify_info["has_path_declarations"] = !path_decls.empty();
+    specify_info["path_count"] = static_cast<int>(path_decls.size());
+    
+    // Check for specparam declarations
+    auto specparams = verible::SearchSyntaxTree(node, NodekSpecParamDeclaration());
+    specify_info["has_specparams"] = !specparams.empty();
+    specify_info["specparam_count"] = static_cast<int>(specparams.size());
+    
+    if (!value_->contains("metadata")) {
+      (*value_)["metadata"] = json::object();
+    }
+    (*value_)["metadata"]["specify_info"] = specify_info;
+  } else if (tag == NodeEnum::kUdpPrimitive) {
+    // Phase LRM-3: UDP (User Defined Primitive) Support (Verilog-1995 legacy)
+    json udp_info = json::object();
+    udp_info["construct_type"] = "udp_primitive";
+    
+    // Extract UDP name (typically at child 1)
+    if (node.size() > 1 && node[1]) {
+      std::string_view udp_name = verible::StringSpanOfSymbol(*node[1]);
+      udp_info["udp_name"] = std::string(udp_name);
+    }
+    
+    // Check for sequential vs combinational
+    // Sequential UDPs have a reg declaration for the output
+    auto udp_body = verible::SearchSyntaxTree(node, NodekUdpBody());
+    udp_info["has_table"] = !udp_body.empty();
+    
+    // Check for initial statement (only in sequential UDPs)
+    auto udp_initial = verible::SearchSyntaxTree(node, NodekUdpInitial());
+    udp_info["is_sequential"] = !udp_initial.empty();
+    udp_info["has_initial"] = !udp_initial.empty();
+    
+    // Count table entries
+    auto comb_entries = verible::SearchSyntaxTree(node, NodekUdpCombEntry());
+    auto seq_entries = verible::SearchSyntaxTree(node, NodekUdpSequenceEntry());
+    udp_info["table_entry_count"] = static_cast<int>(comb_entries.size() + seq_entries.size());
+    
+    if (!value_->contains("metadata")) {
+      (*value_)["metadata"] = json::object();
+    }
+    (*value_)["metadata"]["udp_info"] = udp_info;
   } else if (tag == NodeEnum::kDPIImportItem) {
     // Phase DPI-1: DPI-C Import
     json dpi_info = json::object();

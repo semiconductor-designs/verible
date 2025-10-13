@@ -20,6 +20,9 @@ common:macos   --config=unix
 # https://github.com/bazelbuild/bazel/issues/4341#issuecomment-758361769
 common:macos --features=-supports_dynamic_linker --linkopt=-framework --linkopt=CoreFoundation --host_linkopt=-framework --host_linkopt=CoreFoundation
 
+# Fix for C++17 filesystem on macOS - requires 10.15+ deployment target
+common:macos --cxxopt=-mmacosx-version-min=10.15 --host_cxxopt=-mmacosx-version-min=10.15 --linkopt=-mmacosx-version-min=10.15 --host_linkopt=-mmacosx-version-min=10.15
+
 # Use clang-cl by default on Windows. MSVC has some issues with the codebase,
 # so we focus the effort for now is to have a Windows Verible compiled with
 # clang-cl before fixing the issues unique to MSVC.

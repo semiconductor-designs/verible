@@ -1119,6 +1119,42 @@ cc_test(
 )
 
 cc_test(
+    name = "verilog-tree-json-config_test",
+    srcs = ["verilog-tree-json-config_test.cc"],
+    deps = [
+        ":verilog-tree-json",
+        "//verible/common/util:logging",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "verilog-tree-json-specify_test",
+    srcs = ["verilog-tree-json-specify_test.cc"],
+    deps = [
+        ":verilog-tree-json",
+        "//verible/common/util:logging",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "verilog-tree-json-udp_test",
+    srcs = ["verilog-tree-json-udp_test.cc"],
+    deps = [
+        ":verilog-tree-json",
+        "//verible/common/util:logging",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
     name = "verilog-tree-json-dpi_test",
     srcs = ["verilog-tree-json-dpi_test.cc"],
     deps = [
