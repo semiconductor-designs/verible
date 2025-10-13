@@ -2530,6 +2530,79 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
       (*value_)["metadata"] = json::object();
     }
     (*value_)["metadata"]["interface_info"] = interface_info;
+  } else if (tag == NodeEnum::kPackageDeclaration) {
+    // Phase 3: Packages
+    json package_info = json::object();
+    
+    // Extract package name - scan for SymbolIdentifier after "package" keyword
+    std::string package_name;
+    bool found_package_keyword = false;
+    for (size_t i = 0; i < node.size(); i++) {
+      if (node[i] && node[i]->Kind() == verible::SymbolKind::kLeaf) {
+        const auto& leaf = verible::SymbolCastToLeaf(*node[i]);
+        if (leaf.get().text() == "package") {
+          found_package_keyword = true;
+        } else if (found_package_keyword && leaf.get().token_enum() == verilog_tokentype::SymbolIdentifier) {
+          // First identifier after "package" keyword is the package name
+          package_name = std::string(leaf.get().text());
+          break;
+        }
+      }
+    }
+    package_info["package_name"] = package_name;
+    
+    // Count different types of items in kPackageItemList
+    int typedef_count = 0;
+    int parameter_count = 0;
+    int class_count = 0;
+    int function_count = 0;
+    int task_count = 0;
+    int export_count = 0;
+    
+    // Look for kPackageItemList (typically child[4] after: package, name, semicolon, item_list)
+    for (size_t i = 0; i < node.size(); i++) {
+      if (node[i] && node[i]->Kind() == verible::SymbolKind::kNode) {
+        const auto& child_node = verible::SymbolCastToNode(*node[i]);
+        auto child_tag = static_cast<verilog::NodeEnum>(child_node.Tag().tag);
+        
+        if (child_tag == NodeEnum::kPackageItemList) {
+          // Iterate through package items
+          for (size_t j = 0; j < child_node.size(); j++) {
+            if (child_node[j] && child_node[j]->Kind() == verible::SymbolKind::kNode) {
+              const auto& item = verible::SymbolCastToNode(*child_node[j]);
+              auto item_tag = static_cast<verilog::NodeEnum>(item.Tag().tag);
+              
+              if (item_tag == NodeEnum::kTypeDeclaration) {
+                typedef_count++;
+              } else if (item_tag == NodeEnum::kParamDeclaration) {
+                parameter_count++;
+              } else if (item_tag == NodeEnum::kClassDeclaration) {
+                class_count++;
+              } else if (item_tag == NodeEnum::kFunctionDeclaration) {
+                function_count++;
+              } else if (item_tag == NodeEnum::kTaskDeclaration) {
+                task_count++;
+              } else if (item_tag == NodeEnum::kPackageExportDeclaration) {
+                export_count++;
+              }
+            }
+          }
+          break;
+        }
+      }
+    }
+    
+    package_info["typedef_count"] = typedef_count;
+    package_info["parameter_count"] = parameter_count;
+    package_info["class_count"] = class_count;
+    package_info["function_count"] = function_count;
+    package_info["task_count"] = task_count;
+    package_info["export_count"] = export_count;
+    
+    if (!value_->contains("metadata")) {
+      (*value_)["metadata"] = json::object();
+    }
+    (*value_)["metadata"]["package_info"] = package_info;
   } else if (tag == NodeEnum::kDataDeclaration) {
     AddTypeResolutionMetadata(*value_, node, typedef_table_, context_.base);  // Phase A: Type resolution
     
