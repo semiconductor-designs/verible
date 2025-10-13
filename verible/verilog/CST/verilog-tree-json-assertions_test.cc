@@ -647,6 +647,151 @@ endmodule
   EXPECT_TRUE(cover_prop != nullptr) << "Should find kCoverPropertyStatement";
 }
 
+// ============================================================================
+// PHASE 3: Sequences
+// ============================================================================
+
+// Test 27: Simple sequence declaration
+TEST(SequenceTest, SimpleSequenceDeclaration) {
+  const std::string code = R"(
+module test;
+  logic clk, req, ack;
+  
+  sequence s_handshake;
+    req ##1 ack;
+  endsequence
+endmodule
+)";
+  
+  json tree = ParseModuleToJson(code);
+  ASSERT_FALSE(tree.empty());
+  
+  const json* seq_decl = FindNodeByTag(tree, "kSequenceDeclaration");
+  EXPECT_TRUE(seq_decl != nullptr) << "Should find kSequenceDeclaration";
+}
+
+// Test 28: Sequence with fixed delay
+TEST(SequenceTest, SequenceWithFixedDelay) {
+  const std::string code = R"(
+module test;
+  logic clk, a, b;
+  
+  sequence s_delay2;
+    a ##2 b;
+  endsequence
+endmodule
+)";
+  
+  json tree = ParseModuleToJson(code);
+  ASSERT_FALSE(tree.empty());
+  
+  const json* seq_decl = FindNodeByTag(tree, "kSequenceDeclaration");
+  EXPECT_TRUE(seq_decl != nullptr);
+}
+
+// Test 29: Sequence with range delay
+TEST(SequenceTest, SequenceWithRangeDelay) {
+  const std::string code = R"(
+module test;
+  logic clk, req, gnt;
+  
+  sequence s_req_gnt;
+    req ##[1:5] gnt;
+  endsequence
+endmodule
+)";
+  
+  json tree = ParseModuleToJson(code);
+  ASSERT_FALSE(tree.empty());
+  
+  const json* seq_decl = FindNodeByTag(tree, "kSequenceDeclaration");
+  EXPECT_TRUE(seq_decl != nullptr);
+}
+
+// Test 30: Cover sequence statement
+TEST(SequenceTest, CoverSequence) {
+  const std::string code = R"(
+module test;
+  logic clk, valid, ready;
+  
+  sequence s_transfer;
+    valid ##1 ready;
+  endsequence
+  
+  cover sequence (@(posedge clk) s_transfer);
+endmodule
+)";
+  
+  json tree = ParseModuleToJson(code);
+  ASSERT_FALSE(tree.empty());
+  
+  const json* cover_seq = FindNodeByTag(tree, "kCoverSequenceStatement");
+  EXPECT_TRUE(cover_seq != nullptr) << "Should find kCoverSequenceStatement";
+}
+
+// Test 31: Sequence in property
+TEST(SequenceTest, SequenceInProperty) {
+  const std::string code = R"(
+module test;
+  logic clk, start, done;
+  
+  sequence s_operation;
+    start ##[1:10] done;
+  endsequence
+  
+  property p_complete;
+    @(posedge clk) s_operation;
+  endproperty
+  
+  assert property (p_complete);
+endmodule
+)";
+  
+  json tree = ParseModuleToJson(code);
+  ASSERT_FALSE(tree.empty());
+  
+  const json* seq_decl = FindNodeByTag(tree, "kSequenceDeclaration");
+  EXPECT_TRUE(seq_decl != nullptr);
+  
+  const json* prop_decl = FindNodeByTag(tree, "kPropertyDeclaration");
+  EXPECT_TRUE(prop_decl != nullptr);
+}
+
+// Test 32: Multiple sequences
+TEST(SequenceTest, MultipleSequences) {
+  const std::string code = R"(
+module test;
+  logic clk, a, b, c;
+  
+  sequence s1;
+    a ##1 b;
+  endsequence
+  
+  sequence s2;
+    b ##1 c;
+  endsequence
+endmodule
+)";
+  
+  json tree = ParseModuleToJson(code);
+  ASSERT_FALSE(tree.empty());
+  
+  int seq_count = 0;
+  std::function<void(const json&)> count_sequences = [&](const json& node) {
+    if (node.contains("tag") && node["tag"] == "kSequenceDeclaration") {
+      seq_count++;
+    }
+    if (node.contains("children")) {
+      for (const auto& child : node["children"]) {
+        count_sequences(child);
+      }
+    }
+  };
+  count_sequences(tree);
+  
+  EXPECT_EQ(seq_count, 2) << "Should find 2 sequence declarations";
+}
+
 }  // namespace
 }  // namespace verilog
 

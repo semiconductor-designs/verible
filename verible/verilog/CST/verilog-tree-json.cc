@@ -2011,6 +2011,31 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
       (*value_)["metadata"] = json::object();
     }
     (*value_)["metadata"]["concurrent_assertion_info"] = concurrent_assertion;
+  } else if (tag == NodeEnum::kSequenceDeclaration) {
+    // Phase SVA-3: Sequence Declarations
+    json sequence_info = json::object();
+    sequence_info["construct_type"] = "sequence_declaration";
+    
+    // Extract sequence name - typically at child 1
+    if (node.size() > 1 && node[1]) {
+      std::string_view seq_name = verible::StringSpanOfSymbol(*node[1]);
+      sequence_info["sequence_name"] = std::string(seq_name);
+    }
+    
+    if (!value_->contains("metadata")) {
+      (*value_)["metadata"] = json::object();
+    }
+    (*value_)["metadata"]["sequence_info"] = sequence_info;
+  } else if (tag == NodeEnum::kCoverSequenceStatement) {
+    // Phase SVA-3: Cover Sequence Statements
+    json cover_sequence = json::object();
+    cover_sequence["assertion_type"] = "cover_sequence";
+    cover_sequence["is_concurrent"] = true;
+    
+    if (!value_->contains("metadata")) {
+      (*value_)["metadata"] = json::object();
+    }
+    (*value_)["metadata"]["concurrent_assertion_info"] = cover_sequence;
   } else if (tag == NodeEnum::kDataDeclaration) {
     AddTypeResolutionMetadata(*value_, node, typedef_table_, context_.base);  // Phase A: Type resolution
     
