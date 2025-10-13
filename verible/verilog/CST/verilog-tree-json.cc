@@ -2603,6 +2603,96 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
       (*value_)["metadata"] = json::object();
     }
     (*value_)["metadata"]["package_info"] = package_info;
+  } else if (tag == NodeEnum::kLoopGenerateConstruct) {
+    // Phase 4: Generate for loops
+    json generate_info = json::object();
+    generate_info["generate_type"] = "for";
+    
+    // Check for label in kGenerateBlock
+    std::string label;
+    bool has_label = false;
+    
+    // Look for kGenerateBlock child which contains the label
+    for (size_t i = 0; i < node.size(); i++) {
+      if (node[i] && node[i]->Kind() == verible::SymbolKind::kNode) {
+        const auto& child_node = verible::SymbolCastToNode(*node[i]);
+        auto child_tag = static_cast<verilog::NodeEnum>(child_node.Tag().tag);
+        
+        if (child_tag == NodeEnum::kGenerateBlock) {
+          // Look for kLabel in kBegin
+          for (size_t j = 0; j < child_node.size(); j++) {
+            if (child_node[j] && child_node[j]->Kind() == verible::SymbolKind::kNode) {
+              const auto& gen_block_child = verible::SymbolCastToNode(*child_node[j]);
+              auto gen_block_child_tag = static_cast<verilog::NodeEnum>(gen_block_child.Tag().tag);
+              
+              if (gen_block_child_tag == NodeEnum::kBegin) {
+                // Look for kLabel
+                for (size_t k = 0; k < gen_block_child.size(); k++) {
+                  if (gen_block_child[k] && gen_block_child[k]->Kind() == verible::SymbolKind::kNode) {
+                    const auto& begin_child = verible::SymbolCastToNode(*gen_block_child[k]);
+                    auto begin_child_tag = static_cast<verilog::NodeEnum>(begin_child.Tag().tag);
+                    
+                    if (begin_child_tag == NodeEnum::kLabel) {
+                      // Extract label name (second child after ':')
+                      if (begin_child.size() > 1 && begin_child[1] && 
+                          begin_child[1]->Kind() == verible::SymbolKind::kLeaf) {
+                        const auto& label_leaf = verible::SymbolCastToLeaf(*begin_child[1]);
+                        label = std::string(label_leaf.get().text());
+                        has_label = true;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    generate_info["has_label"] = has_label;
+    if (has_label) {
+      generate_info["label"] = label;
+    }
+    
+    if (!value_->contains("metadata")) {
+      (*value_)["metadata"] = json::object();
+    }
+    (*value_)["metadata"]["generate_info"] = generate_info;
+  } else if (tag == NodeEnum::kGenerateIf) {
+    // Phase 4: Generate if/else
+    json generate_info = json::object();
+    generate_info["generate_type"] = "if";
+    
+    // Check if there's an else clause
+    bool has_else = false;
+    for (size_t i = 0; i < node.size(); i++) {
+      if (node[i] && node[i]->Kind() == verible::SymbolKind::kNode) {
+        const auto& child_node = verible::SymbolCastToNode(*node[i]);
+        auto child_tag = static_cast<verilog::NodeEnum>(child_node.Tag().tag);
+        
+        if (child_tag == NodeEnum::kGenerateElseClause) {
+          has_else = true;
+          break;
+        }
+      }
+    }
+    
+    generate_info["has_else"] = has_else;
+    
+    if (!value_->contains("metadata")) {
+      (*value_)["metadata"] = json::object();
+    }
+    (*value_)["metadata"]["generate_info"] = generate_info;
+  } else if (tag == NodeEnum::kGenerateRegion) {
+    // Phase 4: Explicit generate region (with generate/endgenerate keywords)
+    json generate_info = json::object();
+    generate_info["is_explicit"] = true;
+    
+    if (!value_->contains("metadata")) {
+      (*value_)["metadata"] = json::object();
+    }
+    (*value_)["metadata"]["generate_info"] = generate_info;
   } else if (tag == NodeEnum::kDataDeclaration) {
     AddTypeResolutionMetadata(*value_, node, typedef_table_, context_.base);  // Phase A: Type resolution
     
