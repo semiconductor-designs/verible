@@ -543,6 +543,110 @@ TEST(ImmediateAssertionsTest, PerformanceTest) {
   EXPECT_EQ(count, 100) << "Should find 100 assertion statements";
 }
 
+// ============================================================================
+// PHASE 2: Concurrent Assertions - Properties
+// ============================================================================
+
+// Test 21: Simple property declaration
+TEST(ConcurrentAssertionsTest, SimplePropertyDeclaration) {
+  const std::string code = R"(
+module test(input logic clk, req, ack);
+  property p_req_ack;
+    @(posedge clk) req |-> ##1 ack;
+  endproperty
+  
+  assert property (p_req_ack);
+endmodule
+)";
+  
+  json tree = ParseModuleToJson(code);
+  ASSERT_FALSE(tree.empty());
+  
+  // Should find property declaration
+  const json* prop_decl = FindNodeByTag(tree, "kPropertyDeclaration");
+  EXPECT_TRUE(prop_decl != nullptr) << "Should find kPropertyDeclaration";
+}
+
+// Test 22: Property with clocking event
+TEST(ConcurrentAssertionsTest, PropertyWithClockingEvent) {
+  const std::string code = R"(
+module test(input logic clk, valid, ready);
+  property p_handshake;
+    @(posedge clk) valid |-> ready;
+  endproperty
+endmodule
+)";
+  
+  json tree = ParseModuleToJson(code);
+  ASSERT_FALSE(tree.empty());
+  
+  const json* prop_decl = FindNodeByTag(tree, "kPropertyDeclaration");
+  EXPECT_TRUE(prop_decl != nullptr);
+}
+
+// Test 23: Property with disable iff
+TEST(ConcurrentAssertionsTest, PropertyWithDisableIff) {
+  const std::string code = R"(
+module test(input logic clk, rst_n, req, gnt);
+  property p_req_gnt;
+    @(posedge clk) disable iff (!rst_n)
+    req |-> ##[1:3] gnt;
+  endproperty
+endmodule
+)";
+  
+  json tree = ParseModuleToJson(code);
+  ASSERT_FALSE(tree.empty());
+  
+  const json* prop_decl = FindNodeByTag(tree, "kPropertyDeclaration");
+  EXPECT_TRUE(prop_decl != nullptr);
+}
+
+// Test 24: Inline property in assert
+TEST(ConcurrentAssertionsTest, InlinePropertyInAssert) {
+  const std::string code = R"(
+module test(input logic clk, req, ack);
+  assert property (@(posedge clk) req |-> ##1 ack);
+endmodule
+)";
+  
+  json tree = ParseModuleToJson(code);
+  ASSERT_FALSE(tree.empty());
+  
+  const json* assert_prop = FindNodeByTag(tree, "kAssertPropertyStatement");
+  EXPECT_TRUE(assert_prop != nullptr) << "Should find kAssertPropertyStatement";
+}
+
+// Test 25: Concurrent assume property
+TEST(ConcurrentAssertionsTest, AssumeProperty) {
+  const std::string code = R"(
+module test(input logic clk, rst_n);
+  assume property (@(posedge clk) $rose(rst_n) |-> !req);
+endmodule
+)";
+  
+  json tree = ParseModuleToJson(code);
+  ASSERT_FALSE(tree.empty());
+  
+  const json* assume_prop = FindNodeByTag(tree, "kAssumePropertyStatement");
+  EXPECT_TRUE(assume_prop != nullptr) << "Should find kAssumePropertyStatement";
+}
+
+// Test 26: Concurrent cover property
+TEST(ConcurrentAssertionsTest, CoverProperty) {
+  const std::string code = R"(
+module test(input logic clk, valid, ready);
+  cover property (@(posedge clk) valid ##1 ready);
+endmodule
+)";
+  
+  json tree = ParseModuleToJson(code);
+  ASSERT_FALSE(tree.empty());
+  
+  const json* cover_prop = FindNodeByTag(tree, "kCoverPropertyStatement");
+  EXPECT_TRUE(cover_prop != nullptr) << "Should find kCoverPropertyStatement";
+}
+
 }  // namespace
 }  // namespace verilog
 

@@ -1968,6 +1968,49 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
       (*value_)["metadata"] = json::object();
     }
     (*value_)["metadata"]["assertion_info"] = assertion_info;
+  } else if (tag == NodeEnum::kPropertyDeclaration) {
+    // Phase SVA-2: Property Declarations
+    json property_info = json::object();
+    property_info["construct_type"] = "property_declaration";
+    
+    // Extract property name - typically at child 1
+    if (node.size() > 1 && node[1]) {
+      std::string_view prop_name = verible::StringSpanOfSymbol(*node[1]);
+      property_info["property_name"] = std::string(prop_name);
+    }
+    
+    if (!value_->contains("metadata")) {
+      (*value_)["metadata"] = json::object();
+    }
+    (*value_)["metadata"]["property_info"] = property_info;
+  } else if (tag == NodeEnum::kAssertPropertyStatement || 
+             tag == NodeEnum::kAssumePropertyStatement ||
+             tag == NodeEnum::kCoverPropertyStatement ||
+             tag == NodeEnum::kExpectPropertyStatement ||
+             tag == NodeEnum::kRestrictPropertyStatement) {
+    // Phase SVA-2: Concurrent Assertion Statements
+    json concurrent_assertion = json::object();
+    
+    std::string assertion_type;
+    if (tag == NodeEnum::kAssertPropertyStatement) {
+      assertion_type = "assert_property";
+    } else if (tag == NodeEnum::kAssumePropertyStatement) {
+      assertion_type = "assume_property";
+    } else if (tag == NodeEnum::kCoverPropertyStatement) {
+      assertion_type = "cover_property";
+    } else if (tag == NodeEnum::kExpectPropertyStatement) {
+      assertion_type = "expect_property";
+    } else {
+      assertion_type = "restrict_property";
+    }
+    
+    concurrent_assertion["assertion_type"] = assertion_type;
+    concurrent_assertion["is_concurrent"] = true;
+    
+    if (!value_->contains("metadata")) {
+      (*value_)["metadata"] = json::object();
+    }
+    (*value_)["metadata"]["concurrent_assertion_info"] = concurrent_assertion;
   } else if (tag == NodeEnum::kDataDeclaration) {
     AddTypeResolutionMetadata(*value_, node, typedef_table_, context_.base);  // Phase A: Type resolution
     
