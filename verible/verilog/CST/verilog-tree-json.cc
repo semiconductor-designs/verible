@@ -2193,6 +2193,69 @@ void VerilogTreeToJsonConverter::Visit(const verible::SyntaxTreeNode &node) {
       (*value_)["metadata"] = json::object();
     }
     (*value_)["metadata"]["dpi_info"] = dpi_info;
+  } else if (tag == NodeEnum::kProgramDeclaration) {
+    // Phase PROGRAM-1: Program Blocks
+    json program_info = json::object();
+    
+    // Look for kModuleHeader child (child[0])
+    if (node.size() > 0 && node[0] && node[0]->Kind() == verible::SymbolKind::kNode) {
+      const auto& header = verible::SymbolCastToNode(*node[0]);
+      
+      // Check for "automatic" or "static" keyword
+      program_info["is_automatic"] = false;
+      program_info["is_static"] = false;
+      
+      for (size_t i = 0; i < header.size(); i++) {
+        if (header[i] && header[i]->Kind() == verible::SymbolKind::kLeaf) {
+          const auto& leaf = verible::SymbolCastToLeaf(*header[i]);
+          std::string_view text = leaf.get().text();
+          if (text == "automatic") {
+            program_info["is_automatic"] = true;
+          } else if (text == "static") {
+            program_info["is_static"] = true;
+          }
+        }
+      }
+      
+      // Extract program name - typically child[2] in header
+      if (header.size() > 2 && header[2]) {
+        std::string_view prog_name = verible::StringSpanOfSymbol(*header[2]);
+        program_info["program_name"] = std::string(prog_name);
+      }
+      
+      // Check for ports - look for kParenGroup or kPortDeclarationList
+      program_info["has_ports"] = false;
+      for (size_t i = 0; i < header.size(); i++) {
+        if (header[i] && header[i]->Kind() == verible::SymbolKind::kNode) {
+          const auto& child_node = verible::SymbolCastToNode(*header[i]);
+          auto child_tag = static_cast<verilog::NodeEnum>(child_node.Tag().tag);
+          if (child_tag == NodeEnum::kParenGroup || child_tag == NodeEnum::kPortDeclarationList) {
+            program_info["has_ports"] = true;
+            break;
+          }
+        }
+      }
+    }
+    
+    // Count program items (initial, final, functions, tasks, etc.)
+    int item_count = 0;
+    for (size_t i = 1; i < node.size(); i++) {
+      if (node[i] && node[i]->Kind() == verible::SymbolKind::kNode) {
+        const auto& child_node = verible::SymbolCastToNode(*node[i]);
+        auto child_tag = static_cast<verilog::NodeEnum>(child_node.Tag().tag);
+        // Count items in kProgramItemList
+        if (child_tag == NodeEnum::kModuleItemList) {
+          item_count = child_node.size();
+          break;
+        }
+      }
+    }
+    program_info["item_count"] = item_count;
+    
+    if (!value_->contains("metadata")) {
+      (*value_)["metadata"] = json::object();
+    }
+    (*value_)["metadata"]["program_info"] = program_info;
   } else if (tag == NodeEnum::kDataDeclaration) {
     AddTypeResolutionMetadata(*value_, node, typedef_table_, context_.base);  // Phase A: Type resolution
     
