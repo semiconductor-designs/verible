@@ -290,3 +290,27 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+# M5 Group 4: SVA operators verification tests
+cc_test(
+    name = "verilog-parser-sva_test",
+    srcs = ["verilog-parser-sva_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# M5 Group 5: Drive and net strength verification tests
+cc_test(
+    name = "verilog-parser-strength_test",
+    srcs = ["verilog-parser-strength_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
