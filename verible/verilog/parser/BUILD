@@ -278,3 +278,15 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+# M5 Group 3: Bind directive verification tests
+cc_test(
+    name = "verilog-parser-bind_test",
+    srcs = ["verilog-parser-bind_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
