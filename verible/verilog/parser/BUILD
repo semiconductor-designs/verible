@@ -327,6 +327,18 @@ cc_test(
     ],
 )
 
+# Phase 2: Complete LRM Verification - All 243 Keywords (Incremental)
+cc_test(
+    name = "verilog-parser-lrm-complete_test",
+    srcs = ["verilog-parser-lrm-complete_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
 # M6: Drive Strength on Wire Declarations (TDD)
 cc_test(
     name = "verilog-parser-drive-strength_test",

@@ -7023,7 +7023,12 @@ wait_statement
                           MakeTaggedNode(N::kWaitBody, $5));}
   | TK_wait TK_fork ';'
     { $$ = MakeTaggedNode(N::kWaitForkStatement, $1, $2, $3);}
-    /* TODO(b/144972702): wait_order ... */
+  | TK_wait_order '(' expression_list_proper ')' statement_or_null
+    /* IEEE 1800-2017 Section 9.4.5 */
+    { $$ = MakeTaggedNode(N::kWaitOrderStatement,
+                          MakeTaggedNode(N::kWaitOrderHeader,
+                                         $1, MakeParenGroup($2, $3, $4)),
+                          MakeTaggedNode(N::kWaitOrderBody, $5));}
   ;
 
 statement_item
