@@ -254,3 +254,15 @@ cc_library(
         ":verilog-token-enum",
     ],
 )
+
+# M4 Group 1: Net array modifiers (scalared/vectored) tests
+cc_test(
+    name = "verilog-parser-net-modifier_test",
+    srcs = ["verilog-parser-net-modifier_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)

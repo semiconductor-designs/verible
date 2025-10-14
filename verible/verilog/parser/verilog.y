@@ -3845,6 +3845,19 @@ charge_strength_opt
     { $$ = nullptr; }
   ;
 
+net_array_modifier
+  : TK_scalared
+    { $$ = std::move($1); }
+  | TK_vectored
+    { $$ = std::move($1); }
+  ;
+net_array_modifier_opt
+  : net_array_modifier
+    { $$ = std::move($1); }
+  | /* empty */
+    { $$ = nullptr; }
+  ;
+
 defparam_assign
   : reference '=' expression
     { $$ = MakeTaggedNode(N::kDefParamAssignment, $1, $2, $3); }
@@ -5347,16 +5360,16 @@ port_declaration_noattr
   // dir, var_or_net_type_opt, data_type (includes packed dimensions), id,
   // unpacked dimensions, trailing_assign_opt
   //
-  : port_direction var_or_net_type_opt
+  : port_direction var_or_net_type_opt net_array_modifier_opt
     data_type_or_implicit_basic_followed_by_id_and_dimensions_opt
     trailing_assign_opt
-    { $$ = MakeTaggedNode(N::kPortDeclaration, $1, $2, ForwardChildren($3), $4); }
+    { $$ = MakeTaggedNode(N::kPortDeclaration, $1, $2, $3, ForwardChildren($4), $5); }
     // TODO(fangism): inout's cannot have variable port types,
     // so this needs to be enforced in CST validation.
-  | net_type data_type_or_implicit_basic_followed_by_id_and_dimensions_opt
+  | net_type net_array_modifier_opt data_type_or_implicit_basic_followed_by_id_and_dimensions_opt
     trailing_assign_opt
-    { $$ = MakeTaggedNode(N::kPortDeclaration, nullptr, $1,
-                          ForwardChildren($2), $3); }
+    { $$ = MakeTaggedNode(N::kPortDeclaration, nullptr, $1, $2,
+                          ForwardChildren($3), $4); }
   | data_type_primitive GenericIdentifier decl_dimensions_opt trailing_assign_opt
     { $$ = MakeTaggedNode(N::kPortDeclaration, nullptr, nullptr,
                           // just expand without ForwardChildren:
@@ -5591,10 +5604,10 @@ module_parameter_port_list_item_last
 // included too, for type comparison purposes (for multiline port
 // declaration)
 net_declaration
-  : net_type net_variable_or_decl_assigns ';'
-    { $$ = MakeTaggedNode(N::kNetDeclaration, MakeDataType($1), nullptr, $2, $3); }
-  | net_type data_type_or_implicit net_variable_or_decl_assigns ';'
+  : net_type net_array_modifier_opt net_variable_or_decl_assigns ';'
     { $$ = MakeTaggedNode(N::kNetDeclaration, MakeDataType($1), $2, $3, $4); }
+  | net_type net_array_modifier_opt data_type_or_implicit net_variable_or_decl_assigns ';'
+    { $$ = MakeTaggedNode(N::kNetDeclaration, MakeDataType($1), $2, $3, $4, $5); }
     /* TODO(fangism): support drive_strength and charge_strength */
   // : net_type data_type_or_implicit delay3_opt net_variable_list ';'
   // : net_type data_type_or_implicit delay3 net_variable_list ';'
