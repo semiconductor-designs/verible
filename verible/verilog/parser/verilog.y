@@ -5370,10 +5370,21 @@ port_declaration_noattr
     { $$ = MakeTaggedNode(N::kPortDeclaration, $1, $2, $3, ForwardChildren($4), $5); }
     // TODO(fangism): inout's cannot have variable port types,
     // so this needs to be enforced in CST validation.
+  /* M6: Drive strength support for port declarations with direction */
+  | port_direction net_type drive_strength net_array_modifier_opt
+    data_type_or_implicit_basic_followed_by_id_and_dimensions_opt
+    trailing_assign_opt
+    { $$ = MakeTaggedNode(N::kPortDeclaration, $1, $2, $3, $4,
+                          ForwardChildren($5), $6); }
   | net_type net_array_modifier_opt data_type_or_implicit_basic_followed_by_id_and_dimensions_opt
     trailing_assign_opt
     { $$ = MakeTaggedNode(N::kPortDeclaration, nullptr, $1, $2,
                           ForwardChildren($3), $4); }
+  /* M6: Drive strength support for port declarations without direction */
+  | net_type drive_strength net_array_modifier_opt data_type_or_implicit_basic_followed_by_id_and_dimensions_opt
+    trailing_assign_opt
+    { $$ = MakeTaggedNode(N::kPortDeclaration, nullptr, $1, $2, $3,
+                          ForwardChildren($4), $5); }
   | data_type_primitive GenericIdentifier decl_dimensions_opt trailing_assign_opt
     { $$ = MakeTaggedNode(N::kPortDeclaration, nullptr, nullptr,
                           // just expand without ForwardChildren:
@@ -5612,7 +5623,16 @@ net_declaration
     { $$ = MakeTaggedNode(N::kNetDeclaration, MakeDataType($1), $2, $3, $4); }
   | net_type net_array_modifier_opt data_type_or_implicit net_variable_or_decl_assigns ';'
     { $$ = MakeTaggedNode(N::kNetDeclaration, MakeDataType($1), $2, $3, $4, $5); }
-    /* TODO(fangism): support drive_strength and charge_strength */
+  /* M6: Drive strength support for net declarations */
+  | net_type drive_strength net_array_modifier_opt net_variable_or_decl_assigns ';'
+    { $$ = MakeTaggedNode(N::kNetDeclaration, MakeDataType($1), $2, $3, $4, $5); }
+  | net_type drive_strength net_array_modifier_opt data_type_or_implicit net_variable_or_decl_assigns ';'
+    { $$ = MakeTaggedNode(N::kNetDeclaration, MakeDataType($1), $2, $3, $4, $5, $6); }
+  | net_type drive_strength delay3 net_variable_or_decl_assigns ';'
+    { $$ = MakeTaggedNode(N::kNetDeclaration, MakeDataType(nullptr, $1, $3, nullptr), $2, nullptr, $4, $5); }
+  | net_type drive_strength delay3 data_type_or_implicit net_variable_or_decl_assigns ';'
+    { $$ = MakeTaggedNode(N::kNetDeclaration, MakeDataType(nullptr, $1, $3, nullptr), $2, nullptr, $4, $5, $6); }
+    /* TODO(fangism): support charge_strength */
   // : net_type data_type_or_implicit delay3_opt net_variable_list ';'
   // : net_type data_type_or_implicit delay3 net_variable_list ';'
   // : net_type data_type_or_implicit_followed_by_id
@@ -6219,7 +6239,13 @@ param_type_followed_by_id_and_dimensions_opt
   // : bit_logic_opt signed_unsigned_opt decl_dimensions_opt GenericIdentifier decl_dimensions_opt
   /* apparently, there are user-defined parameter types */
   /* TODO(fangism): enforce more structure here, e.g. kDataType */
-  : bit_logic_opt signed_unsigned_opt qualified_id decl_dimensions_opt
+  /* M9: untyped parameter support */
+  : TK_untyped GenericIdentifier
+    { $$ = MakeParamTypeDeclaration(MakeTypeInfoNode(nullptr, nullptr, $1),
+                                    /* no packed dimensions */ nullptr,
+                                    $2,
+                                    /* no unpacked dimensions */ nullptr); }
+  | bit_logic_opt signed_unsigned_opt qualified_id decl_dimensions_opt
     GenericIdentifier decl_dimensions_opt
     { $$ = MakeParamTypeDeclaration(MakeTypeInfoNode($1, $2, $3),
                                     MakePackedDimensionsNode($4),
@@ -6672,6 +6698,11 @@ specify_item
     { $$ = MakeTaggedNode(N::kSpecifyItem, $1, $2, $3); }
   | TK_noshowcancelled     specify_path_identifiers ';'
     { $$ = MakeTaggedNode(N::kSpecifyItem, $1, $2, $3); }
+  /* M9: Allow showcancelled/noshowcancelled without path identifiers */
+  | TK_showcancelled ';'
+    { $$ = MakeTaggedNode(N::kSpecifyItem, $1, $2); }
+  | TK_noshowcancelled ';'
+    { $$ = MakeTaggedNode(N::kSpecifyItem, $1, $2); }
   | preprocessor_directive
     { $$ = std::move($1); }
   ;
@@ -7822,6 +7853,9 @@ property_prefix_expr
     { $$ = MakeTaggedNode(N::kPropertyPrefixExpression, $1,
                           MakeTaggedNode(N::kCycleDelayConstRange, $2, $3, $4),
                           $5); }
+  /* M7: Add s_always without range */
+  | TK_s_always property_prefix_expr
+    { $$ = MakeTaggedNode(N::kPropertyPrefixExpression, $1, nullptr, $2); }
   | TK_s_eventually property_prefix_expr
     { $$ = MakeTaggedNode(N::kPropertyPrefixExpression, $1, nullptr, $2); }
   | TK_eventually '[' cycle_range ']'  property_prefix_expr
@@ -7829,6 +7863,9 @@ property_prefix_expr
     { $$ = MakeTaggedNode(N::kPropertyPrefixExpression, $1,
                           MakeTaggedNode(N::kCycleDelayConstRange, $2, $3, $4),
                           $5); }
+  /* M7: Add eventually without range */
+  | TK_eventually property_prefix_expr
+    { $$ = MakeTaggedNode(N::kPropertyPrefixExpression, $1, nullptr, $2); }
   | TK_s_eventually '[' cycle_range ']'  property_prefix_expr
     /* $3 should be a cycle_delay_const_range_expression */
     { $$ = MakeTaggedNode(N::kPropertyPrefixExpression, $1,

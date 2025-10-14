@@ -314,3 +314,51 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+# Phase 1: Keyword investigation tests for 40 blocked keywords
+cc_test(
+    name = "verilog-parser-keyword-investigation_test",
+    srcs = ["verilog-parser-keyword-investigation_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# M6: Drive Strength on Wire Declarations (TDD)
+cc_test(
+    name = "verilog-parser-drive-strength_test",
+    srcs = ["verilog-parser-drive-strength_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# M7: SVA Temporal Operators - Fix edge cases (TDD)
+cc_test(
+    name = "verilog-parser-sva-temporal_test",
+    srcs = ["verilog-parser-sva-temporal_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# M9: Medium Priority Keywords (TDD)
+cc_test(
+    name = "verilog-parser-m9-keywords_test",
+    srcs = ["verilog-parser-m9-keywords_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
