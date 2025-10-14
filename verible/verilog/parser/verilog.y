@@ -229,6 +229,7 @@ is not locally defined, so the grammar here uses only generic identifiers.
 // gen_tokenizer start STRING_LITERAL
 %token TK_StringLiteral         // STRING
 %token TK_EvalStringLiteral     // STRING
+%token TK_MultilineStringLiteral  // STRING (SV-2023: triple-quoted)
 %token TK_AngleBracketInclude   // STRING
 
 // gen_tokenizer stop
@@ -313,6 +314,7 @@ is not locally defined, so the grammar here uses only generic identifiers.
 %token TK_sample "sample"
 %token TK_scalared "scalared"
 %token TK_small "small"
+%token TK_soft "soft"
 %token TK_specify "specify"
 %token TK_specparam "specparam"
 %token TK_strong0 "strong0"
@@ -3100,6 +3102,9 @@ tf_port_direction
     { $$ = std::move($1); }
   | TK_const TK_ref
     { $$ = MakeTaggedNode(N::kConstRef, $1, $2); }
+  | TK_ref TK_static
+    /* SV-2023: ref static for FSM state updates via nonblocking assignments */
+    { $$ = MakeTaggedNode(N::kRefStatic, $1, $2); }
   ;
 tf_port_direction_opt
   : tf_port_direction
@@ -3757,6 +3762,9 @@ struct_data_type
   ;
 packed_signing_opt
   : TK_packed signed_unsigned_opt
+    { $$ = MakeTaggedNode(N::kPackedSigning, $1, $2); }
+  | TK_packed TK_soft
+    /* SV-2023: soft packed union with different-sized members */
     { $$ = MakeTaggedNode(N::kPackedSigning, $1, $2); }
   | /* empty */
     { $$ = nullptr; }
@@ -4823,6 +4831,9 @@ string_literal
     { $$ = std::move($1); }
   | TK_EvalStringLiteral
     { $$ = std::move($1); }
+  | TK_MultilineStringLiteral
+    /* SV-2023: Triple-quoted multiline strings */
+    { $$ = std::move($1); }
   ;
 
 expr_primary_no_groups
@@ -5617,6 +5628,24 @@ type_assignment
     /* $3 covers all types, including interface types and user-defined types */
   | GenericIdentifier
     { $$ = MakeTaggedNode(N::kTypeAssignment, $1, nullptr, nullptr); }
+  | TK_enum GenericIdentifier '=' parameter_expr
+    /* SV-2023: Restrict type parameter to enum types */
+    { $$ = MakeTaggedNode(N::kTypeAssignmentRestricted, $1, $2, $3, $4); }
+  | TK_enum GenericIdentifier
+    /* SV-2023: Restrict type parameter to enum types */
+    { $$ = MakeTaggedNode(N::kTypeAssignmentRestricted, $1, $2, nullptr, nullptr); }
+  | TK_struct GenericIdentifier '=' parameter_expr
+    /* SV-2023: Restrict type parameter to struct types */
+    { $$ = MakeTaggedNode(N::kTypeAssignmentRestricted, $1, $2, $3, $4); }
+  | TK_struct GenericIdentifier
+    /* SV-2023: Restrict type parameter to struct types */
+    { $$ = MakeTaggedNode(N::kTypeAssignmentRestricted, $1, $2, nullptr, nullptr); }
+  | TK_class GenericIdentifier '=' parameter_expr
+    /* SV-2023: Restrict type parameter to class types */
+    { $$ = MakeTaggedNode(N::kTypeAssignmentRestricted, $1, $2, $3, $4); }
+  | TK_class GenericIdentifier
+    /* SV-2023: Restrict type parameter to class types */
+    { $$ = MakeTaggedNode(N::kTypeAssignmentRestricted, $1, $2, nullptr, nullptr); }
 
   ;
 

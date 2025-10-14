@@ -479,6 +479,7 @@ rtranif1 { UpdateLocation(); return TK_rtranif1; }
 sample { UpdateLocation(); return TK_sample; }
 scalared { UpdateLocation(); return TK_scalared; }
 small { UpdateLocation(); return TK_small; }
+soft { UpdateLocation(); return TK_soft; }
 specify { UpdateLocation(); return TK_specify; }
 specparam { UpdateLocation(); return TK_specparam; }
 strong0 { UpdateLocation(); return TK_strong0; }
@@ -892,6 +893,14 @@ zi_zp { UpdateLocation(); return TK_zi_zp; }
 "."        { UpdateLocation(); yy_push_state(AFTER_DOT); return yytext[0]; }
   /* single-char tokens */
 [}{;:\[\],()'#=@&!?<>%|^~+*/-] { UpdateLocation(); return yytext[0]; }
+
+\"\"\"(\\.|[^\"]|\"[^\"]|\"\"[^\"])*\"\"\" {
+  /* SV-2023: Multiline string literal (triple-quoted) */
+  /* Matches: """ followed by: escaped chars, non-quotes, single ", or double " (but not triple), then """ */
+  /* Note: [^\"]] includes newlines in flex */
+  UpdateLocation();
+  return TK_MultilineStringLiteral;
+}
 
 {StringLiteral} { UpdateLocation(); return TK_StringLiteral; }
 {EvalStringLiteral} { UpdateLocation(); return TK_EvalStringLiteral; }

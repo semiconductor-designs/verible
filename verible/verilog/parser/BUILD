@@ -410,3 +410,51 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+# M12 Feature 1: ref static arguments (SV-2023 TDD)
+cc_test(
+    name = "verilog-parser-ref-static_test",
+    srcs = ["verilog-parser-ref-static_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# M12 Feature 2: multiline string literals (SV-2023 TDD)
+cc_test(
+    name = "verilog-parser-multiline-string_test",
+    srcs = ["verilog-parser-multiline-string_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# M12 Feature 4: soft packed unions (SV-2023 TDD)
+cc_test(
+    name = "verilog-parser-soft-union_test",
+    srcs = ["verilog-parser-soft-union_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# M12 Feature 5: type parameter restrictions (SV-2023 TDD)
+cc_test(
+    name = "verilog-parser-type-restrictions_test",
+    srcs = ["verilog-parser-type-restrictions_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)

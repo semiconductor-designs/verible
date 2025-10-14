@@ -122,6 +122,7 @@ enum class NodeEnum {
   kParameterAssign,
   kParameterAssignList,
   kTypeAssignment,
+  kTypeAssignmentRestricted,  // SV-2023: type enum/struct/class restrictions
   kTypeAssignmentList,
   kBaseDigits,  // e.g. 'd 1234
   kNumber,
@@ -285,6 +286,7 @@ enum class NodeEnum {
   kAssignmentPatternExpression,
   kMinTypMaxList,
   kConstRef,
+  kRefStatic,  // SV-2023: ref static for FSM state updates
   kInterfacePortHeader,
   kTFPortDeclaration,
   kTFVariableIdentifier,
