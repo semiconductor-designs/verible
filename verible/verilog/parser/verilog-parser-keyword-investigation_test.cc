@@ -204,9 +204,13 @@ TEST(KeywordInvestigationTest, ConfigComplete) {
 // ============================================================================
 
 TEST(KeywordInvestigationTest, RandsequenceBasic) {
-  // Expected: FAIL or unclear - need to verify
+  // FIXED in M9: Now works with correct syntax
   verible::TestParserAcceptValid<VerilogAnalyzer>(
-      "module m; initial randsequence() main; endsequence endmodule\n", 40);
+      "module m;\n"
+      "  initial randsequence(main)\n"
+      "    main : { $display(\"test\"); };\n"
+      "  endsequence\n"
+      "endmodule\n", 40);
 }
 
 // ============================================================================
@@ -214,9 +218,10 @@ TEST(KeywordInvestigationTest, RandsequenceBasic) {
 // ============================================================================
 
 TEST(KeywordInvestigationTest, UntypedBasic) {
-  // Expected: May work - need to verify context
+  // FIXED in M9: Now works with correct syntax
   verible::TestParserAcceptValid<VerilogAnalyzer>(
-      "module m; untyped data; endmodule\n", 41);
+      "module m #(parameter untyped p = 5)();\n"
+      "endmodule\n", 41);
 }
 
 TEST(KeywordInvestigationTest, Unique0Basic) {
