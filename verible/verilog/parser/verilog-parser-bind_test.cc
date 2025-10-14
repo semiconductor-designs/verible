@@ -118,18 +118,20 @@ TEST(VerilogParserBindTest, BindWithMultiDimArray) {
 }
 
 // Complex real-world patterns
+TEST(VerilogParserBindTest, BindComplexMultiTarget) {
+  verible::TestParserAcceptValid<VerilogAnalyzer>(
+      "bind top : inst1, inst2 checker_type chk(.*); package p; endpackage\n", 17);
+}
+
 TEST(VerilogParserBindTest, BindInterfacePattern) {
   verible::TestParserAcceptValid<VerilogAnalyzer>(
-      "bind axi_bus axi_if#(32,4) if_inst(.aclk(clk)); package p; endpackage\n", 17);
+      "bind axi_bus axi_if#(32,4) if_inst(.aclk(clk)); package p; endpackage\n", 18);
 }
 
 TEST(VerilogParserBindTest, BindProgramPattern) {
   verible::TestParserAcceptValid<VerilogAnalyzer>(
-      "bind testbench test_prog prog_inst(); package p; endpackage\n", 18);
+      "bind testbench test_prog prog_inst(); package p; endpackage\n", 19);
 }
-
-// Note: Some very complex bind patterns with hierarchical member access
-// in target lists may not be fully supported by the current grammar
 
 }  // namespace
 }  // namespace verilog

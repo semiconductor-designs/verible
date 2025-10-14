@@ -5632,6 +5632,8 @@ net_declaration
   /* TODO(fangism): net_type_identifer [ delay_control ] list_of_net_decl_assignments */
   | TK_interconnect net_variable_or_decl_assigns ';'
     { $$ = MakeTaggedNode(N::kNetDeclaration, MakeDataType($1), nullptr, $2, $3); }
+  | TK_interconnect delay3 net_variable_or_decl_assigns ';'
+    { $$ = MakeTaggedNode(N::kNetDeclaration, MakeDataType(nullptr, $1, $2, nullptr), nullptr, nullptr, $3, $4); }
   ;
 
 module_port_declaration

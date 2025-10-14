@@ -127,7 +127,10 @@ TEST(VerilogParserStrengthTest, InterconnectMultiple) {
       "module m; interconnect net1, net2, net3; endmodule\n", 18);
 }
 
-// Note: interconnect with delays is not currently supported by the grammar
+TEST(VerilogParserStrengthTest, InterconnectWithDelay) {
+  verible::TestParserAcceptValid<VerilogAnalyzer>(
+      "module m; interconnect #10 net1; endmodule\n", 19);
+}
 
 }  // namespace
 }  // namespace verilog
