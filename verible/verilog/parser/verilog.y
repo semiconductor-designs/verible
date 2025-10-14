@@ -3837,6 +3837,10 @@ charge_strength
     { $$ = MakeParenGroup($1, $2, $3); }
   | '(' TK_large ')'
     { $$ = MakeParenGroup($1, $2, $3); }
+  | '(' TK_highz0 ')'
+    { $$ = MakeParenGroup($1, $2, $3); }
+  | '(' TK_highz1 ')'
+    { $$ = MakeParenGroup($1, $2, $3); }
   ;
 charge_strength_opt
   : charge_strength

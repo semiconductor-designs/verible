@@ -266,3 +266,15 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+# M4 Group 2: Charge strength (highz0/highz1) tests
+cc_test(
+    name = "verilog-parser-charge-strength_test",
+    srcs = ["verilog-parser-charge-strength_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
