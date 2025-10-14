@@ -534,6 +534,11 @@ TEST(VerilogParserLRMTest, WaitOrder) {
       "module m; initial wait_order (a, b, c) begin end endmodule\n", 516);
 }
 
+TEST(VerilogParserLRMTest, WaitOrderWithElse) {
+  verible::TestParserAcceptValid<VerilogAnalyzer>(
+      "module m; initial wait_order (a, b, c) $display(\"pass\"); else $display(\"fail\"); endmodule\n", 517);
+}
+
 // ============================================================================
 // Category 7: Functions & Tasks (8 keywords)
 // ============================================================================
@@ -796,6 +801,11 @@ TEST(VerilogParserLRMTest, FirstMatch) {
 TEST(VerilogParserLRMTest, And) {
   verible::TestParserAcceptValid<VerilogAnalyzer>(
       "module m; property p; a and b; endproperty endmodule\n", 1017);
+}
+
+TEST(VerilogParserLRMTest, During) {
+  verible::TestParserAcceptValid<VerilogAnalyzer>(
+      "module m; property p; a during b; endproperty endmodule\n", 1018);
 }
 
 // ============================================================================

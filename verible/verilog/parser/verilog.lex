@@ -332,6 +332,7 @@ deassign { UpdateLocation(); return TK_deassign; }
 default { UpdateLocation(); return TK_default; }
 defparam { UpdateLocation(); return TK_defparam; }
 disable { UpdateLocation(); return TK_disable; }
+during { UpdateLocation(); return TK_during; }
 edge { UpdateLocation(); yy_push_state(EDGES_POSSIBLY); return TK_edge; }
 else { UpdateLocation(); return TK_else; }
 end { UpdateLocation(); return TK_end; }

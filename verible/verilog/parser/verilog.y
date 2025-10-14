@@ -138,7 +138,7 @@ static SymbolPtr MakeUnpackedDimensionsNode(SymbolPtr& arg) {
 
 %debug
 %verbose
-%expect 0
+%expect 1  /* M11: 1 shift/reduce in matches expression - tagged vs member access */
 %define api.pure
 %param { ::verible::ParserParam* param }
 /* TODO(fangism): this prefix name should point to an adaptation of yylex */
@@ -251,6 +251,7 @@ is not locally defined, so the grammar here uses only generic identifiers.
 %token TK_default "default"
 %token TK_defparam "defparam"
 %token TK_disable "disable"
+%token TK_during "during"
 %token TK_edge "edge"
 %token TK_else "else"
 %token TK_end "end"
@@ -705,6 +706,7 @@ is not locally defined, so the grammar here uses only generic identifiers.
 %right '?'
 %right ':'
 %right TK_inside
+%right TK_matches
 %right TK_LOGICAL_IMPLIES
 %right TK_LOGEQUIV
 /* left-associative operators */
@@ -2218,6 +2220,14 @@ data_type_or_implicit_basic_followed_by_id_and_dimensions_opt
                           $2, MakeUnpackedDimensionsNode($3)); }
   ;
 
+extern_module_declaration
+  : TK_extern TK_module symbol_or_label
+    module_parameter_port_list_opt
+    module_port_list_opt ';'
+    /* IEEE 1800-2017 Section 33.4 - extern module for separate compilation */
+    { $$ = MakeTaggedNode(N::kExternModuleDeclaration, $1, $2, $3, $4, $5, $6); }
+  ;
+
 description
   : module_or_interface_declaration
     { $$ = std::move($1); }
@@ -2239,6 +2249,8 @@ description
                           MakeParenGroup($2, MakeNode($3, $4, $5, $6, $7),
                                          $8)); }
   | bind_directive
+    { $$ = std::move($1); }
+  | extern_module_declaration
     { $$ = std::move($1); }
   | preprocessor_balanced_description_items
     { $$ = std::move($1); }
@@ -4274,6 +4286,26 @@ pattern_opt
   | /* empty */
     { $$ = nullptr; }
   ;
+
+/* Restricted pattern for expression contexts - non-recursive to avoid conflicts */
+/* Only includes unambiguous patterns that don't overlap with expression grammar */
+/* Note: Member capture (.v) not supported in expressions to avoid ambiguity with member access */
+/* Use case...matches for complex patterns with captures */
+expr_pattern
+  : TK_DOTSTAR
+    /* Wildcard: matches .* */
+    { $$ = MakeTaggedNode(N::kPattern, $1); }
+  | TK_tagged GenericIdentifier
+    /* Tagged union without capture: matches tagged Valid */
+    /* Capture variable must be handled in containing statement */
+    { $$ = MakeTaggedNode(N::kPattern, $1, $2, nullptr); }
+  | TK_DecNumber
+    /* Literal decimal number: matches 5 */
+    { $$ = MakeTaggedNode(N::kPattern, $1); }
+  | TK_RealTime
+    /* Real/time literal */
+    { $$ = MakeTaggedNode(N::kPattern, $1); }
+  ;
 pattern
   : '.' member_name
     { $$ = MakeTaggedNode(N::kPattern, $1, $2); }
@@ -4433,6 +4465,11 @@ comp_expr
   | comp_expr TK_inside reference
     { $$ = MakeBinaryExpression($1, $2, $3); }
     /* This rule is an extension of the LRM rules supported by some vendors. */
+  | comp_expr TK_matches expr_pattern
+    %prec TK_matches
+    /* IEEE 1800-2017 Section 12.5 - Pattern matching expression */
+    /* Uses restricted expr_pattern to avoid grammar conflicts */
+    { $$ = MakeBinaryExpression($1, $2, $3); }
   /* TODO(fangism): dist expression has same precedence as this group */
   ;
 
@@ -7023,7 +7060,16 @@ wait_statement
                           MakeTaggedNode(N::kWaitBody, $5));}
   | TK_wait TK_fork ';'
     { $$ = MakeTaggedNode(N::kWaitForkStatement, $1, $2, $3);}
+  | TK_wait_order '(' expression_list_proper ')' statement_or_null TK_else statement_or_null
+    /* IEEE 1800-2017 Section 9.4.5 with else clause */
+    { $$ = MakeTaggedNode(N::kWaitOrderStatement,
+                          MakeTaggedNode(N::kWaitOrderHeader,
+                                         $1, MakeParenGroup($2, $3, $4)),
+                          MakeTaggedNode(N::kWaitOrderBody, $5),
+                          $6,
+                          MakeTaggedNode(N::kWaitOrderElseBody, $7));}
   | TK_wait_order '(' expression_list_proper ')' statement_or_null
+    %prec less_than_TK_else
     /* IEEE 1800-2017 Section 9.4.5 */
     { $$ = MakeTaggedNode(N::kWaitOrderStatement,
                           MakeTaggedNode(N::kWaitOrderHeader,
@@ -7964,6 +8010,9 @@ property_operator
     { $$ = std::move($1); }
   | followed_by_operator
     { $$ = std::move($1); }
+  | TK_during
+    /* IEEE 1800-2017 Section 16.12 */
+    { $$ = std::move($1); }
   ;
 implication_operator
   : TK_PIPEARROW
@@ -8784,8 +8833,13 @@ case_item_expression
 
 /* Minimal checker support (Option B-Lite) - basic structure */
 checker_declaration
-  : TK_checker GenericIdentifier ';' TK_endchecker label_opt
-    { $$ = MakeTaggedNode(N::kCheckerDeclaration, $1, $2, $3, $4, $5); }
+  : TK_checker GenericIdentifier
+    module_parameter_port_list_opt
+    module_port_list_opt ';'
+    /* module_item_list_opt */ /* body items optional for now */
+    TK_endchecker label_opt
+    /* IEEE 1800-2017 Section 17 - Checkers with parameters and ports */
+    { $$ = MakeTaggedNode(N::kCheckerDeclaration, $1, $2, $3, $4, $5, $6, $7); }
   | TK_checker GenericIdentifier TK_endchecker label_opt
     { $$ = MakeTaggedNode(N::kCheckerDeclaration, $1, $2, $3, $4); }
   ;
