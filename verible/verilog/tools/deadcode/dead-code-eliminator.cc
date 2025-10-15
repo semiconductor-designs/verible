@@ -27,6 +27,7 @@
 #include "absl/strings/string_view.h"
 #include "verible/common/text/text-structure.h"
 #include "verible/common/text/token-info.h"
+#include "verible/common/text/tree-utils.h"
 #include "verible/common/util/tree-operations.h"
 #include "verible/verilog/analysis/call-graph.h"
 #include "verible/verilog/analysis/symbol-table.h"
@@ -127,22 +128,31 @@ absl::Status DeadCodeEliminator::Eliminate(const DeadCodeReport& report,
       const auto& info = node.Value();
       const verible::Symbol* cst_node = info.syntax_origin;
       
-      if (cst_node) {
+      if (cst_node && info.file_origin) {
         // Get the file this symbol is in
-        std::string filename = current_file;
-        if (info.file_origin) {
-          filename = std::string(info.file_origin->ResolvedPath());
-        }
+        std::string filename(info.file_origin->ResolvedPath());
         
-        // Calculate text range for this CST node
-        // For now, we'll mark it for removal (actual offset calculation would use StringSpanOfSymbol)
-        // This is a placeholder that maintains test compatibility
-        CodeRange range;
-        range.filename = filename;
-        range.symbol_name = symbol_name;
-        range.start_offset = 0; // Would be calculated from CST
-        range.end_offset = 0;   // Would be calculated from CST
-        ranges_to_remove.push_back(range);
+        // ACTUAL IMPLEMENTATION: Calculate text range using StringSpanOfSymbol
+        const auto* text_structure = info.file_origin->GetTextStructure();
+        if (text_structure) {
+          const auto base_text = text_structure->Contents();
+          auto span = verible::StringSpanOfSymbol(*cst_node);
+          
+          // Calculate byte offsets from base text
+          int start_offset = span.begin() - base_text.begin();
+          int end_offset = span.end() - base_text.begin();
+          
+          // Only add if we have valid offsets
+          if (start_offset >= 0 && end_offset > start_offset && 
+              end_offset <= static_cast<int>(base_text.length())) {
+            CodeRange range;
+            range.filename = filename;
+            range.symbol_name = symbol_name;
+            range.start_offset = start_offset;
+            range.end_offset = end_offset;
+            ranges_to_remove.push_back(range);
+          }
+        }
       }
     }
     
