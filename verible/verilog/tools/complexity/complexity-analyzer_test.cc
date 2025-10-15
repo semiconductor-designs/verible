@@ -47,20 +47,20 @@ class ComplexityAnalyzerTest : public ::testing::Test {
 
 // Test 1: Constructor
 TEST_F(ComplexityAnalyzerTest, Constructor) {
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   EXPECT_TRUE(true);
 }
 
 // Test 2: Constructor with type checker
 TEST_F(ComplexityAnalyzerTest, ConstructorWithTypeChecker) {
-  // Updated to pass symbol_table as 2nd param (nullptr for now)
-  ComplexityAnalyzer analyzer(call_graph_.get(), nullptr, type_checker_.get());
+  // NOW passing REAL symbol_table to test helper integration!
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get(), type_checker_.get());
   EXPECT_TRUE(true);
 }
 
 // Test 3: Analyze empty call graph
 TEST_F(ComplexityAnalyzerTest, AnalyzeEmpty) {
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   
   auto report = analyzer.Analyze();
   EXPECT_EQ(report.total_functions, 0);
@@ -73,7 +73,7 @@ TEST_F(ComplexityAnalyzerTest, AnalyzeSimple) {
   call_graph_->AddNode("func2");
   call_graph_->AddEdge("func1", "func2");
   
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   auto report = analyzer.Analyze();
   
   EXPECT_GT(report.total_functions, 0);
@@ -83,7 +83,7 @@ TEST_F(ComplexityAnalyzerTest, AnalyzeSimple) {
 TEST_F(ComplexityAnalyzerTest, GenerateTextReport) {
   call_graph_->AddNode("test_func");
   
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   analyzer.Analyze();
   
   auto report = analyzer.GenerateReport(ReportFormat::kText);
@@ -95,7 +95,7 @@ TEST_F(ComplexityAnalyzerTest, GenerateTextReport) {
 TEST_F(ComplexityAnalyzerTest, GenerateJsonReport) {
   call_graph_->AddNode("test_func");
   
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   analyzer.Analyze();
   
   auto report = analyzer.GenerateReport(ReportFormat::kJson);
@@ -107,7 +107,7 @@ TEST_F(ComplexityAnalyzerTest, GenerateJsonReport) {
 TEST_F(ComplexityAnalyzerTest, GenerateHtmlReport) {
   call_graph_->AddNode("test_func");
   
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   analyzer.Analyze();
   
   auto report = analyzer.GenerateReport(ReportFormat::kHtml);
@@ -118,7 +118,7 @@ TEST_F(ComplexityAnalyzerTest, GenerateHtmlReport) {
 
 // Test 8: Get function metrics (non-existent)
 TEST_F(ComplexityAnalyzerTest, GetNonExistentFunctionMetrics) {
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   analyzer.Analyze();
   
   auto metrics = analyzer.GetFunctionMetrics("nonexistent");
@@ -137,7 +137,7 @@ TEST_F(ComplexityAnalyzerTest, ComplexCallGraph) {
                           absl::StrCat("func", i + 1));
   }
   
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   auto report = analyzer.Analyze();
   
   EXPECT_EQ(report.total_functions, 10);
@@ -153,7 +153,7 @@ TEST_F(ComplexityAnalyzerTest, NullCallGraph) {
 
 // Test 11: Report before analyze
 TEST_F(ComplexityAnalyzerTest, ReportBeforeAnalyze) {
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   
   // Generate report without calling Analyze()
   auto report = analyzer.GenerateReport(ReportFormat::kText);
@@ -164,7 +164,7 @@ TEST_F(ComplexityAnalyzerTest, ReportBeforeAnalyze) {
 TEST_F(ComplexityAnalyzerTest, MultipleAnalyses) {
   call_graph_->AddNode("func1");
   
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   
   auto report1 = analyzer.Analyze();
   auto report2 = analyzer.Analyze();
@@ -178,7 +178,7 @@ TEST_F(ComplexityAnalyzerTest, MetricsConsistency) {
   call_graph_->AddNode("func2");
   call_graph_->AddNode("func3");
   
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   auto report = analyzer.Analyze();
   
   // Check that metrics are consistent
@@ -189,7 +189,7 @@ TEST_F(ComplexityAnalyzerTest, MetricsConsistency) {
 
 // Test 14: Empty function name metrics
 TEST_F(ComplexityAnalyzerTest, EmptyFunctionName) {
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   analyzer.Analyze();
   
   auto metrics = analyzer.GetFunctionMetrics("");
@@ -200,7 +200,7 @@ TEST_F(ComplexityAnalyzerTest, EmptyFunctionName) {
 TEST_F(ComplexityAnalyzerTest, AllReportFormats) {
   call_graph_->AddNode("test");
   
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   analyzer.Analyze();
   
   auto text = analyzer.GenerateReport(ReportFormat::kText);
@@ -225,7 +225,7 @@ TEST_F(ComplexityAnalyzerTest, CyclomaticComplexityCalculation) {
   call_graph_->AddNode("simple_func");  // Complexity: 1 (no branches)
   call_graph_->AddNode("complex_func"); // Would have branches in real code
   
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   auto report = analyzer.Analyze();
   
   // Framework should handle complexity calculation
@@ -239,7 +239,7 @@ TEST_F(ComplexityAnalyzerTest, LargeFunctionGraphPerformance) {
     call_graph_->AddNode("func_" + std::to_string(i));
   }
   
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   
   auto start = std::chrono::high_resolution_clock::now();
   auto report = analyzer.Analyze();
@@ -256,7 +256,7 @@ TEST_F(ComplexityAnalyzerTest, LargeFunctionGraphPerformance) {
 TEST_F(ComplexityAnalyzerTest, HtmlReportValidation) {
   call_graph_->AddNode("test_func");
   
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   analyzer.Analyze();
   
   auto html = analyzer.GenerateReport(ReportFormat::kHtml);
@@ -270,7 +270,7 @@ TEST_F(ComplexityAnalyzerTest, HtmlReportValidation) {
 TEST_F(ComplexityAnalyzerTest, JsonReportValidation) {
   call_graph_->AddNode("test_func");
   
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   analyzer.Analyze();
   
   auto json = analyzer.GenerateReport(ReportFormat::kJson);
@@ -284,7 +284,7 @@ TEST_F(ComplexityAnalyzerTest, JsonReportValidation) {
 TEST_F(ComplexityAnalyzerTest, FunctionMetricsDetail) {
   call_graph_->AddNode("detailed_func");
   
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   analyzer.Analyze();
   
   auto metrics = analyzer.GetFunctionMetrics("detailed_func");
@@ -301,7 +301,7 @@ TEST_F(ComplexityAnalyzerTest, AverageComplexityCalculation) {
   call_graph_->AddNode("func2");
   call_graph_->AddNode("func3");
   
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   auto report = analyzer.Analyze();
   
   // Average should be between 0 and max
@@ -314,7 +314,7 @@ TEST_F(ComplexityAnalyzerTest, MaxComplexityIdentification) {
   call_graph_->AddNode("simple");
   call_graph_->AddNode("complex");
   
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   auto report = analyzer.Analyze();
   
   // Should identify max complexity
@@ -327,7 +327,7 @@ TEST_F(ComplexityAnalyzerTest, CallGraphIntegration) {
   call_graph_->AddNode("callee");
   call_graph_->AddEdge("caller", "callee");
   
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   auto report = analyzer.Analyze();
   
   // Should handle call relationships
@@ -336,7 +336,7 @@ TEST_F(ComplexityAnalyzerTest, CallGraphIntegration) {
 
 // Test 24: Empty analysis result
 TEST_F(ComplexityAnalyzerTest, EmptyAnalysisResult) {
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   
   auto report = analyzer.Analyze();
   
@@ -350,7 +350,7 @@ TEST_F(ComplexityAnalyzerTest, EmptyAnalysisResult) {
 TEST_F(ComplexityAnalyzerTest, ReportConsistencyAcrossFormats) {
   call_graph_->AddNode("test");
   
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   analyzer.Analyze();
   
   auto text = analyzer.GenerateReport(ReportFormat::kText);
@@ -368,7 +368,7 @@ TEST_F(ComplexityAnalyzerTest, ReportConsistencyAcrossFormats) {
 TEST_F(ComplexityAnalyzerTest, HelpersActuallyUsed) {
   call_graph_->AddNode("test_function");
   
-  ComplexityAnalyzer analyzer(call_graph_.get());
+  ComplexityAnalyzer analyzer(call_graph_.get(), symbol_table_.get());
   auto report = analyzer.Analyze();
   
   // DOCUMENTED LIMITATION (from risk assessment):
