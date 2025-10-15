@@ -60,17 +60,150 @@ const Type* TypeInference::InferType(const verible::Symbol& expr) const {
     case NodeEnum::kLocalRoot:
       return InferIdentifier(expr);
 
-    case NodeEnum::kBinaryExpression:
+    case NodeEnum::kBinaryExpression: {
       // Binary operation: lhs op rhs
-      // Simplified: assume standard binary expression structure
-      return nullptr;  // TODO: Implement with proper CST traversal
-      break;
+      // Get children as vector
+      std::vector<const verible::Symbol*> children;
+      for (const auto& child : node->children()) {
+        if (child) children.push_back(child.get());
+      }
+      
+      if (children.size() >= 3) {
+        const auto* lhs = children[0];
+        const auto* op_symbol = children[1];
+        const auto* rhs = children[2];
+        
+        if (lhs && rhs && op_symbol) {
+          const Type* lhs_type = InferType(*lhs);
+          const Type* rhs_type = InferType(*rhs);
+          
+          if (lhs_type && rhs_type) {
+            // Get operator token
+            if (op_symbol->Kind() == verible::SymbolKind::kLeaf) {
+              const auto& op_token = verible::SymbolCastToLeaf(*op_symbol).get();
+              auto result = std::make_unique<Type>();
+              
+              // Arithmetic operators: +, -, *, /, %
+              // Result width is max of operands
+              if (op_token.token_enum() == '+' || op_token.token_enum() == '-' ||
+                  op_token.token_enum() == '*' || op_token.token_enum() == '/' ||
+                  op_token.token_enum() == '%') {
+                result->base_type = PrimitiveType::kLogic;
+                int max_width = std::max(lhs_type->GetWidth(), rhs_type->GetWidth());
+                result->dimensions = {max_width > 0 ? max_width : 32};
+                result->is_signed = lhs_type->is_signed && rhs_type->is_signed;
+                return StoreInCache(expr_cache_, &expr, std::move(result));
+              }
+              
+              // Logical operators: &&, ||
+              // Result is 1-bit
+              if (op_token.token_enum() == TK_LAND || op_token.token_enum() == TK_LOR) {
+                result->base_type = PrimitiveType::kLogic;
+                result->dimensions = {1};
+                return StoreInCache(expr_cache_, &expr, std::move(result));
+              }
+              
+              // Comparison operators: ==, !=, <, <=, >, >=
+              // Result is 1-bit
+              if (op_token.token_enum() == TK_EQ || op_token.token_enum() == TK_NE ||
+                  op_token.token_enum() == '<' || op_token.token_enum() == TK_LE ||
+                  op_token.token_enum() == '>' || op_token.token_enum() == TK_GE) {
+                result->base_type = PrimitiveType::kLogic;
+                result->dimensions = {1};
+                return StoreInCache(expr_cache_, &expr, std::move(result));
+              }
+              
+              // Bitwise operators: &, |, ^, ~^, ^~
+              // Result width is max of operands
+              if (op_token.token_enum() == '&' || op_token.token_enum() == '|' ||
+                  op_token.token_enum() == '^') {
+                result->base_type = PrimitiveType::kLogic;
+                int max_width = std::max(lhs_type->GetWidth(), rhs_type->GetWidth());
+                result->dimensions = {max_width > 0 ? max_width : 32};
+                return StoreInCache(expr_cache_, &expr, std::move(result));
+              }
+              
+              // Shift operators: <<, >>
+              // Result width is width of lhs
+              if (op_token.token_enum() == TK_LS || op_token.token_enum() == TK_RS) {
+                result->base_type = PrimitiveType::kLogic;
+                result->dimensions = {lhs_type->GetWidth() > 0 ? lhs_type->GetWidth() : 32};
+                result->is_signed = lhs_type->is_signed;
+                return StoreInCache(expr_cache_, &expr, std::move(result));
+              }
+            }
+          }
+        }
+      }
+      
+      // Fallback: return unknown
+      auto unknown = std::make_unique<Type>();
+      unknown->base_type = PrimitiveType::kUnknown;
+      return StoreInCache(expr_cache_, &expr, std::move(unknown));
+    }
 
-    case NodeEnum::kUnaryPrefixExpression:
+    case NodeEnum::kUnaryPrefixExpression: {
       // Unary operation: op expr
-      // Simplified: assume standard unary expression structure
-      return nullptr;  // TODO: Implement with proper CST traversal
-      break;
+      // Get children as vector
+      std::vector<const verible::Symbol*> children;
+      for (const auto& child : node->children()) {
+        if (child) children.push_back(child.get());
+      }
+      
+      if (children.size() >= 2) {
+        const auto* op_symbol = children[0];
+        const auto* operand = children[1];
+        
+        if (op_symbol && operand) {
+          const Type* operand_type = InferType(*operand);
+          
+          if (operand_type && op_symbol->Kind() == verible::SymbolKind::kLeaf) {
+            const auto& op_token = verible::SymbolCastToLeaf(*op_symbol).get();
+            auto result = std::make_unique<Type>();
+            
+            // Logical NOT: !
+            // Result is 1-bit
+            if (op_token.token_enum() == '!') {
+              result->base_type = PrimitiveType::kLogic;
+              result->dimensions = {1};
+              return StoreInCache(expr_cache_, &expr, std::move(result));
+            }
+            
+            // Bitwise NOT: ~
+            // Result width is same as operand
+            if (op_token.token_enum() == '~') {
+              result->base_type = PrimitiveType::kLogic;
+              result->dimensions = {operand_type->GetWidth() > 0 ? operand_type->GetWidth() : 32};
+              result->is_signed = operand_type->is_signed;
+              return StoreInCache(expr_cache_, &expr, std::move(result));
+            }
+            
+            // Unary reduction: &, |, ^, ~&, ~|, ~^, ^~
+            // Result is 1-bit
+            if (op_token.token_enum() == '&' || op_token.token_enum() == '|' ||
+                op_token.token_enum() == '^') {
+              result->base_type = PrimitiveType::kLogic;
+              result->dimensions = {1};
+              return StoreInCache(expr_cache_, &expr, std::move(result));
+            }
+            
+            // Unary +, -
+            // Result width is same as operand
+            if (op_token.token_enum() == '+' || op_token.token_enum() == '-') {
+              result->base_type = PrimitiveType::kLogic;
+              result->dimensions = {operand_type->GetWidth() > 0 ? operand_type->GetWidth() : 32};
+              result->is_signed = operand_type->is_signed;
+              return StoreInCache(expr_cache_, &expr, std::move(result));
+            }
+          }
+        }
+      }
+      
+      // Fallback: return unknown
+      auto unknown = std::make_unique<Type>();
+      unknown->base_type = PrimitiveType::kUnknown;
+      return StoreInCache(expr_cache_, &expr, std::move(unknown));
+    }
 
     case NodeEnum::kConcatenationExpression:
       return InferConcat(expr);
@@ -266,11 +399,30 @@ const Type* TypeInference::InferIdentifier(const verible::Symbol& id) const {
 
 const Type* TypeInference::InferConcat(const verible::Symbol& concat) const {
   // Concatenation {a, b, c} - sum of all widths
-  // Simplified: return 32-bit logic for concatenations
-  // Full implementation would traverse children and sum widths
+  if (concat.Kind() != verible::SymbolKind::kNode) {
+    auto unknown = std::make_unique<Type>();
+    unknown->base_type = PrimitiveType::kUnknown;
+    return StoreInCache(expr_cache_, &concat, std::move(unknown));
+  }
+  
+  const auto& node = verible::SymbolCastToNode(concat);
+  int total_width = 0;
+  // Traverse all children and sum their widths
+  for (const auto& child : node.children()) {
+    if (child) {
+      const Type* child_type = InferType(*child);
+      if (child_type) {
+        int width = child_type->GetWidth();
+        if (width > 0) {
+          total_width += width;
+        }
+      }
+    }
+  }
+  
   auto result = std::make_unique<Type>();
   result->base_type = PrimitiveType::kLogic;
-  result->dimensions = {32};
+  result->dimensions = {total_width > 0 ? total_width : 32};
   return StoreInCache(expr_cache_, &concat, std::move(result));
 }
 
