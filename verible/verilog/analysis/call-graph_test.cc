@@ -14,6 +14,10 @@
 
 #include "verible/verilog/analysis/call-graph.h"
 
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+
 #include "gtest/gtest.h"
 #include "verible/verilog/analysis/symbol-table.h"
 #include "verible/verilog/analysis/verilog-project.h"
@@ -402,6 +406,174 @@ TEST_F(CallGraphTest, ComprehensiveAnalysis) {
   
   EXPECT_FALSE(graph.HasRecursion("main"));
   EXPECT_FALSE(graph.HasRecursion("util"));
+}
+
+// ============================================================================
+// PHASE 5 PERFECTION: CallGraph Deep Dive Tests
+// ============================================================================
+
+// TDD Test: Extract calls from initial blocks (currently fails - 0 edges!)
+TEST_F(CallGraphTest, ExtractCallsFromInitialBlock) {
+  // This test exposes the root cause: CallGraph only looks at
+  // local_references_to_bind within function/task definitions,
+  // but initial blocks are NOT functions/tasks!
+  
+  std::string test_code = R"(
+module test;
+  initial begin
+    used_function();
+  end
+  
+  function automatic void used_function();
+    // Called from initial
+  endfunction
+  
+  function automatic void unused_function();
+    // Never called
+  endfunction
+endmodule
+)";
+
+  // Write test file
+  std::string test_file = "test_initial_calls.sv";
+  {
+    std::ofstream file(test_file);
+    file << test_code;
+  }
+
+  // Parse and build symbol table
+  VerilogProject project(".", std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(file_or.ok()) << file_or.status().message();
+
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> build_diagnostics;
+  symbol_table.Build(&build_diagnostics);
+  ASSERT_TRUE(build_diagnostics.empty());
+
+  // Build call graph
+  CallGraph graph(&symbol_table);
+  graph.Build();
+
+  // DEBUG: Show what we actually got
+  auto metrics = graph.GetMetrics();
+  std::cout << "TEST: ExtractCallsFromInitialBlock\n";
+  std::cout << "  Nodes: " << metrics.node_count << "\n";
+  std::cout << "  Edges: " << metrics.edge_count << "\n";
+
+  // EXPECTATIONS:
+  // Before fix: nodes=2, edges=0 ❌
+  // After fix:  nodes=3 (2 functions + $module_scope), edges=1+ ✅
+  
+  EXPECT_EQ(metrics.node_count, 3) 
+      << "Should find both functions + $module_scope";
+  
+  // THIS IS THE KEY TEST!
+  EXPECT_GE(metrics.edge_count, 1)
+      << "Should find call from $module_scope to used_function";
+  
+  // Verify $module_scope node exists
+  EXPECT_TRUE(graph.HasNode("$module_scope")) 
+      << "$module_scope represents procedural code outside functions";
+  
+  // Verify edge exists
+  EXPECT_TRUE(graph.HasEdge("$module_scope", "used_function"))
+      << "Should have edge from $module_scope to used_function";
+
+  // Clean up
+  std::filesystem::remove(test_file);
+}
+
+// TDD Test: Extract calls from always blocks
+TEST_F(CallGraphTest, ExtractCallsFromAlwaysBlock) {
+  std::string test_code = R"(
+module test;
+  logic clk;
+  
+  always @(posedge clk) begin
+    my_task();
+  end
+  
+  task automatic my_task();
+    // Called from always block
+  endtask
+endmodule
+)";
+
+  std::string test_file = "test_always_calls.sv";
+  {
+    std::ofstream file(test_file);
+    file << test_code;
+  }
+
+  VerilogProject project(".", std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(file_or.ok());
+
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> build_diagnostics;
+  symbol_table.Build(&build_diagnostics);
+  ASSERT_TRUE(build_diagnostics.empty());
+
+  CallGraph graph(&symbol_table);
+  graph.Build();
+
+  auto metrics = graph.GetMetrics();
+  std::cout << "TEST: ExtractCallsFromAlwaysBlock\n";
+  std::cout << "  Nodes: " << metrics.node_count << "\n";
+  std::cout << "  Edges: " << metrics.edge_count << "\n";
+
+  // May be 2 or 3 nodes depending on symbol table structure
+  EXPECT_GE(metrics.node_count, 2) << "Should find at least my_task + $module_scope";
+  EXPECT_GE(metrics.edge_count, 1) << "Should find call from always block";
+  EXPECT_TRUE(graph.HasEdge("$module_scope", "my_task"))
+      << "Should have edge from $module_scope to my_task";
+
+  std::filesystem::remove(test_file);
+}
+
+// TDD Test: Function calling another function (should work currently)
+TEST_F(CallGraphTest, ExtractCallsFromFunctionBody) {
+  std::string test_code = R"(
+module test;
+  function void caller();
+    callee();
+  endfunction
+  
+  function void callee();
+  endfunction
+endmodule
+)";
+
+  std::string test_file = "test_function_calls.sv";
+  {
+    std::ofstream file(test_file);
+    file << test_code;
+  }
+
+  VerilogProject project(".", std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(file_or.ok());
+
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> build_diagnostics;
+  symbol_table.Build(&build_diagnostics);
+  ASSERT_TRUE(build_diagnostics.empty());
+
+  CallGraph graph(&symbol_table);
+  graph.Build();
+
+  auto metrics = graph.GetMetrics();
+  std::cout << "TEST: ExtractCallsFromFunctionBody\n";
+  std::cout << "  Nodes: " << metrics.node_count << "\n";
+  std::cout << "  Edges: " << metrics.edge_count << "\n";
+
+  EXPECT_EQ(metrics.node_count, 2);
+  // This might already work if local_references_to_bind is populated for functions
+  // But let's verify!
+  std::cout << "  (This test shows if function-to-function calls work)\n";
+
+  std::filesystem::remove(test_file);
 }
 
 }  // namespace

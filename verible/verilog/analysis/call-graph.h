@@ -152,6 +152,13 @@ class CallGraph {
   // Helper: Build graph from symbol table node recursively
   void BuildFromNode(const SymbolTableNode& node);
   
+  // Helper: Extract calls from ANY node (initial, always, function, etc.)
+  void ExtractCallsFromNode(const SymbolTableNode& node,
+                             const std::string& parent_context);
+  
+  // Helper: Determine caller context (function name or "$module_scope")
+  std::string DetermineCallerContext(const SymbolTableNode& node) const;
+  
   // Helper: Extract calls from reference component tree (handles a.b.c())
   void ExtractCallsFromReferenceTree(const std::string& caller_name,
                                       const ReferenceComponentNode& ref_tree);

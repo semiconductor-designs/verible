@@ -40,29 +40,53 @@ void CallGraph::Build() {
 void CallGraph::BuildFromNode(const SymbolTableNode& node) {
   const auto& info = node.Value();
   
-  // If this is a function or task, add it as a node
+  // PHASE 1: If this is a function or task, add it as a node
   if (info.metatype == SymbolMetaType::kFunction ||
       info.metatype == SymbolMetaType::kTask) {
-    // Use the declared name as the node name
     const auto* key = node.Key();
     if (key && !key->empty()) {
       std::string func_name(*key);
       AddNode(func_name);
-      
-      // Extract calls from this function/task's definition
-      // Look through local_references_to_bind for call sites
-      for (const auto& ref : info.local_references_to_bind) {
-        if (!ref.Empty() && ref.components) {
-          // Traverse the entire reference component tree
-          ExtractCallsFromReferenceTree(func_name, *ref.components);
-        }
-      }
     }
   }
   
-  // Recursively traverse children
+  // PHASE 2: Extract calls from this node (works for ANY node type!)
+  // This is the KEY FIX: Extract calls from initial, always, AND functions
+  std::string parent_context = DetermineCallerContext(node);
+  ExtractCallsFromNode(node, parent_context);
+  
+  // PHASE 3: Recursively traverse children
   for (const auto& child : node) {
     BuildFromNode(child.second);
+  }
+}
+
+std::string CallGraph::DetermineCallerContext(const SymbolTableNode& node) const {
+  const auto& info = node.Value();
+  const auto* key = node.Key();
+  
+  // If this is a function or task, use its name as the caller context
+  if ((info.metatype == SymbolMetaType::kFunction ||
+       info.metatype == SymbolMetaType::kTask) && 
+      key && !key->empty()) {
+    return std::string(*key);
+  }
+  
+  // For all other nodes (initial, always, module-level), use special context
+  // This represents "module scope" or procedural code that's not in a function
+  return "$module_scope";
+}
+
+void CallGraph::ExtractCallsFromNode(const SymbolTableNode& node,
+                                     const std::string& parent_context) {
+  const auto& info = node.Value();
+  
+  // Extract calls from local_references_to_bind
+  // This now works for initial, always, AND function/task bodies!
+  for (const auto& ref : info.local_references_to_bind) {
+    if (!ref.Empty() && ref.components) {
+      ExtractCallsFromReferenceTree(parent_context, *ref.components);
+    }
   }
 }
 
@@ -356,18 +380,25 @@ std::string CallGraph::ExportToJSON() const {
 std::vector<std::string> CallGraph::FindDeadCode() const {
   std::vector<std::string> dead_code;
   
-  // Dead code = nodes that are never called (except roots which are entry points)
-  // We consider a function dead if it's not a root AND has no callers
+  // Dead code = functions/tasks that are never called
+  // Entry points: roots EXCEPT $module_scope
   auto roots = FindRootNodes();
   std::set<std::string> root_set(roots.begin(), roots.end());
   
+  // $module_scope is a fake node representing procedural code
+  // It should be treated as an entry point, but functions reachable ONLY
+  // from $module_scope are still live (they're called from initial/always)
+  
+  // Dead code = nodes with no callers AND not special nodes
   for (const auto& node : nodes_) {
+    // Skip special nodes like $module_scope
+    if (node == "$module_scope") continue;
+    
     bool has_callers = (reverse_adj_list_.find(node) != reverse_adj_list_.end() &&
                         !reverse_adj_list_.at(node).empty());
-    bool is_root = root_set.count(node) > 0;
     
-    // If not a root and has no callers, it's dead (unless it's the ONLY node)
-    if (!is_root && !has_callers && nodes_.size() > 1) {
+    // If has no callers, it's dead (not called by anyone)
+    if (!has_callers && nodes_.size() > 1) {
       dead_code.push_back(node);
     }
   }

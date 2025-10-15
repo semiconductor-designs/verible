@@ -112,27 +112,24 @@ endmodule
   }
   std::cout << "  Summary: " << report.summary << "\n";
 
-  // CRITICAL FINDING:
-  // CallGraph has 2 nodes but 0 edges!
-  // This means CallGraph::Build() doesn't extract calls from 'initial' blocks
-  // 
-  // KNOWN LIMITATION: CallGraph::Build() relies on local_references_to_bind
-  // which may not be populated for procedural blocks like 'initial'
-  //
-  // CallGraph::FindDeadCode() WORKS CORRECTLY (verified in unit tests)
-  // But it needs edges to determine what's dead
-  // 
-  // This is a SYMBOL TABLE limitation, not a dead code detection limitation
+  // PHASE 5 PERFECTION: CallGraph now extracts calls from initial blocks! ✅
+  // CallGraph has 3 nodes (2 functions + $module_scope) and 1+ edges
+  // This means CallGraph::Build() NOW extracts calls from 'initial' blocks!
   
-  // DOCUMENTED BEHAVIOR: With no edges, FindDeadCode returns empty
-  // This is correct behavior - if we don't know what's called, we can't
-  // safely mark anything as dead
+  EXPECT_GE(metrics.edge_count, 1) 
+      << "CallGraph now finds edges from initial blocks!";
   
-  EXPECT_EQ(metrics.edge_count, 0) 
-      << "Test confirms call graph has no edges (limitation documented)";
+  // With edges, FindDeadCode should now find unused_function as dead
+  EXPECT_EQ(report.total_dead_count, 1)
+      << "Should detect unused_function as dead code";
   
-  EXPECT_EQ(report.total_dead_count, 0)
-      << "Correctly returns no dead code when call graph has no edges";
+  EXPECT_EQ(report.dead_functions.size(), 1)
+      << "Should find 1 dead function";
+  
+  if (!report.dead_functions.empty()) {
+    EXPECT_EQ(*report.dead_functions.begin(), "unused_function")
+        << "The dead function should be unused_function";
+  }
 }
 
 // Integration Test 2: No False Positives (Used Functions Not Marked Dead)
@@ -216,17 +213,19 @@ endmodule
   DeadCodeEliminator eliminator(&call_graph, &symbol_table);
   auto report = eliminator.FindDeadCode();
 
-  // Same limitation as Test 1: No edges in call graph
-  // Document the expected behavior given current implementation
+  // PHASE 5 PERFECTION: CallGraph now works!
   auto metrics = call_graph.GetMetrics();
   
   std::cout << "DEBUG Test3: nodes=" << metrics.node_count 
             << " edges=" << metrics.edge_count 
             << " dead=" << report.total_dead_count << "\n";
   
-  // DOCUMENTED: Without call graph edges, can't detect dead code safely
-  EXPECT_EQ(metrics.edge_count, 0) << "Confirms no edges (limitation)";
-  EXPECT_EQ(report.total_dead_count, 0) << "Correctly returns 0 with no edges";
+  // CallGraph now has edges
+  EXPECT_GE(metrics.edge_count, 1) << "CallGraph now finds edges!";
+  
+  // Should detect 3 dead functions (dead_1, dead_2, dead_3)
+  EXPECT_EQ(report.total_dead_count, 3) << "Should find 3 dead functions";
+  EXPECT_EQ(report.dead_functions.size(), 3);
 }
 
 }  // namespace
