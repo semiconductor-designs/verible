@@ -145,6 +145,40 @@ class TypeChecker {
   // Get current options.
   const Options& GetOptions() const { return options_; }
   
+  // Week 2: Function & Task Validation APIs
+  
+  // Validates function/task call with detailed argument checking
+  absl::Status ValidateFunctionCall(const verible::Symbol& call_site,
+                                     const std::string& function_name,
+                                     const std::vector<const verible::Symbol*>& arguments);
+  
+  // Validates task call
+  absl::Status ValidateTaskCall(const verible::Symbol& call_site,
+                                 const std::string& task_name,
+                                 const std::vector<const verible::Symbol*>& arguments);
+  
+  // Check argument count matches expected count
+  absl::Status CheckArgumentCount(const std::string& callable_name,
+                                   size_t expected_count,
+                                   size_t actual_count) const;
+  
+  // Check argument type compatibility
+  absl::Status CheckArgumentType(const std::string& callable_name,
+                                  size_t arg_index,
+                                  const Type* expected_type,
+                                  const Type* actual_type) const;
+  
+  // Check return type compatibility
+  absl::Status CheckReturnType(const std::string& function_name,
+                                const Type* expected_return,
+                                const Type* actual_return) const;
+  
+  // Check parameter direction (input/output/inout)
+  absl::Status CheckParameterDirection(const std::string& callable_name,
+                                        size_t arg_index,
+                                        const std::string& expected_direction,
+                                        const verible::Symbol& argument) const;
+  
  private:
   const SymbolTable* symbol_table_;
   const TypeInference* type_inference_;

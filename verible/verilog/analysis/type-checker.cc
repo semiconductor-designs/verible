@@ -238,6 +238,125 @@ std::string TypeChecker::FormatSignMismatchWarning(const Type& lhs,
                       rhs.ToString());
 }
 
+// Week 2: Function & Task Validation Implementations
+
+absl::Status TypeChecker::ValidateFunctionCall(
+    const verible::Symbol& call_site,
+    const std::string& function_name,
+    const std::vector<const verible::Symbol*>& arguments) {
+  // Simplified: Look up function in symbol table and check arguments
+  // Full implementation would traverse symbol table to find function declaration
+  
+  // For now, just validate argument types are inferrable
+  for (size_t i = 0; i < arguments.size(); ++i) {
+    if (arguments[i]) {
+      const Type* arg_type = type_inference_->InferType(*arguments[i]);
+      if (!arg_type || arg_type->IsUnknown()) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("Cannot infer type for argument ", i, 
+                        " in call to function '", function_name, "'"));
+      }
+    }
+  }
+  
+  return absl::OkStatus();
+}
+
+absl::Status TypeChecker::ValidateTaskCall(
+    const verible::Symbol& call_site,
+    const std::string& task_name,
+    const std::vector<const verible::Symbol*>& arguments) {
+  // Similar to function validation, but tasks don't have return types
+  
+  for (size_t i = 0; i < arguments.size(); ++i) {
+    if (arguments[i]) {
+      const Type* arg_type = type_inference_->InferType(*arguments[i]);
+      if (!arg_type || arg_type->IsUnknown()) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("Cannot infer type for argument ", i,
+                        " in call to task '", task_name, "'"));
+      }
+    }
+  }
+  
+  return absl::OkStatus();
+}
+
+absl::Status TypeChecker::CheckArgumentCount(const std::string& callable_name,
+                                              size_t expected_count,
+                                              size_t actual_count) const {
+  if (expected_count != actual_count) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Argument count mismatch in call to '", callable_name,
+                    "': expected ", expected_count, " arguments, got ",
+                    actual_count));
+  }
+  return absl::OkStatus();
+}
+
+absl::Status TypeChecker::CheckArgumentType(const std::string& callable_name,
+                                             size_t arg_index,
+                                             const Type* expected_type,
+                                             const Type* actual_type) const {
+  if (!expected_type || !actual_type) {
+    return absl::UnknownError(
+        absl::StrCat("Cannot determine types for argument ", arg_index,
+                    " in call to '", callable_name, "'"));
+  }
+  
+  if (!expected_type->IsAssignableFrom(*actual_type)) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Type mismatch for argument ", arg_index,
+                    " in call to '", callable_name, "': expected ",
+                    expected_type->ToString(), ", got ",
+                    actual_type->ToString()));
+  }
+  
+  return absl::OkStatus();
+}
+
+absl::Status TypeChecker::CheckReturnType(const std::string& function_name,
+                                          const Type* expected_return,
+                                          const Type* actual_return) const {
+  if (!expected_return || !actual_return) {
+    return absl::UnknownError(
+        absl::StrCat("Cannot determine return type for function '",
+                    function_name, "'"));
+  }
+  
+  if (!expected_return->IsAssignableFrom(*actual_return)) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("Return type mismatch for function '", function_name,
+                    "': expected ", expected_return->ToString(), ", got ",
+                    actual_return->ToString()));
+  }
+  
+  return absl::OkStatus();
+}
+
+absl::Status TypeChecker::CheckParameterDirection(
+    const std::string& callable_name,
+    size_t arg_index,
+    const std::string& expected_direction,
+    const verible::Symbol& argument) const {
+  // Simplified: Check if argument can be used with given direction
+  // Full implementation would analyze if argument is lvalue (for output/inout)
+  
+  // For output/inout, argument should be an lvalue (variable, port, etc)
+  if (expected_direction == "output" || expected_direction == "inout") {
+    // Simplified check: if we can't infer type, it might not be an lvalue
+    const Type* arg_type = type_inference_->InferType(argument);
+    if (!arg_type || arg_type->IsUnknown()) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Argument ", arg_index, " in call to '", callable_name,
+                      "' must be an lvalue for ", expected_direction,
+                      " parameter"));
+    }
+  }
+  
+  return absl::OkStatus();
+}
+
 }  // namespace analysis
 }  // namespace verilog
 
