@@ -362,13 +362,31 @@ endmodule
   sel.end_line = 4;
   sel.end_column = 21;    // End of "20"
 
+  // DEBUG: Show what we're trying to extract
+  std::cout << "=== SELECTION ===\n";
+  std::cout << "Line " << sel.start_line << ":" << sel.start_column 
+            << " to " << sel.end_line << ":" << sel.end_column << "\n";
+  std::cout << "Looking for: '10 + 20'\n";
+  
   auto result = engine.ExtractVariable(sel, "sum");
+  std::cout << "Result status: " << result.message() << "\n";
   EXPECT_TRUE(result.ok()) << result.message();
 
   // Read and verify EXACT output
   std::string modified = ReadFile(test_file);
+  std::string backup = ReadFile(test_file + ".bak");
   
-  std::cout << "=== EXACT OUTPUT TEST ===\n" << modified << "\n=== END ===\n";
+  std::cout << "=== ORIGINAL (from backup) ===\n" << backup << "\n=== END ORIGINAL ===\n";
+  std::cout << "=== MODIFIED (actual file) ===\n" << modified << "\n=== END MODIFIED ===\n";
+  
+  // Check if they're different
+  if (modified == backup) {
+    std::cout << "⚠️  WARNING: File not modified at all!\n";
+  } else if (modified == test_code) {
+    std::cout << "⚠️  WARNING: File matches original, not backup!\n";
+  } else {
+    std::cout << "✅ File was modified\n";
+  }
   
   // CRITICAL BUG FOUND BY THIS TEST! 🔴
   // The output is corrupted:

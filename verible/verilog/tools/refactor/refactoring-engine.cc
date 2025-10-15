@@ -600,8 +600,9 @@ absl::Status RefactoringEngine::ExtractVariable(
   std::string declaration = absl::StrCat(var_type, " ", var_name, " = ", expression_text, ";");
   
   // 6. Calculate insertion point (start of line containing selection)
+  // CRITICAL FIX: Use same content string for all offset calculations!
   const auto base_text = file_ctx.text_structure->Contents();
-  auto selection_offset = SelectionToOffsets(file_ctx.content, selection);
+  auto selection_offset = SelectionToOffsets(std::string(base_text), selection);
   
   // Find start of line for insertion
   int insertion_offset = selection_offset.start_offset;
