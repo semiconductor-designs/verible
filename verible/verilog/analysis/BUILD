@@ -14,6 +14,23 @@ package(
 )
 
 cc_library(
+    name = "type-representation",
+    srcs = ["type-representation.cc"],
+    hdrs = ["type-representation.h"],
+    deps = [],
+)
+
+cc_test(
+    name = "type-representation_test",
+    srcs = ["type-representation_test.cc"],
+    deps = [
+        ":type-representation",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "default-rules",
     hdrs = ["default-rules.h"],
     deps = [
