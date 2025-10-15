@@ -167,6 +167,146 @@ TEST_F(RefactoringEngineIntegrationTest, ExtractVariableBadSelection) {
   EXPECT_TRUE(true) << "No crash with out-of-bounds selection";
 }
 
+// Integration Test 3: ExtractFunction End-to-End
+TEST_F(RefactoringEngineIntegrationTest, ExtractFunctionEndToEnd) {
+  // Create test file with code block to extract
+  std::string test_code = R"(
+module test_module;
+  logic a, b, result;
+  initial begin
+    a = 5;
+    b = 3;
+    result = a + b;
+  end
+endmodule
+)";
+
+  std::string test_file = CreateTestFile("extract_func.sv", test_code);
+
+  // Parse and build
+  VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(file_or.ok()) << file_or.status().message();
+  ASSERT_TRUE(file_or.value()->Status().ok());
+
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> build_diagnostics;
+  symbol_table.Build(&build_diagnostics);
+  ASSERT_TRUE(build_diagnostics.empty());
+
+  analysis::TypeInference type_inference(&symbol_table);
+  RefactoringEngine engine(&symbol_table, &type_inference, &project);
+
+  // Extract the assignment statements into a function
+  Selection sel;
+  sel.filename = test_file;
+  sel.start_line = 5;      // "a = 5;"
+  sel.start_column = 5;
+  sel.end_line = 6;        // "b = 3;"
+  sel.end_column = 11;
+
+  auto result = engine.ExtractFunction(sel, "initialize_values");
+
+  // Verify success
+  EXPECT_TRUE(result.ok()) << "ExtractFunction failed: " << result.message();
+
+  // Read modified file
+  std::string modified = ReadFile(test_file);
+
+  // Verify function was created (name should appear)
+  EXPECT_THAT(modified, HasSubstr("initialize_values")) << "Function not created";
+
+  // Verify backup
+  EXPECT_TRUE(std::filesystem::exists(test_file + ".bak"));
+}
+
+// Integration Test 4: InlineFunction End-to-End
+TEST_F(RefactoringEngineIntegrationTest, InlineFunctionEndToEnd) {
+  // Create test file with a simple function call
+  std::string test_code = R"(
+module test_module;
+  logic result;
+  initial begin
+    result = calculate();
+  end
+endmodule
+)";
+
+  std::string test_file = CreateTestFile("inline_func.sv", test_code);
+
+  // Parse and build
+  VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(file_or.ok());
+  ASSERT_TRUE(file_or.value()->Status().ok());
+
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> build_diagnostics;
+  symbol_table.Build(&build_diagnostics);
+  ASSERT_TRUE(build_diagnostics.empty());
+
+  analysis::TypeInference type_inference(&symbol_table);
+  RefactoringEngine engine(&symbol_table, &type_inference, &project);
+
+  // Inline the function call
+  Location call_loc;
+  call_loc.filename = test_file;
+  call_loc.line = 4;       // "result = calculate();"
+  call_loc.column = 14;    // At "calculate"
+
+  auto result = engine.InlineFunction(call_loc);
+
+  // Verify success
+  EXPECT_TRUE(result.ok()) << "InlineFunction failed: " << result.message();
+
+  // Verify backup
+  EXPECT_TRUE(std::filesystem::exists(test_file + ".bak"));
+}
+
+// Integration Test 5: MoveDeclaration End-to-End
+TEST_F(RefactoringEngineIntegrationTest, MoveDeclarationEndToEnd) {
+  // Create test file with a declaration to move
+  std::string test_code = R"(
+module test_module;
+  logic a;
+  initial begin
+    logic b;
+    a = b;
+  end
+endmodule
+)";
+
+  std::string test_file = CreateTestFile("move_decl.sv", test_code);
+
+  // Parse and build
+  VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(file_or.ok());
+  ASSERT_TRUE(file_or.value()->Status().ok());
+
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> build_diagnostics;
+  symbol_table.Build(&build_diagnostics);
+  ASSERT_TRUE(build_diagnostics.empty());
+
+  analysis::TypeInference type_inference(&symbol_table);
+  RefactoringEngine engine(&symbol_table, &type_inference, &project);
+
+  // Move the declaration
+  Location decl_loc;
+  decl_loc.filename = test_file;
+  decl_loc.line = 4;       // "logic b;"
+  decl_loc.column = 5;
+
+  auto result = engine.MoveDeclaration(decl_loc);
+
+  // Verify success
+  EXPECT_TRUE(result.ok()) << "MoveDeclaration failed: " << result.message();
+
+  // Verify backup
+  EXPECT_TRUE(std::filesystem::exists(test_file + ".bak"));
+}
+
 }  // namespace
 }  // namespace tools
 }  // namespace verilog
