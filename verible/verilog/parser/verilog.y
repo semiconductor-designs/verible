@@ -6704,6 +6704,15 @@ specify_item
     { $$ = MakeTaggedNode(N::kSpecifyItem, $1, $2); }
   | specify_edge_path_decl ';'
     { $$ = MakeTaggedNode(N::kSpecifyItem, $1, $2); }
+  /* M14 Week 3: Add showcancelled/noshowcancelled with path declarations */
+  | TK_showcancelled specify_simple_path_decl ';'
+    { $$ = MakeTaggedNode(N::kSpecifyItem, $1, $2, $3); }
+  | TK_noshowcancelled specify_simple_path_decl ';'
+    { $$ = MakeTaggedNode(N::kSpecifyItem, $1, $2, $3); }
+  | TK_showcancelled specify_edge_path_decl ';'
+    { $$ = MakeTaggedNode(N::kSpecifyItem, $1, $2, $3); }
+  | TK_noshowcancelled specify_edge_path_decl ';'
+    { $$ = MakeTaggedNode(N::kSpecifyItem, $1, $2, $3); }
   | TK_if '(' expression ')' specify_simple_path_decl ';'
     { $$ = MakeTaggedNode(N::kSpecifyItem, $1,
                           MakeParenGroup($2, $3, $4), $5, $6); }
@@ -6905,6 +6914,11 @@ spec_polarity
   : '+'
     { $$ = std::move($1); }
   | '-'
+    { $$ = std::move($1); }
+  /* M14 Week 3: Add +: and -: polarity operators for simple paths */
+  | TK_PO_POS
+    { $$ = std::move($1); }
+  | TK_PO_NEG
     { $$ = std::move($1); }
   | /* empty */
     { $$ = nullptr; }
