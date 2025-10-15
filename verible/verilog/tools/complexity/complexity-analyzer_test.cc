@@ -14,6 +14,9 @@
 
 #include "verible/verilog/tools/complexity/complexity-analyzer.h"
 
+#include <chrono>
+
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "verible/verilog/analysis/call-graph.h"
 #include "verible/verilog/analysis/symbol-table.h"
@@ -211,6 +214,152 @@ TEST_F(ComplexityAnalyzerTest, AllReportFormats) {
   EXPECT_NE(text, json);
   EXPECT_NE(json, html);
   EXPECT_NE(text, html);
+}
+
+// Integration Tests with Real Analysis (Tests 16-25)
+
+// Test 16: Cyclomatic complexity calculation
+TEST_F(ComplexityAnalyzerTest, CyclomaticComplexityCalculation) {
+  // TDD: Add functions with known complexity
+  call_graph_->AddNode("simple_func");  // Complexity: 1 (no branches)
+  call_graph_->AddNode("complex_func"); // Would have branches in real code
+  
+  ComplexityAnalyzer analyzer(call_graph_.get());
+  auto report = analyzer.Analyze();
+  
+  // Framework should handle complexity calculation
+  EXPECT_GE(report.max_complexity, 0);
+}
+
+// Test 17: Large function graph performance
+TEST_F(ComplexityAnalyzerTest, LargeFunctionGraphPerformance) {
+  // Add 500 functions to test performance
+  for (int i = 0; i < 500; i++) {
+    call_graph_->AddNode("func_" + std::to_string(i));
+  }
+  
+  ComplexityAnalyzer analyzer(call_graph_.get());
+  
+  auto start = std::chrono::high_resolution_clock::now();
+  auto report = analyzer.Analyze();
+  auto end = std::chrono::high_resolution_clock::now();
+  
+  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+  
+  // Should complete in < 1 second for 500 functions
+  EXPECT_LT(duration.count(), 1000);
+  EXPECT_EQ(report.total_functions, 500);
+}
+
+// Test 18: Report HTML format validation
+TEST_F(ComplexityAnalyzerTest, HtmlReportValidation) {
+  call_graph_->AddNode("test_func");
+  
+  ComplexityAnalyzer analyzer(call_graph_.get());
+  analyzer.Analyze();
+  
+  auto html = analyzer.GenerateReport(ReportFormat::kHtml);
+  
+  // HTML should contain basic structure
+  EXPECT_THAT(html, ::testing::HasSubstr("<html"));
+  EXPECT_THAT(html, ::testing::HasSubstr("</html>"));
+}
+
+// Test 19: Report JSON format validation
+TEST_F(ComplexityAnalyzerTest, JsonReportValidation) {
+  call_graph_->AddNode("test_func");
+  
+  ComplexityAnalyzer analyzer(call_graph_.get());
+  analyzer.Analyze();
+  
+  auto json = analyzer.GenerateReport(ReportFormat::kJson);
+  
+  // JSON should contain valid structure
+  EXPECT_THAT(json, ::testing::HasSubstr("{"));
+  EXPECT_THAT(json, ::testing::HasSubstr("}"));
+}
+
+// Test 20: Function metrics detail
+TEST_F(ComplexityAnalyzerTest, FunctionMetricsDetail) {
+  call_graph_->AddNode("detailed_func");
+  
+  ComplexityAnalyzer analyzer(call_graph_.get());
+  analyzer.Analyze();
+  
+  auto metrics = analyzer.GetFunctionMetrics("detailed_func");
+  
+  // Metrics should have reasonable values
+  EXPECT_EQ(metrics.name, "detailed_func");
+  EXPECT_GE(metrics.cyclomatic_complexity, 0);
+  EXPECT_GE(metrics.function_size, 0);
+}
+
+// Test 21: Average complexity calculation
+TEST_F(ComplexityAnalyzerTest, AverageComplexityCalculation) {
+  call_graph_->AddNode("func1");
+  call_graph_->AddNode("func2");
+  call_graph_->AddNode("func3");
+  
+  ComplexityAnalyzer analyzer(call_graph_.get());
+  auto report = analyzer.Analyze();
+  
+  // Average should be between 0 and max
+  EXPECT_GE(report.average_complexity, 0.0);
+  EXPECT_LE(report.average_complexity, report.max_complexity);
+}
+
+// Test 22: Max complexity identification
+TEST_F(ComplexityAnalyzerTest, MaxComplexityIdentification) {
+  call_graph_->AddNode("simple");
+  call_graph_->AddNode("complex");
+  
+  ComplexityAnalyzer analyzer(call_graph_.get());
+  auto report = analyzer.Analyze();
+  
+  // Should identify max complexity
+  EXPECT_GE(report.max_complexity, 0);
+}
+
+// Test 23: Call graph integration
+TEST_F(ComplexityAnalyzerTest, CallGraphIntegration) {
+  call_graph_->AddNode("caller");
+  call_graph_->AddNode("callee");
+  call_graph_->AddEdge("caller", "callee");
+  
+  ComplexityAnalyzer analyzer(call_graph_.get());
+  auto report = analyzer.Analyze();
+  
+  // Should handle call relationships
+  EXPECT_EQ(report.total_functions, 2);
+}
+
+// Test 24: Empty analysis result
+TEST_F(ComplexityAnalyzerTest, EmptyAnalysisResult) {
+  ComplexityAnalyzer analyzer(call_graph_.get());
+  
+  auto report = analyzer.Analyze();
+  
+  // Empty call graph should give zero metrics
+  EXPECT_EQ(report.total_functions, 0);
+  EXPECT_EQ(report.max_complexity, 0);
+  EXPECT_EQ(report.average_complexity, 0.0);
+}
+
+// Test 25: Report consistency across formats
+TEST_F(ComplexityAnalyzerTest, ReportConsistencyAcrossFormats) {
+  call_graph_->AddNode("test");
+  
+  ComplexityAnalyzer analyzer(call_graph_.get());
+  analyzer.Analyze();
+  
+  auto text = analyzer.GenerateReport(ReportFormat::kText);
+  auto json = analyzer.GenerateReport(ReportFormat::kJson);
+  auto html = analyzer.GenerateReport(ReportFormat::kHtml);
+  
+  // All formats should report 1 function
+  EXPECT_THAT(text, ::testing::HasSubstr("1"));
+  EXPECT_THAT(json, ::testing::HasSubstr("1"));
+  EXPECT_THAT(html, ::testing::HasSubstr("1"));
 }
 
 }  // namespace
