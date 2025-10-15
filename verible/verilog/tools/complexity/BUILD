@@ -29,6 +29,19 @@ cc_test(
     ],
 )
 
+cc_test(
+    name = "complexity-analyzer_integration_test",
+    srcs = ["complexity-analyzer_integration_test.cc"],
+    deps = [
+        ":complexity-analyzer",
+        "//verible/verilog/analysis:call-graph",
+        "//verible/verilog/analysis:symbol-table",
+        "//verible/verilog/analysis:verilog-project",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
 cc_binary(
     name = "verible-verilog-complexity",
     srcs = ["complexity-main.cc"],
