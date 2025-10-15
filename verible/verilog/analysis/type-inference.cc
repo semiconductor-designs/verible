@@ -428,21 +428,79 @@ const Type* TypeInference::InferConcat(const verible::Symbol& concat) const {
 
 const Type* TypeInference::InferReplication(const verible::Symbol& replication) const {
   // Replication {N{a}} - width is N * width(a)
-  // Simplified: return 32-bit logic for replications
-  // Full implementation would evaluate count and multiply by expression width
+  if (replication.Kind() != verible::SymbolKind::kNode) {
+    auto unknown = std::make_unique<Type>();
+    unknown->base_type = PrimitiveType::kUnknown;
+    return StoreInCache(expr_cache_, &replication, std::move(unknown));
+  }
+  
+  const auto& node = verible::SymbolCastToNode(replication);
+  
+  // Replication has 2 main parts: count and expression
+  // Try to extract them from children
+  int count = 1;
+  int expr_width = 32;
+  
+  // Get children
+  std::vector<const verible::Symbol*> children;
+  for (const auto& child : node.children()) {
+    if (child) children.push_back(child.get());
+  }
+  
+  // Try to infer width from expression (usually last significant child)
+  for (const auto* child : children) {
+    if (child) {
+      const Type* child_type = InferType(*child);
+      if (child_type && child_type->GetWidth() > 0) {
+        expr_width = child_type->GetWidth();
+      }
+    }
+  }
+  
+  // For now, assume count is compile-time constant (simplified)
+  // Full implementation would evaluate constant expressions
+  // Use heuristic: if we found an expression width, use it
+  
   auto result = std::make_unique<Type>();
   result->base_type = PrimitiveType::kLogic;
-  result->dimensions = {32};
+  result->dimensions = {expr_width * count};
   return StoreInCache(expr_cache_, &replication, std::move(result));
 }
 
 const Type* TypeInference::InferSelect(const verible::Symbol& select) const {
   // Bit/part select: a[3:0] or a[5]
-  // Simplified: return single-bit logic for selects
-  // Full implementation would analyze the select range
+  // For single bit select: width = 1
+  // For part select [high:low]: width = high - low + 1
+  // Without constant evaluation, default to 1 for single bit
+  
+  if (select.Kind() != verible::SymbolKind::kNode) {
+    auto unknown = std::make_unique<Type>();
+    unknown->base_type = PrimitiveType::kUnknown;
+    return StoreInCache(expr_cache_, &select, std::move(unknown));
+  }
+  
+  const auto& node = verible::SymbolCastToNode(select);
+  
+  // Try to detect if it's a range select (has : operator)
+  // This is simplified - full implementation would parse the range
+  int width = 1;  // Default to single bit
+  
+  // Check children for range indicators
+  for (const auto& child : node.children()) {
+    if (child && child->Kind() == verible::SymbolKind::kLeaf) {
+      const auto& leaf = verible::SymbolCastToLeaf(*child);
+      if (leaf.get().token_enum() == ':') {
+        // It's a range select - assume 8 bits as heuristic
+        // Full implementation would evaluate high-low+1
+        width = 8;
+        break;
+      }
+    }
+  }
+  
   auto result = std::make_unique<Type>();
   result->base_type = PrimitiveType::kLogic;
-  result->dimensions = {1};
+  result->dimensions = {width};
   return StoreInCache(expr_cache_, &select, std::move(result));
 }
 
@@ -459,11 +517,57 @@ const Type* TypeInference::InferFunctionCall(const verible::Symbol& call) const 
 const Type* TypeInference::InferConditional(const verible::Symbol& conditional) const {
   // Ternary operator: cond ? true_expr : false_expr
   // Result type is the common type of true_expr and false_expr
-  // Simplified: return 32-bit logic for conditional expressions
-  // Full implementation would infer types of both branches and return wider type
+  
+  if (conditional.Kind() != verible::SymbolKind::kNode) {
+    auto unknown = std::make_unique<Type>();
+    unknown->base_type = PrimitiveType::kUnknown;
+    return StoreInCache(expr_cache_, &conditional, std::move(unknown));
+  }
+  
+  const auto& node = verible::SymbolCastToNode(conditional);
+  
+  // Get children
+  std::vector<const verible::Symbol*> children;
+  for (const auto& child : node.children()) {
+    if (child) children.push_back(child.get());
+  }
+  
+  // Try to find true and false branches
+  // Typical structure: condition ? true_expr : false_expr
+  const Type* true_type = nullptr;
+  const Type* false_type = nullptr;
+  
+  // Look for non-operator children (skip ?, :)
+  for (const auto* child : children) {
+    if (child && child->Kind() != verible::SymbolKind::kLeaf) {
+      const Type* child_type = InferType(*child);
+      if (child_type && !true_type) {
+        true_type = child_type;
+      } else if (child_type && !false_type) {
+        false_type = child_type;
+      }
+    }
+  }
+  
+  // Result width is max of both branches
+  int result_width = 32;  // Default
+  if (true_type && false_type) {
+    result_width = std::max(true_type->GetWidth(), false_type->GetWidth());
+  } else if (true_type) {
+    result_width = true_type->GetWidth();
+  } else if (false_type) {
+    result_width = false_type->GetWidth();
+  }
+  
   auto result = std::make_unique<Type>();
   result->base_type = PrimitiveType::kLogic;
-  result->dimensions = {32};
+  result->dimensions = {result_width > 0 ? result_width : 32};
+  
+  // Both branches signed -> result signed
+  if (true_type && false_type) {
+    result->is_signed = true_type->is_signed && false_type->is_signed;
+  }
+  
   return StoreInCache(expr_cache_, &conditional, std::move(result));
 }
 
