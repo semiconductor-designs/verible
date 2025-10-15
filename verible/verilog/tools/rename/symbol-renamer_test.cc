@@ -269,15 +269,11 @@ TEST_F(SymbolRenamerTest, RenameToReservedWord) {
   
   verible::SymbolPtr scope = verible::MakeNode();
   
-  // In full implementation, would fail for reserved words like:
-  // - "module", "endmodule"
-  // - "if", "else"
-  // - "logic", "wire"
-  
-  // For now, basic validation doesn't check reserved words
+  // Full implementation now checks reserved words
   auto status = renamer.ValidateRename("myvar", "module", *scope);
-  // Would eventually EXPECT_FALSE when reserved word checking added
-  EXPECT_TRUE(status.ok());
+  // Should reject reserved words
+  EXPECT_FALSE(status.ok());
+  EXPECT_EQ(status.code(), absl::StatusCode::kInvalidArgument);
 }
 
 // Basic validation tests
@@ -380,6 +376,9 @@ TEST_F(SymbolRenamerTest, CaseSensitivity) {
   // SystemVerilog is case-sensitive
   // "MyVar" and "myvar" are different
   auto status = renamer.ValidateRename("MyVar", "myvar", *scope);
+  if (!status.ok()) {
+    std::cerr << "Validation failed: " << status.message() << std::endl;
+  }
   EXPECT_TRUE(status.ok());  // Should allow - they're different
 }
 
