@@ -27,6 +27,19 @@ cc_test(
     ],
 )
 
+cc_test(
+    name = "dead-code-eliminator_integration_test",
+    srcs = ["dead-code-eliminator_integration_test.cc"],
+    deps = [
+        ":dead-code-eliminator",
+        "//verible/verilog/analysis:call-graph",
+        "//verible/verilog/analysis:symbol-table",
+        "//verible/verilog/analysis:verilog-project",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
 cc_binary(
     name = "verible-verilog-deadcode",
     srcs = ["deadcode-main.cc"],
