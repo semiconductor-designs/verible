@@ -24,8 +24,11 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
+#include "verible/common/text/concrete-syntax-leaf.h"
 #include "verible/common/text/symbol.h"
+#include "verible/common/text/text-structure.h"
 #include "verible/common/text/token-info.h"
+#include "verible/common/text/tree-utils.h"
 #include "verible/common/util/tree-operations.h"
 #include "verible/verilog/CST/verilog-nonterminals.h"
 #include "verible/verilog/analysis/symbol-table.h"
@@ -124,37 +127,6 @@ std::string GenerateFunctionSignature(
   
   return sig.str();
 }
-// Helper to find CST nodes within a line/column selection
-// Returns nodes that fall within the selection range
-struct NodeLocation {
-  const verible::Symbol* node;
-  int start_line;
-  int start_column;
-  int end_line;
-  int end_column;
-};
-
-std::vector<NodeLocation> FindNodesInSelection(
-    const verible::Symbol* root,
-    const Selection& selection) {
-  std::vector<NodeLocation> result;
-  
-  if (!root) return result;
-  
-  // For a full implementation, this would:
-  // 1. Traverse the CST
-  // 2. Check each node's TokenInfo for line/column
-  // 3. Collect nodes within selection range
-  //
-  // This requires integration with:
-  // - verible::Symbol traversal
-  // - TokenInfo line/column extraction
-  // - Range intersection logic
-  //
-  // Estimated: 2-3 hours for robust implementation
-  
-  return result;
-}
 
 // Helper to convert line/column to byte offset
 struct OffsetRange {
@@ -170,13 +142,11 @@ OffsetRange SelectionToOffsets(
   int current_line = 1;
   int current_column = 1;
   int offset = 0;
-  bool found_start = false;
   
   for (size_t i = 0; i < content.size(); ++i) {
     if (current_line == selection.start_line && 
         current_column == selection.start_column) {
       result.start_offset = offset;
-      found_start = true;
     }
     
     if (current_line == selection.end_line && 
@@ -198,6 +168,78 @@ OffsetRange SelectionToOffsets(
   if (result.end_offset == 0) {
     result.end_offset = offset;
   }
+  
+  return result;
+}
+
+// Helper to find CST nodes within a line/column selection
+// Returns nodes that fall within the selection range
+struct NodeLocation {
+  const verible::Symbol* node;
+  int start_line;
+  int start_column;
+  int end_line;
+  int end_column;
+};
+
+// Recursively traverse CST and collect nodes within selection
+void CollectNodesInRange(
+    const verible::Symbol* node,
+    const verible::TextStructureView* text_structure,
+    int start_offset,
+    int end_offset,
+    std::vector<NodeLocation>* result) {
+  if (!node) return;
+  
+  // Get the text span of this node
+  auto span = verible::StringSpanOfSymbol(*node);
+  const auto base_text = text_structure->Contents();
+  int node_start = span.begin() - base_text.begin();
+  int node_end = span.end() - base_text.begin();
+  
+  // Check if node overlaps with selection
+  bool overlaps = !(node_end <= start_offset || node_start >= end_offset);
+  
+  if (overlaps) {
+    // Get line/column for this node
+    auto start_lc = text_structure->GetLineColAtOffset(node_start);
+    auto end_lc = text_structure->GetLineColAtOffset(node_end);
+    
+    NodeLocation loc;
+    loc.node = node;
+    loc.start_line = start_lc.line;
+    loc.start_column = start_lc.column;
+    loc.end_line = end_lc.line;
+    loc.end_column = end_lc.column;
+    result->push_back(loc);
+    
+    // Recurse into children if this is a node
+    if (node->Kind() == verible::SymbolKind::kNode) {
+      const auto& syntax_node = verible::SymbolCastToNode(*node);
+      for (const auto& child : syntax_node.children()) {
+        CollectNodesInRange(child.get(), text_structure, start_offset, end_offset, result);
+      }
+    }
+  }
+}
+
+std::vector<NodeLocation> FindNodesInSelection(
+    const verible::Symbol* root,
+    const verible::TextStructureView* text_structure,
+    const Selection& selection) {
+  std::vector<NodeLocation> result;
+  
+  if (!root || !text_structure) return result;
+  
+  // Convert selection to byte offsets
+  const auto content = text_structure->Contents();
+  auto offset_range = SelectionToOffsets(std::string(content), selection);
+  
+  // Traverse and collect
+  CollectNodesInRange(root, text_structure, 
+                      offset_range.start_offset, 
+                      offset_range.end_offset, 
+                      &result);
   
   return result;
 }
