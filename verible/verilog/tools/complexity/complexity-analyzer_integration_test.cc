@@ -104,17 +104,43 @@ endmodule
   // Get the first function's metrics
   auto& func = report.per_function.begin()->second;
   
+  // DEBUG: Print actual values
+  std::cout << "Function: " << func.name << "\n";
+  std::cout << "  Cyclomatic complexity: " << func.cyclomatic_complexity << "\n";
+  std::cout << "  Function size (LOC): " << func.function_size << "\n";
+  
   // VERIFY ACTUAL COMPLEXITY CALCULATION
-  // With 2 if statements, complexity should be at least 2
-  // If it's exactly 1, the helpers aren't working
+  // With 2 decision points (if + else if), cyclomatic complexity should be 3
+  // McCabe's formula: CC = E - N + 2P where E=edges, N=nodes, P=connected components
+  // Or simply: CC = decision_points + 1
+  // 
+  // Our function has:
+  // - if (x > 10) -> decision 1
+  // - else if (x > 5) -> decision 2
+  // - else -> no decision (fallthrough)
+  // Expected CC = 2 + 1 = 3
+  
   EXPECT_GT(func.cyclomatic_complexity, 1) 
       << "Complexity is default (1) - helpers not executing!";
   
+  // STRICTER TEST: Verify it's in reasonable range (2-4)
+  // Could be 2 if only counting 'if', or 3 if counting 'else if'
+  EXPECT_GE(func.cyclomatic_complexity, 2)
+      << "Complexity too low - should be at least 2 for 2 branches";
+  EXPECT_LE(func.cyclomatic_complexity, 4)
+      << "Complexity too high - should be at most 4 for this simple function";
+  
   // VERIFY ACTUAL LOC CALCULATION
-  // Function has ~7 lines
-  // If it's exactly 10, that's the default - helpers not working
+  // Function spans lines 3-10 in the test code (8 lines including braces)
+  // Exact count depends on implementation (comments? blanks? braces?)
   EXPECT_NE(func.function_size, 10)
       << "LOC is default (10) - helpers not executing!";
+  
+  // STRICTER TEST: Verify reasonable range (5-12 lines)
+  EXPECT_GE(func.function_size, 5)
+      << "LOC too low - function has at least 5 lines";
+  EXPECT_LE(func.function_size, 12)
+      << "LOC too high - function is only ~8 lines";
 }
 
 // Integration Test 2: Multiple functions with different complexity

@@ -120,9 +120,25 @@ endmodule
 
   // 8. Verify the refactoring actually happened
   EXPECT_THAT(modified, HasSubstr("temp_sum")) << "Variable not extracted";
-  // Should have declaration + usage
-  // Note: exact format depends on implementation
-
+  
+  // 8b. CRITICAL: Verify output is syntactically valid
+  // Re-parse the modified file to ensure it's valid Verilog
+  VerilogProject verify_project(test_dir_.string(), std::vector<std::string>{});
+  auto verify_file_or = verify_project.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(verify_file_or.ok()) << "Modified file can't be opened";
+  auto* verify_file = verify_file_or.value();
+  EXPECT_TRUE(verify_file->Status().ok()) 
+      << "CRITICAL: Modified file has syntax errors!\n"
+      << "Modified content:\n" << modified;
+  
+  // 8c. Verify ACTUAL content matches expected pattern
+  // Should have: logic temp_sum = <expr>;
+  // Should have: a = temp_sum;
+  EXPECT_THAT(modified, HasSubstr("logic")) 
+      << "Missing declaration keyword";
+  EXPECT_THAT(modified, HasSubstr("temp_sum"))
+      << "Missing variable name";
+  
   // 9. Verify backup was created
   std::string backup_file = test_file + ".bak";
   EXPECT_TRUE(std::filesystem::exists(backup_file)) << "Backup file not created";
