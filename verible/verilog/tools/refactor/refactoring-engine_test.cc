@@ -94,7 +94,7 @@ TEST_F(RefactoringEngineTest, InlineFunctionBasic) {
   Location loc{"test.sv", 10, 5};
   auto status = engine.InlineFunction(loc);
   
-  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
 }
 
 TEST_F(RefactoringEngineTest, InlineFunctionEmptyFilename) {
@@ -112,7 +112,7 @@ TEST_F(RefactoringEngineTest, InlineFunctionWithParameters) {
   Location loc{"module.sv", 25, 10};
   auto status = engine.InlineFunction(loc);
   
-  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
 }
 
 TEST_F(RefactoringEngineTest, InlineFunctionWithReturn) {
@@ -121,7 +121,7 @@ TEST_F(RefactoringEngineTest, InlineFunctionWithReturn) {
   Location loc{"design.sv", 40, 15};
   auto status = engine.InlineFunction(loc);
   
-  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
 }
 
 TEST_F(RefactoringEngineTest, InlineFunctionNestedCall) {
@@ -130,7 +130,7 @@ TEST_F(RefactoringEngineTest, InlineFunctionNestedCall) {
   Location loc{"nested.sv", 100, 20};
   auto status = engine.InlineFunction(loc);
   
-  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
 }
 
 // ==================== Extract Variable Tests (5) ====================
@@ -297,7 +297,7 @@ TEST_F(RefactoringEngineTest, InlineFunctionIntegrationBasic) {
   auto status = engine.InlineFunction(loc);
   
   // Should identify inline target
-  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
 }
 
 // Test 27: InlineFunction with params integration
@@ -308,7 +308,7 @@ TEST_F(RefactoringEngineTest, InlineFunctionWithParametersIntegration) {
   auto status = engine.InlineFunction(loc);
   
   // Should handle parameter substitution
-  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
 }
 
 // Test 28: InlineFunction recursion check
@@ -330,7 +330,7 @@ TEST_F(RefactoringEngineTest, InlineFunctionSemanticPreservation) {
   auto status = engine.InlineFunction(loc);
   
   // Should preserve program semantics
-  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
 }
 
 // Test 30: InlineFunction multiple call sites
@@ -341,7 +341,7 @@ TEST_F(RefactoringEngineTest, InlineFunctionMultipleCallSites) {
   auto status = engine.InlineFunction(loc);
   
   // Should handle multiple call sites
-  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
 }
 
 // General Integration Tests (31-35)
@@ -374,7 +374,7 @@ TEST_F(RefactoringEngineTest, MultipleOperationsConsistency) {
   
   // Both operations should be recognized
   EXPECT_EQ(extract_status.code(), absl::StatusCode::kFailedPrecondition);
-  EXPECT_EQ(inline_status.code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(inline_status.code(), absl::StatusCode::kFailedPrecondition);
 }
 
 // Test 33: Error handling robustness
@@ -412,7 +412,7 @@ TEST_F(RefactoringEngineTest, SymbolTableIntegration) {
   auto status = engine.InlineFunction(loc);
   
   // Should query symbol table correctly
-  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
 }
 
 // TDD Integration Test: Document current limitations
@@ -430,7 +430,7 @@ TEST_F(RefactoringEngineTest, ActualRefactoringLimitations) {
   // Test InlineFunction (not yet implemented)
   Location loc{"test.sv", 15, 10};
   auto status2 = engine.InlineFunction(loc);
-  EXPECT_EQ(status2.code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(status2.code(), absl::StatusCode::kFailedPrecondition);
   
   // Test ExtractVariable (now implemented!)
   Selection sel2{"test.sv", 20, 10, 20, 25};
