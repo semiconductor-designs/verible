@@ -2696,11 +2696,12 @@ dpi_import_export
 dpi_export_item
   /* The following rules are expanded from:
    * TK_export dpi_spec_string { GenericIdentifier '=' }_opt modport_tf_port ';'
+   * M14 Week 2: Added context support for DPI export (IEEE 1800-2017 Section 35.5.5)
    */
-  : TK_export dpi_spec_string GenericIdentifier '=' modport_tf_port ';'
-    { $$ = MakeTaggedNode(N::kDPIExportItem, $1, $2, $3, $4, $5, $6); }
-  | TK_export dpi_spec_string modport_tf_port ';'
-    { $$ = MakeTaggedNode(N::kDPIExportItem, $1, $2, nullptr, nullptr, $3, $4); }
+  : TK_export dpi_spec_string dpi_import_property_opt GenericIdentifier '=' modport_tf_port ';'
+    { $$ = MakeTaggedNode(N::kDPIExportItem, $1, $2, $3, $4, $5, $6, $7); }
+  | TK_export dpi_spec_string dpi_import_property_opt modport_tf_port ';'
+    { $$ = MakeTaggedNode(N::kDPIExportItem, $1, $2, $3, nullptr, nullptr, $4, $5); }
   ;
 import_export
   : TK_export

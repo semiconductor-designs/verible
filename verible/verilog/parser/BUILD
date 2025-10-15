@@ -495,6 +495,18 @@ cc_test(
     ],
 )
 
+# M14 Week 2: DPI enhancements (DPI 2.0, open arrays, context, pure)
+cc_test(
+    name = "verilog-parser-dpi-enhanced_test",
+    srcs = ["verilog-parser-dpi-enhanced_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
 # M11 Feature 2: checker instantiation (TDD)
 cc_test(
     name = "verilog-parser-checker-inst_test",
