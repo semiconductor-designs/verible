@@ -31,6 +31,35 @@ cc_test(
 )
 
 cc_library(
+    name = "type-inference",
+    srcs = ["type-inference.cc"],
+    hdrs = ["type-inference.h"],
+    deps = [
+        ":symbol-table",
+        ":type-representation",
+        "//verible/common/text:concrete-syntax-tree",
+        "//verible/common/text:symbol",
+        "//verible/common/text:token-info",
+        "//verible/common/text:tree-utils",
+        "//verible/common/util:casts",
+        "//verible/verilog/CST:verilog-nonterminals",
+        "//verible/verilog/parser:verilog-token-enum",
+    ],
+)
+
+cc_test(
+    name = "type-inference_test",
+    srcs = ["type-inference_test.cc"],
+    deps = [
+        ":symbol-table",
+        ":type-inference",
+        ":verilog-project",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "default-rules",
     hdrs = ["default-rules.h"],
     deps = [
