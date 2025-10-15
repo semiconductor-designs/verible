@@ -7848,8 +7848,19 @@ property_actual_arg_opt
 assertion_variable_declaration_list
   : assertion_variable_declaration_list ';' assertion_variable_declaration
     { $$ = ExtendNode($1, $2, $3); }
+  | assertion_variable_declaration_list ';' let_identifier_with_arguments
+    /* SVA let declarations in property/sequence - semicolon as separator */
+    { $$ = ExtendNode($1, $2, $3); }
   | assertion_variable_declaration
     { $$ = MakeTaggedNode(N::kAssertionVariableDeclarationList, $1); }
+  | let_identifier_with_arguments
+    /* SVA let declaration as first statement in property/sequence */
+    { $$ = MakeTaggedNode(N::kAssertionVariableDeclarationList, $1); }
+  ;
+let_identifier_with_arguments
+  /* Let declaration without the trailing semicolon for use in lists */
+  : TK_let GenericIdentifier let_port_list_in_parens_opt '=' expression
+    { $$ = MakeTaggedNode(N::kLetDeclaration, $1, $2, $3, $4, $5); }
   ;
 assertion_variable_declaration
   : var_opt data_type_or_implicit_basic_followed_by_id_and_dimensions_opt

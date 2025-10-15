@@ -399,6 +399,18 @@ cc_test(
     ],
 )
 
+# Phase 40: Let keyword in SVA properties (VeriPG support)
+cc_test(
+    name = "verilog-parser-let-property_test",
+    srcs = ["verilog-parser-let-property_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
 # M11 Feature 2: checker instantiation (TDD)
 cc_test(
     name = "verilog-parser-checker-inst_test",
