@@ -98,6 +98,7 @@ cc_test(
     name = "type-checker_test",
     srcs = ["type-checker_test.cc"],
     deps = [
+        ":call-graph",
         ":symbol-table",
         ":type-checker",
         ":type-inference",
