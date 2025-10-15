@@ -411,6 +411,78 @@ cc_test(
     ],
 )
 
+# M13 Sprint 1: Multi-clock assertions (Advanced SVA)
+cc_test(
+    name = "verilog-parser-multi-clock-sva_test",
+    srcs = ["verilog-parser-multi-clock-sva_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# M13 Sprint 2: Library enhancements (config blocks, liblist)
+cc_test(
+    name = "verilog-parser-library-enhanced_test",
+    srcs = ["verilog-parser-library-enhanced_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# M13 Sprint 3: Complex sequence expressions (intersect, first_match, throughout)
+cc_test(
+    name = "verilog-parser-complex-sequences_test",
+    srcs = ["verilog-parser-complex-sequences_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# M13 Sprint 4: Recursive properties and sequences
+cc_test(
+    name = "verilog-parser-recursive-properties_test",
+    srcs = ["verilog-parser-recursive-properties_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# M13 Sprint 5: Advanced temporal operators (ranges, unbounded)
+cc_test(
+    name = "verilog-parser-temporal-advanced_test",
+    srcs = ["verilog-parser-temporal-advanced_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# M13 Sprint 6: Local variables in assertions
+cc_test(
+    name = "verilog-parser-local-vars-sva_test",
+    srcs = ["verilog-parser-local-vars-sva_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
 # M11 Feature 2: checker instantiation (TDD)
 cc_test(
     name = "verilog-parser-checker-inst_test",

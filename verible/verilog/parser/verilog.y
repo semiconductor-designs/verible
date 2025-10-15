@@ -520,7 +520,7 @@ is not locally defined, so the grammar here uses only generic identifiers.
 %token TK_implements "implements"
 %token TK_interconnect "interconnect"
 %token TK_nettype "nettype"
-%token TK_soft "soft"
+/* TK_soft already declared at line 317 - removed duplicate */
 %token TK_absdelay "absdelay"
 %token TK_abstol "abstol"
 %token TK_access "access"
@@ -2263,6 +2263,9 @@ description
    * See LRM: Ch. 33
    */
   | library_source
+    { $$ = std::move($1); }
+  /* M13 Sprint 2: Allow library declaration at top level */
+  | library_declaration
     { $$ = std::move($1); }
   ;
 description_list_opt
@@ -4044,8 +4047,12 @@ include_statement
     { $$ = MakeTaggedNode(N::kLibraryInclude, $1, $2, $3); }
   ;
 file_path_spec_list
+  /* M13 Sprint 2: Support both comma-separated (old) and space-separated (LRM) */
   : file_path_spec_list ',' file_path_spec
     { $$ = ExtendNode($1, $2, $3); }
+  | file_path_spec_list file_path_spec
+    /* Space-separated - IEEE 1364-2001 Section 13.3 */
+    { $$ = ExtendNode($1, $2); }
   | file_path_spec
     { $$ = MakeTaggedNode(N::kFilePathSpecList, $1); }
   ;

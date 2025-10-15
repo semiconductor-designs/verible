@@ -447,6 +447,7 @@ enum class NodeEnum {
   kVarDataTypeImplicitBasicIdDimensions,
   kSequenceDelayRange,
   kSequenceDelayRepetition,
+  kSequenceWithClock,  // M13: Multi-clock assertions
   kConsecutiveRepetition,
   kNonconsecutiveRepetition,
   kGotoRepetition,
