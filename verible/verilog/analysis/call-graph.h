@@ -149,6 +149,9 @@ class CallGraph {
   // Reverse adjacency list: callee -> set of callers
   std::map<std::string, std::set<std::string>> reverse_adj_list_;
   
+  // Helper: Build graph from symbol table node recursively
+  void BuildFromNode(const SymbolTableNode& node);
+  
   // Helper: DFS for recursion detection
   bool HasCycleDFS(const std::string& node,
                    std::set<std::string>& visited,

@@ -28,9 +28,51 @@ CallGraph::CallGraph(const SymbolTable* symbol_table)
     : symbol_table_(symbol_table) {}
 
 void CallGraph::Build() {
-  // Simplified: In full implementation, would traverse symbol table
-  // and extract function/task calls from CST
+  // Build call graph by traversing symbol table
   Clear();
+  
+  if (!symbol_table_) return;
+  
+  // Traverse the symbol table root
+  BuildFromNode(symbol_table_->Root());
+}
+
+void CallGraph::BuildFromNode(const SymbolTableNode& node) {
+  const auto& info = node.Value();
+  
+  // If this is a function or task, add it as a node
+  if (info.metatype == SymbolMetaType::kFunction ||
+      info.metatype == SymbolMetaType::kTask) {
+    // Use the declared name as the node name
+    const auto* key = node.Key();
+    if (key && !key->empty()) {
+      std::string func_name(*key);
+      AddNode(func_name);
+      
+      // Extract calls from this function/task's definition
+      // Look through local_references_to_bind for call sites
+      for (const auto& ref : info.local_references_to_bind) {
+        if (!ref.Empty() && ref.components) {
+          // Get the first component (simplified - doesn't traverse tree)
+          const auto& first_component = ref.components->Value();
+          if (!first_component.identifier.empty()) {
+            // This is a potential call to another function
+            std::string callee_name(first_component.identifier);
+            
+            // Add the edge if it looks like a call
+            if (!callee_name.empty() && callee_name != func_name) {
+              AddEdge(func_name, callee_name);
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  // Recursively traverse children
+  for (const auto& child : node) {
+    BuildFromNode(child.second);
+  }
 }
 
 void CallGraph::Clear() {
