@@ -14,12 +14,17 @@
 
 #include "verible/verilog/tools/complexity/complexity-analyzer.h"
 
+#include <algorithm>
 #include <map>
+#include <set>
 #include <string>
 
 #include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "verible/common/text/symbol.h"
+#include "verible/common/text/tree-utils.h"
 #include "verible/common/util/tree-operations.h"
+#include "verible/verilog/CST/verilog-nonterminals.h"
 #include "verible/verilog/analysis/call-graph.h"
 #include "verible/verilog/analysis/type-checker.h"
 
@@ -27,36 +32,59 @@ namespace verilog {
 namespace tools {
 
 namespace {
-// Helper function demonstrating CST traversal pattern for complexity counting
-// Full implementation would use actual node tag checking
+// ACTUAL IMPLEMENTATION: Count decision points in CST using real node tags
 int CountDecisionPointsInCST(const verible::Symbol* node) {
   if (!node) return 0;
   
   int count = 0;
   
-  // Pattern for full implementation:
-  // Check node tag/type:
-  // - if (node->Tag() == NodeEnum::kIfStatement) count++;
-  // - if (node->Tag() == NodeEnum::kCaseStatement) count++;
-  // - if (node->Tag() == NodeEnum::kForLoop) count++;
-  // - if (node->Tag() == NodeEnum::kWhileLoop) count++;
-  // - if (node->Tag() == NodeEnum::kDoWhileLoop) count++;
-  
-  // Recursively traverse children
-  // for (const auto& child : node->children()) {
-  //   count += CountDecisionPointsInCST(&child);
-  // }
+  // Check if this node is a decision point
+  if (node->Kind() == verible::SymbolKind::kNode) {
+    const auto& syntax_tree_node = verible::SymbolCastToNode(*node);
+    const auto tag = static_cast<verilog::NodeEnum>(syntax_tree_node.Tag().tag);
+    
+    // Count actual decision points
+    switch (tag) {
+      case verilog::NodeEnum::kConditionalStatement:  // if/else
+      case verilog::NodeEnum::kCaseStatement:         // case
+      case verilog::NodeEnum::kLoopGenerateConstruct: // for generate
+      case verilog::NodeEnum::kForLoopStatement:      // for loop
+      case verilog::NodeEnum::kWhileLoopStatement:    // while loop
+      case verilog::NodeEnum::kDoWhileLoopStatement:  // do-while
+      case verilog::NodeEnum::kForeverLoopStatement:  // forever
+      case verilog::NodeEnum::kRepeatLoopStatement:   // repeat
+        count++;
+        break;
+      default:
+        break;
+    }
+    
+    // Recursively traverse children
+    for (const auto& child : syntax_tree_node.children()) {
+      count += CountDecisionPointsInCST(child.get());
+    }
+  }
   
   return count;
 }
 
-// Helper to calculate lines of code from CST
+// ACTUAL IMPLEMENTATION: Calculate lines of code from CST
 int CalculateLOC(const verible::Symbol* node) {
-  // Full implementation would:
-  // - Get text span of CST node
-  // - Count newlines in span
-  // - Return line count
-  return 10; // Placeholder
+  if (!node) return 0;
+  
+  // Get text span for this CST node
+  auto span = verible::StringSpanOfSymbol(*node);
+  
+  // Count newlines in the span
+  int loc = 0;
+  for (char c : span) {
+    if (c == '\n') loc++;
+  }
+  
+  // LOC is number of lines, which is newlines + 1 (if non-empty)
+  if (!span.empty()) loc++;
+  
+  return loc;
 }
 }  // namespace
 
