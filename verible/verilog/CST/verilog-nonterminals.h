@@ -389,6 +389,7 @@ enum class NodeEnum {
   kPropertySpecDisableIff,
   kPropertyPrefixExpression,
   kPropertyExpressionIndex,
+  kPropertyOperatorWithRange,  // M13: s_until[n:m] with range
   kPropertyIfElse,
   kPropertySimpleSequenceExpression,
   kPropertyCaseItem,

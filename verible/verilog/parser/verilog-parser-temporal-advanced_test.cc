@@ -62,7 +62,7 @@ TEST(TemporalAdvancedTest, UnboundedRange) {
       "module m;\n"
       "  logic req, done;\n"
       "  property p;\n"
-      "    req |-> ##[1:$] eventually done;\n"
+      "    req |-> ##[1:$] done;\n"
       "  endproperty\n"
       "endmodule\n", 13504);
 }

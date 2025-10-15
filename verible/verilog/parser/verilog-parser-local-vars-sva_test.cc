@@ -125,8 +125,8 @@ TEST(LocalVarsSVATest, LocalWithPropertyCall) {
       "module m;\n"
       "  logic req, ack;\n"
       "  property p(int n);\n"
-      "    int local;\n"
-      "    (req, local=n) |-> ##1 (ack && local == n);\n"
+      "    int local_var;\n"
+      "    (req, local_var=n) |-> ##1 (ack && local_var == n);\n"
       "  endproperty\n"
       "endmodule\n", 13608);
 }

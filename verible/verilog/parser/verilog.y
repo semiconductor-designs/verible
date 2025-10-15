@@ -8070,6 +8070,10 @@ property_operator
     { $$ = std::move($1); }
   | until_operator
     { $$ = std::move($1); }
+  | until_operator '[' cycle_range ']'
+    /* M13: s_until[n:m] and until_with[n:m] with ranges */
+    { $$ = MakeTaggedNode(N::kPropertyOperatorWithRange, $1,
+                          MakeTaggedNode(N::kCycleDelayConstRange, $2, $3, $4)); }
   | followed_by_operator
     { $$ = std::move($1); }
   | TK_during

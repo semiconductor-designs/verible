@@ -5992,7 +5992,8 @@ static const std::initializer_list<ParserTestData> kInvalidCodeTests = {
     {{PP_endif, "`endif"}, "\n"},
     // The following tests are valid library map syntax (LRM Ch. 33),
     // but invalid for the rest of SystemVerilog:
-    {{TK_library, "library"}, " foo bar;\n"},
+    // NOTE: M13 Sprint 2 adds library declarations to top-level grammar,
+    //       so "library foo bar;" is now VALID. Removed from invalid tests.
     {{TK_include, "include"}, " foo/bar/*.v;\n"},
     // fuzzer-discovered cases: (these may have crashed at one point in history)
     {"`g((\\x\" `g(::\"\n"

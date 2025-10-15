@@ -34,14 +34,13 @@ TEST(RecursivePropertiesTest, SimpleRecursiveSequence) {
       "endmodule\n", 13401);
 }
 
-// Test 2: Recursive property with if/else
+// Test 2: Recursive property with conditional (ternary pattern)
 TEST(RecursivePropertiesTest, RecursivePropertyIfElse) {
   verible::TestParserAcceptValid<VerilogAnalyzer>(
       "module m;\n"
       "  logic req, ack;\n"
       "  property p(int n);\n"
-      "    if (n == 0) ack;\n"
-      "    else req |-> ##1 p(n-1);\n"
+      "    (n == 0) ? ack : (req |-> ##1 p(n-1));\n"
       "  endproperty\n"
       "endmodule\n", 13402);
 }
@@ -86,15 +85,15 @@ TEST(RecursivePropertiesTest, RecursiveSequenceInProperty) {
       "endmodule\n", 13405);
 }
 
-// Test 6: Complex recursion with parameters
+// Test 6: Complex recursion with parameters (nested ternary)
 TEST(RecursivePropertiesTest, ComplexRecursionMultiParam) {
   verible::TestParserAcceptValid<VerilogAnalyzer>(
       "module m;\n"
       "  logic a, b, done;\n"
       "  property nested(int m, int n);\n"
-      "    if (m == 0 && n == 0) done;\n"
-      "    else if (m > 0) a |-> ##1 nested(m-1, n);\n"
-      "    else b |-> ##1 nested(m, n-1);\n"
+      "    (m == 0 && n == 0) ? done :\n"
+      "    (m > 0) ? (a |-> ##1 nested(m-1, n)) :\n"
+      "    (b |-> ##1 nested(m, n-1));\n"
       "  endproperty\n"
       "endmodule\n", 13406);
 }
