@@ -19,6 +19,7 @@
 #include <string>
 
 #include "verible/verilog/analysis/call-graph.h"
+#include "verible/verilog/analysis/symbol-table.h"
 #include "verible/verilog/analysis/type-checker.h"
 
 namespace verilog {
@@ -54,8 +55,9 @@ struct ComplexityReport {
 // ComplexityAnalyzer provides code quality metrics
 class ComplexityAnalyzer {
  public:
-  // Construct with call graph and optional type checker
+  // Construct with call graph, symbol table, and optional type checker
   explicit ComplexityAnalyzer(const verilog::analysis::CallGraph* call_graph,
+                               const verilog::SymbolTable* symbol_table = nullptr,
                                const verilog::analysis::TypeChecker* type_checker = nullptr);
 
   // Analyze complexity for entire project
@@ -69,6 +71,7 @@ class ComplexityAnalyzer {
 
  private:
   const verilog::analysis::CallGraph* call_graph_;
+  const verilog::SymbolTable* symbol_table_;
   const verilog::analysis::TypeChecker* type_checker_;
   ComplexityReport current_report_;
 };

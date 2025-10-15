@@ -86,12 +86,34 @@ int CalculateLOC(const verible::Symbol* node) {
   
   return loc;
 }
+// Helper: Find a symbol in the symbol table by name
+const SymbolTableNode* FindSymbolByName(
+    const SymbolTableNode& node,
+    const std::string& target_name) {
+  // Check if this node matches
+  const auto* key_ptr = node.Key();
+  if (key_ptr && std::string(*key_ptr) == target_name) {
+    return &node;
+  }
+  
+  // Recursively search children
+  for (const auto& [child_key, child_node] : node.Children()) {
+    auto* result = FindSymbolByName(child_node, target_name);
+    if (result) return result;
+  }
+  
+  return nullptr;
+}
+
 }  // namespace
 
 ComplexityAnalyzer::ComplexityAnalyzer(
     const verilog::analysis::CallGraph* call_graph,
+    const verilog::SymbolTable* symbol_table,
     const verilog::analysis::TypeChecker* type_checker)
-    : call_graph_(call_graph), type_checker_(type_checker) {}
+    : call_graph_(call_graph), 
+      symbol_table_(symbol_table),
+      type_checker_(type_checker) {}
 
 ComplexityReport ComplexityAnalyzer::Analyze() {
   ComplexityReport report;
@@ -136,21 +158,36 @@ ComplexityReport ComplexityAnalyzer::Analyze() {
     ComplexityMetrics func_metrics;
     func_metrics.name = node_name;
     
-    // Enhanced implementation pattern:
-    // Full implementation would:
-    // 1. Get CST node for function from symbol table
-    //    const verible::Symbol* func_cst = symbol_table->Find(node_name)->syntax_origin;
-    // 
-    // 2. Count decision points using CST traversal
-    //    int decisions = CountDecisionPointsInCST(func_cst);
-    //    func_metrics.cyclomatic_complexity = decisions + 1;
-    //
-    // 3. Calculate actual LOC from CST
-    //    func_metrics.function_size = CalculateLOC(func_cst);
+    // ACTUAL IMPLEMENTATION: Use helpers if symbol table is available
+    if (symbol_table_) {
+      // Try to find this function in the symbol table
+      const auto* node = FindSymbolByName(symbol_table_->Root(), node_name);
+      if (node) {
+        const auto& info = node->Value();
+        const verible::Symbol* func_cst = info.syntax_origin;
+        
+        if (func_cst) {
+          // Use REAL helpers!
+          int decisions = CountDecisionPointsInCST(func_cst);
+          func_metrics.cyclomatic_complexity = decisions + 1; // Base + decisions
+          func_metrics.function_size = CalculateLOC(func_cst);
+        } else {
+          // No CST available, use defaults
+          func_metrics.cyclomatic_complexity = 1;
+          func_metrics.function_size = 10;
+        }
+      } else {
+        // Function not found in symbol table, use defaults
+        func_metrics.cyclomatic_complexity = 1;
+        func_metrics.function_size = 10;
+      }
+    } else {
+      // No symbol table available, use baseline from CallGraph
+      func_metrics.cyclomatic_complexity = 1;
+      func_metrics.function_size = 10;
+    }
     
-    // For now, use CallGraph metrics as baseline
-    func_metrics.cyclomatic_complexity = 1; // Base complexity
-    func_metrics.function_size = 10; // Estimated LOC
+    // CallGraph metrics (always available)
     func_metrics.fan_out = call_graph_->GetCallees(node_name).size();
     func_metrics.fan_in = call_graph_->GetCallers(node_name).size();
     func_metrics.call_depth = call_graph_->GetMaxCallDepth(node_name);
