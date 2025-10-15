@@ -435,6 +435,18 @@ cc_test(
     ],
 )
 
+# M12 Feature 3: enhanced preprocessor (SV-2023 TDD)
+cc_test(
+    name = "verilog-parser-enhanced-preprocessor_test",
+    srcs = ["verilog-parser-enhanced-preprocessor_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
 # M12 Feature 4: soft packed unions (SV-2023 TDD)
 cc_test(
     name = "verilog-parser-soft-union_test",
