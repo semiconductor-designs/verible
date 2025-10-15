@@ -18,11 +18,47 @@
 #include <string>
 
 #include "absl/strings/str_cat.h"
+#include "verible/common/text/symbol.h"
+#include "verible/common/util/tree-operations.h"
 #include "verible/verilog/analysis/call-graph.h"
 #include "verible/verilog/analysis/type-checker.h"
 
 namespace verilog {
 namespace tools {
+
+namespace {
+// Helper function demonstrating CST traversal pattern for complexity counting
+// Full implementation would use actual node tag checking
+int CountDecisionPointsInCST(const verible::Symbol* node) {
+  if (!node) return 0;
+  
+  int count = 0;
+  
+  // Pattern for full implementation:
+  // Check node tag/type:
+  // - if (node->Tag() == NodeEnum::kIfStatement) count++;
+  // - if (node->Tag() == NodeEnum::kCaseStatement) count++;
+  // - if (node->Tag() == NodeEnum::kForLoop) count++;
+  // - if (node->Tag() == NodeEnum::kWhileLoop) count++;
+  // - if (node->Tag() == NodeEnum::kDoWhileLoop) count++;
+  
+  // Recursively traverse children
+  // for (const auto& child : node->children()) {
+  //   count += CountDecisionPointsInCST(&child);
+  // }
+  
+  return count;
+}
+
+// Helper to calculate lines of code from CST
+int CalculateLOC(const verible::Symbol* node) {
+  // Full implementation would:
+  // - Get text span of CST node
+  // - Count newlines in span
+  // - Return line count
+  return 10; // Placeholder
+}
+}  // namespace
 
 ComplexityAnalyzer::ComplexityAnalyzer(
     const verilog::analysis::CallGraph* call_graph,
@@ -72,13 +108,19 @@ ComplexityReport ComplexityAnalyzer::Analyze() {
     ComplexityMetrics func_metrics;
     func_metrics.name = node_name;
     
-    // Use call graph structure as complexity proxy
+    // Enhanced implementation pattern:
     // Full implementation would:
-    // 1. Get CST node for function
-    // 2. Count decision points (if/case/for/while)
-    // 3. Calculate cyclomatic complexity = decisions + 1
-    // 4. Measure LOC
+    // 1. Get CST node for function from symbol table
+    //    const verible::Symbol* func_cst = symbol_table->Find(node_name)->syntax_origin;
+    // 
+    // 2. Count decision points using CST traversal
+    //    int decisions = CountDecisionPointsInCST(func_cst);
+    //    func_metrics.cyclomatic_complexity = decisions + 1;
+    //
+    // 3. Calculate actual LOC from CST
+    //    func_metrics.function_size = CalculateLOC(func_cst);
     
+    // For now, use CallGraph metrics as baseline
     func_metrics.cyclomatic_complexity = 1; // Base complexity
     func_metrics.function_size = 10; // Estimated LOC
     func_metrics.fan_out = call_graph_->GetCallees(node_name).size();
