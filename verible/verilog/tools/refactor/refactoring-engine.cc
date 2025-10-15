@@ -14,6 +14,8 @@
 
 #include "verible/verilog/tools/refactor/refactoring-engine.h"
 
+#include <algorithm>
+#include <fstream>
 #include <set>
 #include <sstream>
 #include <string>
@@ -122,6 +124,68 @@ std::string GenerateFunctionSignature(
   
   return sig.str();
 }
+// Common file modification helper
+// Pattern: read → backup → apply modifications → write
+struct TextModification {
+  int start_offset;
+  int end_offset;
+  std::string replacement_text;
+  
+  bool operator<(const TextModification& other) const {
+    return start_offset < other.start_offset;
+  }
+};
+
+absl::Status ApplyTextModifications(
+    const std::string& filename,
+    const std::vector<TextModification>& modifications) {
+  if (modifications.empty()) {
+    return absl::OkStatus();
+  }
+  
+  // 1. Read original file
+  std::ifstream input(filename);
+  if (!input.good()) {
+    return absl::NotFoundError(absl::StrCat("Cannot open file: ", filename));
+  }
+  std::string content((std::istreambuf_iterator<char>(input)),
+                      std::istreambuf_iterator<char>());
+  input.close();
+  
+  // 2. Create backup
+  std::string backup_path = filename + ".bak";
+  std::ofstream backup(backup_path);
+  if (!backup.good()) {
+    return absl::InternalError(absl::StrCat("Cannot create backup: ", backup_path));
+  }
+  backup << content;
+  backup.close();
+  
+  // 3. Sort modifications in reverse order to preserve offsets
+  auto sorted_mods = modifications;
+  std::sort(sorted_mods.rbegin(), sorted_mods.rend());
+  
+  // 4. Apply modifications in reverse order
+  for (const auto& mod : sorted_mods) {
+    if (mod.start_offset < 0 || mod.end_offset > static_cast<int>(content.length()) ||
+        mod.start_offset > mod.end_offset) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Invalid offset range: ", mod.start_offset, "-", mod.end_offset));
+    }
+    content.replace(mod.start_offset, mod.end_offset - mod.start_offset, mod.replacement_text);
+  }
+  
+  // 5. Write modified content
+  std::ofstream output(filename);
+  if (!output.good()) {
+    return absl::InternalError(absl::StrCat("Cannot write file: ", filename));
+  }
+  output << content;
+  output.close();
+  
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 RefactoringEngine::RefactoringEngine(
