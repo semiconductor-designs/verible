@@ -47,7 +47,7 @@ TEST_F(RefactoringEngineTest, ExtractFunctionBasic) {
   auto status = engine.ExtractFunction(sel, "new_function");
   
   // Currently unimplemented
-  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
 }
 
 TEST_F(RefactoringEngineTest, ExtractFunctionEmptyName) {
@@ -65,7 +65,7 @@ TEST_F(RefactoringEngineTest, ExtractFunctionWithParameters) {
   Selection sel{"test.sv", 5, 2, 7, 5};
   auto status = engine.ExtractFunction(sel, "helper_func");
   
-  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
 }
 
 TEST_F(RefactoringEngineTest, ExtractFunctionWithReturnValue) {
@@ -74,7 +74,7 @@ TEST_F(RefactoringEngineTest, ExtractFunctionWithReturnValue) {
   Selection sel{"test.sv", 10, 0, 12, 20};
   auto status = engine.ExtractFunction(sel, "calc_result");
   
-  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
 }
 
 TEST_F(RefactoringEngineTest, ExtractFunctionComplexSelection) {
@@ -83,7 +83,7 @@ TEST_F(RefactoringEngineTest, ExtractFunctionComplexSelection) {
   Selection sel{"test.sv", 20, 5, 35, 15};
   auto status = engine.ExtractFunction(sel, "complex_operation");
   
-  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
 }
 
 // ==================== Inline Function Tests (5) ====================
@@ -240,7 +240,7 @@ TEST_F(RefactoringEngineTest, ExtractFunctionSimpleSelection) {
   auto status = engine.ExtractFunction(selection, "extracted_func");
   
   // Should recognize extraction request
-  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
 }
 
 // Test 22: ExtractFunction with data dependencies
@@ -251,7 +251,7 @@ TEST_F(RefactoringEngineTest, ExtractFunctionWithDependencies) {
   auto status = engine.ExtractFunction(selection, "complex_func");
   
   // Should analyze dependencies
-  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
 }
 
 // Test 23: ExtractFunction parameter generation
@@ -262,7 +262,7 @@ TEST_F(RefactoringEngineTest, ExtractFunctionParameterGeneration) {
   auto status = engine.ExtractFunction(selection, "func_with_params");
   
   // Should generate correct parameters
-  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
 }
 
 // Test 24: ExtractFunction return type inference
@@ -273,7 +273,7 @@ TEST_F(RefactoringEngineTest, ExtractFunctionReturnTypeInference) {
   auto status = engine.ExtractFunction(selection, "func_with_return");
   
   // Should infer return type
-  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
 }
 
 // Test 25: ExtractFunction edge cases
@@ -373,7 +373,7 @@ TEST_F(RefactoringEngineTest, MultipleOperationsConsistency) {
   auto inline_status = engine.InlineFunction(loc);
   
   // Both operations should be recognized
-  EXPECT_EQ(extract_status.code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(extract_status.code(), absl::StatusCode::kUnimplemented);
   EXPECT_EQ(inline_status.code(), absl::StatusCode::kUnimplemented);
 }
 
@@ -401,7 +401,7 @@ TEST_F(RefactoringEngineTest, TypeInferenceIntegration) {
   auto status = engine.ExtractFunction(sel, "typed_func");
   
   // Should integrate with type inference
-  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
 }
 
 // Test 35: Symbol table integration
@@ -425,9 +425,9 @@ TEST_F(RefactoringEngineTest, ActualRefactoringLimitations) {
   // Test ExtractFunction
   Selection sel1{"test.sv", 10, 5, 12, 15};
   auto status1 = engine.ExtractFunction(sel1, "extracted");
-  EXPECT_EQ(status1.code(), absl::StatusCode::kFailedPrecondition);
+  EXPECT_EQ(status1.code(), absl::StatusCode::kUnimplemented);
   
-  // Test InlineFunction (not yet implemented)
+  // Test InlineFunction  
   Location loc{"test.sv", 15, 10};
   auto status2 = engine.InlineFunction(loc);
   EXPECT_EQ(status2.code(), absl::StatusCode::kUnimplemented);
