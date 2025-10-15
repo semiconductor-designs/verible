@@ -60,6 +60,27 @@ cc_test(
 )
 
 cc_library(
+    name = "unused-detector",
+    srcs = ["unused-detector.cc"],
+    hdrs = ["unused-detector.h"],
+    deps = [
+        ":symbol-table",
+    ],
+)
+
+cc_test(
+    name = "unused-detector_test",
+    srcs = ["unused-detector_test.cc"],
+    deps = [
+        ":symbol-table",
+        ":unused-detector",
+        ":verilog-project",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "default-rules",
     hdrs = ["default-rules.h"],
     deps = [
