@@ -93,8 +93,15 @@ TEST(LetPropertyTest, LetComplexExpression) {
 }
 
 // Test 6: Let in sequence
-// Note: Skipped - Verible has limited support for standalone sequence declarations
-// The core `let` functionality works in properties which is sufficient for Phase 40
+TEST(LetPropertyTest, LetInSequence) {
+  verible::TestParserAcceptValid<VerilogAnalyzer>(
+      "module m;\n"
+      "  sequence s;\n"
+      "    let double(x) = x * 2;\n"
+      "    a until b;\n"
+      "  endsequence\n"
+      "endmodule\n", 4006);
+}
 
 // Test 7: Let with variables before and after
 TEST(LetPropertyTest, LetMixedWithVariables) {
