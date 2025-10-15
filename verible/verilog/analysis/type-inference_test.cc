@@ -186,6 +186,177 @@ TEST_F(TypeInferenceTest, ConditionalExpressionType) {
   EXPECT_NE(&inference, nullptr);
 }
 
+// Week 2 Enhanced Tests
+
+// Test type equality with different configurations
+TEST_F(TypeInferenceTest, TypeEqualityComprehensive) {
+  Type t1 = MakeLogicType(8, false);
+  Type t2 = MakeLogicType(8, false);
+  Type t3 = MakeLogicType(8, true);  // signed
+  Type t4 = MakeLogicType(16, false);  // different width
+  
+  EXPECT_EQ(t1, t2);  // Same type
+  EXPECT_NE(t1, t3);  // Different signedness
+  EXPECT_NE(t1, t4);  // Different width
+}
+
+// Test type width for various types
+TEST_F(TypeInferenceTest, TypeWidthVariety) {
+  EXPECT_EQ(MakeLogicType(1).GetWidth(), 1);
+  EXPECT_EQ(MakeLogicType(8).GetWidth(), 8);
+  EXPECT_EQ(MakeLogicType(32).GetWidth(), 32);
+  EXPECT_EQ(MakeLogicType(64).GetWidth(), 64);
+  EXPECT_EQ(MakeIntType().GetWidth(), 32);
+}
+
+// Test type compatibility matrix
+TEST_F(TypeInferenceTest, TypeCompatibilityMatrix) {
+  Type logic8 = MakeLogicType(8);
+  Type logic16 = MakeLogicType(16);
+  Type bit8 = MakeBitType(8);
+  Type int32 = MakeIntType();
+  Type real_type = MakeRealType();
+  Type string_type = MakeStringType();
+  
+  // Same width logic/bit are compatible
+  EXPECT_TRUE(logic8.IsAssignableFrom(bit8));
+  
+  // Wider can accept narrower
+  EXPECT_TRUE(logic16.IsAssignableFrom(logic8));
+  
+  // Real can accept integer
+  EXPECT_TRUE(real_type.IsAssignableFrom(int32));
+  
+  // String is isolated
+  EXPECT_FALSE(string_type.IsAssignableFrom(int32));
+  EXPECT_FALSE(int32.IsAssignableFrom(string_type));
+}
+
+// Test user-defined types
+TEST_F(TypeInferenceTest, UserDefinedTypeHandling) {
+  Type my_struct = MakeUserDefinedType("my_struct_t");
+  Type other_struct = MakeUserDefinedType("other_struct_t");
+  Type same_struct = MakeUserDefinedType("my_struct_t");
+  
+  // Same name = compatible
+  EXPECT_TRUE(my_struct.IsAssignableFrom(same_struct));
+  
+  // Different name = incompatible
+  EXPECT_FALSE(my_struct.IsAssignableFrom(other_struct));
+}
+
+// Test ToString for various types
+TEST_F(TypeInferenceTest, ToStringComprehensive) {
+  EXPECT_EQ(MakeLogicType(1).ToString(), "logic[0:0]");
+  EXPECT_EQ(MakeLogicType(8).ToString(), "logic[7:0]");
+  EXPECT_EQ(MakeLogicType(16, true).ToString(), "signed logic[15:0]");
+  EXPECT_EQ(MakeBitType(4).ToString(), "bit[3:0]");
+  EXPECT_EQ(MakeIntType().ToString(), "int[31:0]");
+  EXPECT_EQ(MakeRealType().ToString(), "real");
+  EXPECT_EQ(MakeStringType().ToString(), "string");
+}
+
+// Test type properties comprehensively
+TEST_F(TypeInferenceTest, TypePropertiesComplete) {
+  Type logic_type = MakeLogicType(8);
+  Type int_type = MakeIntType();
+  Type real_type = MakeRealType();
+  Type string_type = MakeStringType();
+  
+  // Logic type
+  EXPECT_TRUE(logic_type.IsIntegral());
+  EXPECT_TRUE(logic_type.IsNumeric());
+  EXPECT_TRUE(logic_type.Is4State());
+  EXPECT_FALSE(logic_type.Is2State());
+  EXPECT_FALSE(logic_type.IsReal());
+  
+  // Int type
+  EXPECT_TRUE(int_type.IsIntegral());
+  EXPECT_TRUE(int_type.IsNumeric());
+  EXPECT_TRUE(int_type.Is2State());
+  EXPECT_FALSE(int_type.Is4State());
+  
+  // Real type
+  EXPECT_FALSE(real_type.IsIntegral());
+  EXPECT_TRUE(real_type.IsNumeric());
+  EXPECT_TRUE(real_type.IsReal());
+  
+  // String type
+  EXPECT_FALSE(string_type.IsIntegral());
+  EXPECT_FALSE(string_type.IsNumeric());
+  EXPECT_FALSE(string_type.IsReal());
+}
+
+// Test cache functionality
+TEST_F(TypeInferenceTest, CacheFunctionality) {
+  TypeInference inference(symbol_table_.get());
+  
+  // Verify cache starts empty
+  const auto& stats1 = inference.GetStats();
+  EXPECT_EQ(stats1.cache_hits, 0);
+  EXPECT_EQ(stats1.cache_misses, 0);
+  
+  // Clear cache
+  inference.ClearCache();
+  
+  // Verify stats reset
+  const auto& stats2 = inference.GetStats();
+  EXPECT_EQ(stats2.cache_hits, 0);
+  EXPECT_EQ(stats2.cache_misses, 0);
+  EXPECT_EQ(stats2.total_inferences, 0);
+}
+
+// Test API stability
+TEST_F(TypeInferenceTest, APIStability) {
+  TypeInference inference(symbol_table_.get());
+  
+  // Verify all main APIs are accessible
+  const auto& stats = inference.GetStats();
+  EXPECT_GE(stats.total_inferences, 0);
+  
+  // Verify cache clear works
+  inference.ClearCache();
+  
+  // Verify construction works
+  EXPECT_NE(&inference, nullptr);
+}
+
+// Test type dimension handling
+TEST_F(TypeInferenceTest, TypeDimensions) {
+  Type t1 = MakeLogicType(8);
+  ASSERT_EQ(t1.dimensions.size(), 1);
+  EXPECT_EQ(t1.dimensions[0], 8);
+  
+  // Multi-dimensional (simulated)
+  Type t2 = MakeLogicType(8);
+  t2.dimensions.push_back(4);  // [3:0][7:0]
+  EXPECT_EQ(t2.GetWidth(), 32);  // 4 * 8
+}
+
+// Test type construction methods
+TEST_F(TypeInferenceTest, TypeConstructionMethods) {
+  // Test all helper functions
+  EXPECT_NO_THROW(MakeLogicType(8));
+  EXPECT_NO_THROW(MakeLogicType(16, true));
+  EXPECT_NO_THROW(MakeBitType(32));
+  EXPECT_NO_THROW(MakeIntType());
+  EXPECT_NO_THROW(MakeRealType());
+  EXPECT_NO_THROW(MakeStringType());
+  EXPECT_NO_THROW(MakeUserDefinedType("test"));
+}
+
+// Test edge cases
+TEST_F(TypeInferenceTest, EdgeCases) {
+  // Zero-width type (edge case)
+  Type t1(PrimitiveType::kLogic);
+  EXPECT_EQ(t1.GetWidth(), 1);  // Default 1-bit
+  
+  // Unknown type
+  Type t2(PrimitiveType::kUnknown);
+  EXPECT_TRUE(t2.IsUnknown());
+  EXPECT_FALSE(t2.IsNumeric());
+}
+
 }  // namespace
 }  // namespace analysis
 }  // namespace verilog
