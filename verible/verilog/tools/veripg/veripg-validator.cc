@@ -132,26 +132,59 @@ absl::Status VeriPGValidator::ValidateTypes(
 
 absl::Status VeriPGValidator::ValidateNamingConventions(
     const verilog::SymbolTable& symbol_table) {
-  // Naming convention validation implementation
-  // VeriPG conventions:
-  // - Module names: lowercase_with_underscores
-  // - Signal names: descriptive, not single char (except i,j for loops)
-  // - Parameters: UPPERCASE_WITH_UNDERSCORES
-  // - Constants: UPPERCASE
-  
   std::vector<std::string> naming_warnings;
   
-  // Walk symbol table checking naming patterns
-  // This is a framework demonstrating the validation pattern
-  // Full implementation would:
-  // 1. Traverse symbol table nodes
-  // 2. Check each symbol against naming rules
-  // 3. Collect warnings for violations
+  // ACTUAL IMPLEMENTATION: Walk symbol table and validate naming conventions
+  std::function<void(const SymbolTableNode&)> ValidateNode;
+  ValidateNode = [&](const SymbolTableNode& node) {
+    const auto* key_ptr = node.Key();
+    if (!key_ptr) return;
+    std::string name(*key_ptr);
+    
+    const auto& info = node.Value();
+    
+    // Check naming based on symbol type
+    switch (info.metatype) {
+      case SymbolMetaType::kModule:
+        if (!IsValidModuleName(name)) {
+          naming_warnings.push_back(
+              absl::StrCat("Module '", name, 
+                          "' should use lowercase_with_underscores"));
+        }
+        break;
+        
+      case SymbolMetaType::kParameter:
+        if (!IsValidParameterName(name)) {
+          naming_warnings.push_back(
+              absl::StrCat("Parameter '", name, "' should be UPPERCASE"));
+        }
+        break;
+        
+      case SymbolMetaType::kDataNetVariableInstance:
+        if (!IsDescriptiveName(name)) {
+          naming_warnings.push_back(
+              absl::StrCat("Variable '", name, 
+                          "' should be descriptive (2+ characters)"));
+        }
+        break;
+        
+      default:
+        // Other symbol types don't have strict naming requirements
+        break;
+    }
+    
+    // Recursively validate children
+    for (const auto& [child_key, child_node] : node.Children()) {
+      ValidateNode(child_node);
+    }
+  };
   
-  // For now, return success as tests verify framework integration
+  // Start validation from root
+  ValidateNode(symbol_table.Root());
+  
   if (!naming_warnings.empty()) {
     return absl::InvalidArgumentError(
-        absl::StrCat("Found ", naming_warnings.size(), " naming issues"));
+        absl::StrCat("Found ", naming_warnings.size(), " naming violations"));
   }
   
   return absl::OkStatus();
