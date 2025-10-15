@@ -387,6 +387,18 @@ cc_test(
     ],
 )
 
+# M3 Final: Member capture in expression contexts (completes M3 100%)
+cc_test(
+    name = "verilog-parser-matches-capture_test",
+    srcs = ["verilog-parser-matches-capture_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
 # M11 Feature 2: checker instantiation (TDD)
 cc_test(
     name = "verilog-parser-checker-inst_test",

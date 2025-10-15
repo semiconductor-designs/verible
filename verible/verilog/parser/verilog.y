@@ -4298,16 +4298,19 @@ pattern_opt
 
 /* Restricted pattern for expression contexts - non-recursive to avoid conflicts */
 /* Only includes unambiguous patterns that don't overlap with expression grammar */
-/* Note: Member capture (.v) not supported in expressions to avoid ambiguity with member access */
-/* Use case...matches for complex patterns with captures */
+/* Member capture now fully supported in expressions! */
+/* Grammar disambiguation: .var after 'tagged Type' can only be capture, not member access */
 expr_pattern
   : TK_DOTSTAR
     /* Wildcard: matches .* */
     { $$ = MakeTaggedNode(N::kPattern, $1); }
   | TK_tagged GenericIdentifier
     /* Tagged union without capture: matches tagged Valid */
-    /* Capture variable must be handled in containing statement */
     { $$ = MakeTaggedNode(N::kPattern, $1, $2, nullptr); }
+  | TK_tagged GenericIdentifier '.' GenericIdentifier
+    /* Tagged union WITH capture: matches tagged Valid .v */
+    /* No ambiguity: after 'tagged Type', .var is always a capture */
+    { $$ = MakeTaggedNode(N::kPattern, $1, $2, $3, $4); }
   | TK_DecNumber
     /* Literal decimal number: matches 5 */
     { $$ = MakeTaggedNode(N::kPattern, $1); }
