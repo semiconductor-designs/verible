@@ -310,8 +310,11 @@ absl::Status ApplyTextModifications(
 
 RefactoringEngine::RefactoringEngine(
     const verilog::SymbolTable* symbol_table,
-    const verilog::analysis::TypeInference* type_inference)
-    : symbol_table_(symbol_table), type_inference_(type_inference) {}
+    const verilog::analysis::TypeInference* type_inference,
+    const VerilogProject* project)
+    : symbol_table_(symbol_table),
+      type_inference_(type_inference),
+      project_(project) {}
 
 absl::Status RefactoringEngine::ExtractFunction(
     const Selection& selection,

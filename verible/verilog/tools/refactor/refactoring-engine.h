@@ -43,9 +43,11 @@ struct Location {
 // RefactoringEngine provides advanced code transformations
 class RefactoringEngine {
  public:
-  // Construct with symbol table and type inference
-  explicit RefactoringEngine(const verilog::SymbolTable* symbol_table,
-                              const verilog::analysis::TypeInference* type_inference);
+  // Construct with symbol table, type inference, and optional project for file access
+  explicit RefactoringEngine(
+      const verilog::SymbolTable* symbol_table,
+      const verilog::analysis::TypeInference* type_inference,
+      const class VerilogProject* project = nullptr);
 
   // Extract selected code into new function
   absl::Status ExtractFunction(const Selection& selection,
@@ -64,6 +66,7 @@ class RefactoringEngine {
  private:
   const verilog::SymbolTable* symbol_table_;
   const verilog::analysis::TypeInference* type_inference_;
+  const class VerilogProject* project_;
 };
 
 }  // namespace tools
