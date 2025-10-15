@@ -92,6 +92,40 @@ VerilogPreprocess::ExtractMacroName(const StreamIteratorGenerator &generator) {
   return token_iter;
 }
 
+// Extract expression from `ifdef (expression) for SV-2023 enhanced preprocessor
+// NOTE: Opening '(' has already been consumed by caller
+absl::StatusOr<std::string> VerilogPreprocess::ExtractConditionalExpression(
+    const StreamIteratorGenerator& generator) {
+  std::string expr_text;
+  
+  // Extract tokens until matching ')' (opening '(' already consumed)
+  int paren_depth = 1;
+  while (paren_depth > 0) {
+    auto token_iter = GenerateBypassWhiteSpaces(generator);
+    if ((*token_iter)->isEOF()) {
+      return absl::InvalidArgumentError("Unexpected EOF in ifdef expression");
+    }
+    
+    if ((*token_iter)->token_enum() == '(') {
+      paren_depth++;
+      if (!expr_text.empty()) expr_text += " ";
+      expr_text += "(";
+    } else if ((*token_iter)->token_enum() == ')') {
+      paren_depth--;
+      if (paren_depth > 0) {
+        if (!expr_text.empty()) expr_text += " ";
+        expr_text += ")";
+      }
+    } else {
+      // Append token text with space separator
+      if (!expr_text.empty()) expr_text += " ";
+      expr_text += std::string((*token_iter)->text());
+    }
+  }
+  
+  return expr_text;
+}
+
 // Copies `define token iterators into a temporary buffer.
 // Assumes that the last token of a definition is the un-lexed definition body.
 // Tokens are copied from the 'generator' into 'define_tokens'.
@@ -500,15 +534,50 @@ absl::Status VerilogPreprocess::HandleIf(
     return absl::OkStatus();
   }
 
-  auto macro_name_extract = ExtractMacroName(generator);
-  if (!macro_name_extract.ok()) {
-    return macro_name_extract.status();
+  bool condition_met;
+
+  // Peek to check if next token is '(' (SV-2023 expression syntax)
+  auto next_token = GenerateBypassWhiteSpaces(generator);
+  
+  if ((*next_token)->token_enum() == '(') {
+    // SV-2023: Extract and evaluate expression
+    auto expr_result = ExtractConditionalExpression(generator);
+    if (!expr_result.ok()) {
+      preprocess_data_.errors.emplace_back(**ifpos, std::string(expr_result.status().message()));
+      return expr_result.status();
+    }
+    
+    // Build defined_macros map for evaluator
+    std::map<std::string_view, bool> defined_map;
+    for (const auto& def : preprocess_data_.macro_definitions) {
+      defined_map[def.first] = true;
+    }
+    
+    // Evaluate expression
+    auto eval_result = EvaluatePreprocessorExpression(*expr_result, defined_map);
+    if (!eval_result.ok()) {
+      preprocess_data_.errors.emplace_back(**ifpos, std::string(eval_result.status().message()));
+      return eval_result.status();
+    }
+    
+    condition_met = *eval_result;
+  } else {
+    // Original logic for simple macro name (identifier already consumed in next_token)
+    if ((*next_token)->isEOF()) {
+      preprocess_data_.errors.emplace_back(**next_token, "unexpected EOF where expecting macro name");
+      return absl::InvalidArgumentError("Unexpected EOF");
+    }
+    if ((*next_token)->token_enum() != PP_Identifier) {
+      preprocess_data_.errors.emplace_back(**next_token,
+          absl::StrCat("Expected identifier for macro name, but got \"", (*next_token)->text(), "...\""));
+      return absl::InvalidArgumentError("macro name expected");
+    }
+    const auto &macro_name = *next_token;
+    const bool negative_if = (*ifpos)->token_enum() == PP_ifndef;
+    const auto &defs = preprocess_data_.macro_definitions;
+    const bool name_is_defined = defs.find(macro_name->text()) != defs.end();
+    condition_met = (name_is_defined ^ negative_if);
   }
-  const auto &macro_name = *macro_name_extract.value();
-  const bool negative_if = (*ifpos)->token_enum() == PP_ifndef;
-  const auto &defs = preprocess_data_.macro_definitions;
-  const bool name_is_defined = defs.find(macro_name->text()) != defs.end();
-  const bool condition_met = (name_is_defined ^ negative_if);
 
   if ((*ifpos)->token_enum() == PP_elsif) {
     if (conditional_block_.size() <= 1) {

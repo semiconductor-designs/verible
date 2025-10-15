@@ -22,56 +22,68 @@
 namespace verilog {
 namespace {
 
+// Config with branch filtering enabled (required for expression-based ifdef)
+static constexpr VerilogPreprocess::Config kPreprocessConfig{
+    .filter_branches = true,
+};
+
+// Helper to test code with preprocessor enabled
+void TestWithPreprocessor(const char* code) {
+  VerilogAnalyzer analyzer(code, "<<inline-test>>", kPreprocessConfig);
+  EXPECT_TRUE(analyzer.Analyze().ok()) << "Failed to analyze:\n" << code;
+  EXPECT_NE(analyzer.SyntaxTree().get(), nullptr) << "Missing tree for:\n" << code;
+}
+
 // Test 1: Logical AND
 TEST(EnhancedPreprocessorTest, LogicalAnd) {
-  verible::TestParserAcceptValid<VerilogAnalyzer>(
+  TestWithPreprocessor(
     "`define A\n"
     "`define B\n"
     "`ifdef (A && B)\n"
     "  module m; endmodule\n"
-    "`endif\n", 5021);
+    "`endif\n");
 }
 
 // Test 2: Logical OR
 TEST(EnhancedPreprocessorTest, LogicalOr) {
-  verible::TestParserAcceptValid<VerilogAnalyzer>(
+  TestWithPreprocessor(
     "`define A\n"
     "`ifdef (A || B)\n"
     "  module m; endmodule\n"
-    "`endif\n", 5022);
+    "`endif\n");
 }
 
 // Test 3: Logical NOT
 TEST(EnhancedPreprocessorTest, LogicalNot) {
-  verible::TestParserAcceptValid<VerilogAnalyzer>(
+  TestWithPreprocessor(
     "`ifdef (!UNDEFINED)\n"
     "  module m; endmodule\n"
-    "`endif\n", 5023);
+    "`endif\n");
 }
 
 // Test 4: Implication
 TEST(EnhancedPreprocessorTest, Implication) {
-  verible::TestParserAcceptValid<VerilogAnalyzer>(
+  TestWithPreprocessor(
     "`define MODE\n"
     "`ifdef (MODE -> ADVANCED)\n"
     "  module m; endmodule\n"
-    "`endif\n", 5024);
+    "`endif\n");
 }
 
 // Test 5: Equivalence
 TEST(EnhancedPreprocessorTest, Equivalence) {
-  verible::TestParserAcceptValid<VerilogAnalyzer>(
+  TestWithPreprocessor(
     "`ifdef (A <-> B)\n"
     "  module m; endmodule\n"
-    "`endif\n", 5025);
+    "`endif\n");
 }
 
 // Test 6: Complex expression
 TEST(EnhancedPreprocessorTest, ComplexExpression) {
-  verible::TestParserAcceptValid<VerilogAnalyzer>(
+  TestWithPreprocessor(
     "`ifdef ((A && B) || (!C))\n"
     "  module m; endmodule\n"
-    "`endif\n", 5026);
+    "`endif\n");
 }
 
 }  // namespace

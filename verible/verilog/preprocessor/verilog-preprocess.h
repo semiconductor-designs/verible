@@ -148,6 +148,10 @@ class VerilogPreprocess {
   absl::StatusOr<TokenStreamView::const_iterator> ExtractMacroName(
       const StreamIteratorGenerator &);
 
+  // Extract conditional expression from `ifdef (expression) for SV-2023
+  absl::StatusOr<std::string> ExtractConditionalExpression(
+      const StreamIteratorGenerator&);
+
   absl::Status HandleTokenIterator(TokenStreamView::const_iterator,
                                    const StreamIteratorGenerator &);
   absl::Status HandleMacroIdentifier(TokenStreamView::const_iterator,
