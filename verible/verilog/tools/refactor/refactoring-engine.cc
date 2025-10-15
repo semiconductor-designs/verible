@@ -14,15 +14,71 @@
 
 #include "verible/verilog/tools/refactor/refactoring-engine.h"
 
+#include <set>
 #include <string>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
+#include "verible/common/text/symbol.h"
+#include "verible/common/util/tree-operations.h"
 #include "verible/verilog/analysis/symbol-table.h"
 #include "verible/verilog/analysis/type-inference.h"
 
 namespace verilog {
 namespace tools {
+
+namespace {
+// Data flow analysis helper for extract function
+struct DataFlowInfo {
+  std::set<std::string> variables_read;    // Input parameters
+  std::set<std::string> variables_written; // Return values
+  std::set<std::string> variables_local;   // Declared within selection
+};
+
+// Helper: Analyze data flow in selected CST region
+DataFlowInfo AnalyzeDataFlow(const verible::Symbol* cst_region) {
+  DataFlowInfo info;
+  
+  // Full implementation would:
+  // 1. Traverse CST tree for selected region
+  // 2. Identify all identifiers (variables)
+  // 3. Classify each as:
+  //    - Read: identifier on RHS of assignment
+  //    - Written: identifier on LHS of assignment
+  //    - Local: declared within region
+  // 4. External reads become function parameters
+  // 5. External writes become return values
+  
+  // Pattern for CST traversal:
+  // for (const auto& node : cst_region->children()) {
+  //   if (IsAssignment(node)) {
+  //     auto lhs = GetLHS(node);
+  //     auto rhs = GetRHS(node);
+  //     info.variables_written.insert(GetIdentifier(lhs));
+  //     ExtractReads(rhs, info.variables_read);
+  //   }
+  //   else if (IsDeclaration(node)) {
+  //     info.variables_local.insert(GetIdentifier(node));
+  //   }
+  // }
+  
+  return info;
+}
+
+// Helper: Generate function signature from data flow
+std::string GenerateFunctionSignature(
+    const std::string& func_name,
+    const DataFlowInfo& flow) {
+  // Full implementation would generate:
+  // function [return_type] func_name(input_types params);
+  //   
+  // Example output:
+  // "function int calculate(int a, int b)"
+  
+  return "function void " + func_name + "()";
+}
+}  // namespace
 
 RefactoringEngine::RefactoringEngine(
     const verilog::SymbolTable* symbol_table,

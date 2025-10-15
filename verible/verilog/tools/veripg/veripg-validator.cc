@@ -14,16 +14,49 @@
 
 #include "verible/verilog/tools/veripg/veripg-validator.h"
 
+#include <cctype>
+#include <functional>
 #include <string>
 #include <vector>
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
+#include "verible/common/text/symbol.h"
+#include "verible/common/util/tree-operations.h"
 #include "verible/verilog/analysis/symbol-table.h"
 #include "verible/verilog/analysis/type-checker.h"
 
 namespace verilog {
 namespace tools {
+
+namespace {
+// Helper: Check if name follows lowercase_with_underscores convention
+bool IsValidModuleName(const std::string& name) {
+  if (name.empty()) return false;
+  for (char c : name) {
+    if (!std::islower(c) && c != '_' && !std::isdigit(c)) return false;
+  }
+  return true;
+}
+
+// Helper: Check if name follows UPPERCASE convention
+bool IsValidParameterName(const std::string& name) {
+  if (name.empty()) return false;
+  for (char c : name) {
+    if (!std::isupper(c) && c != '_' && !std::isdigit(c)) return false;
+  }
+  return true;
+}
+
+// Helper: Check if variable name is descriptive (not single char)
+bool IsDescriptiveName(const std::string& name) {
+  // Allow common single-char names: i, j, k for loops
+  if (name.length() == 1) {
+    return name == "i" || name == "j" || name == "k";
+  }
+  return name.length() >= 2;
+}
+}  // namespace
 
 VeriPGValidator::VeriPGValidator(
     const verilog::analysis::TypeChecker* type_checker)
