@@ -388,13 +388,42 @@ const Type* TypeInference::InferIdentifier(const verible::Symbol& id) const {
   // Extract identifier name
   std::string id_name(verible::StringSpanOfSymbol(id));
 
-  // Simplified: return 32-bit logic for identifiers
-  // Full implementation would look up symbol in symbol table
-  // and return its declared type
+  // Look up in symbol table if available
+  if (symbol_table_) {
+    // Search for the identifier in the symbol table
+    // Start from root and traverse to find it
+    const SymbolTableNode* found_node = FindIdentifierInSymbolTable(
+        symbol_table_->Root(), id_name);
+    
+    if (found_node) {
+      // Found the declaration - get its type
+      return GetDeclaredType(*found_node);
+    }
+  }
+  
+  // Fall back: return 32-bit logic if not found
   auto result = std::make_unique<Type>();
   result->base_type = PrimitiveType::kLogic;
   result->dimensions = {32};
   return StoreInCache(expr_cache_, &id, std::move(result));
+}
+
+const SymbolTableNode* TypeInference::FindIdentifierInSymbolTable(
+    const SymbolTableNode& node, const std::string& name) const {
+  // Check if this node's key matches
+  const auto* key = node.Key();
+  if (key && *key == name) {
+    return &node;
+  }
+  
+  // Recursively search children
+  for (const auto& child : node) {
+    const SymbolTableNode* found = FindIdentifierInSymbolTable(
+        child.second, name);
+    if (found) return found;
+  }
+  
+  return nullptr;
 }
 
 const Type* TypeInference::InferConcat(const verible::Symbol& concat) const {

@@ -93,6 +93,10 @@ class TypeInference {
 
   // Infer type from an identifier by looking up in symbol table
   const Type* InferIdentifier(const verible::Symbol& id) const;
+  
+  // Helper: Search symbol table for identifier
+  const SymbolTableNode* FindIdentifierInSymbolTable(
+      const SymbolTableNode& node, const std::string& name) const;
 
   // Infer type from concatenation expression: {a, b, c}
   const Type* InferConcat(const verible::Symbol& concat) const;
