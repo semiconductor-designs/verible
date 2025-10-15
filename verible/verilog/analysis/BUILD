@@ -81,6 +81,33 @@ cc_test(
 )
 
 cc_library(
+    name = "type-checker",
+    srcs = ["type-checker.cc"],
+    hdrs = ["type-checker.h"],
+    deps = [
+        ":symbol-table",
+        ":type-inference",
+        ":type-representation",
+        "//verible/common/text:symbol",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "type-checker_test",
+    srcs = ["type-checker_test.cc"],
+    deps = [
+        ":symbol-table",
+        ":type-checker",
+        ":type-inference",
+        ":verilog-project",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "default-rules",
     hdrs = ["default-rules.h"],
     deps = [

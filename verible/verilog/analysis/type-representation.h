@@ -93,6 +93,8 @@ struct Type {
   bool IsReal() const;
   bool IsNet() const;
   bool IsUnknown() const { return base_type == PrimitiveType::kUnknown; }
+  bool IsString() const { return base_type == PrimitiveType::kString; }
+  bool IsUserDefined() const { return base_type == PrimitiveType::kUserDefined; }
   
   // Get bit width of the type
   int GetWidth() const;

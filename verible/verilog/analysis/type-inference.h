@@ -43,23 +43,23 @@ class TypeInference {
   // Infer the type of an expression from the CST.
   // Returns nullptr if type cannot be inferred.
   // Results are cached for performance.
-  const Type* InferType(const verible::Symbol& expr);
+  const Type* InferType(const verible::Symbol& expr) const;
 
   // Get the declared type of a symbol from the symbol table.
   // Returns nullptr if symbol has no declared type.
   // Results are cached for performance.
-  const Type* GetDeclaredType(const SymbolTableNode& symbol);
+  const Type* GetDeclaredType(const SymbolTableNode& symbol) const;
 
   // Infer type of a binary operation.
   // Returns the result type of (lhs op rhs).
   const Type* InferBinaryOp(const verible::Symbol& lhs,
                             const verible::Symbol& rhs,
-                            const verible::TokenInfo& op);
+                            const verible::TokenInfo& op) const;
 
   // Infer type of a unary operation.
   // Returns the result type of (op expr).
   const Type* InferUnaryOp(const verible::Symbol& expr,
-                           const verible::TokenInfo& op);
+                           const verible::TokenInfo& op) const;
 
   // Clear all caches. Call this if the symbol table is rebuilt.
   void ClearCache();
@@ -78,10 +78,10 @@ class TypeInference {
 
   // Cache: expression symbol -> inferred type
   // Key is the address of the Symbol node
-  std::map<const verible::Symbol*, std::unique_ptr<Type>> expr_cache_;
+  mutable std::map<const verible::Symbol*, std::unique_ptr<Type>> expr_cache_;
 
   // Cache: symbol table node -> declared type
-  std::map<const SymbolTableNode*, std::unique_ptr<Type>> decl_cache_;
+  mutable std::map<const SymbolTableNode*, std::unique_ptr<Type>> decl_cache_;
 
   // Statistics
   mutable Stats stats_;
@@ -89,28 +89,28 @@ class TypeInference {
   // Internal inference methods (not cached)
 
   // Infer type from a literal token
-  Type InferLiteral(const verible::TokenInfo& token);
+  Type InferLiteral(const verible::TokenInfo& token) const;
 
   // Infer type from an identifier by looking up in symbol table
-  const Type* InferIdentifier(const verible::Symbol& id);
+  const Type* InferIdentifier(const verible::Symbol& id) const;
 
   // Infer type from concatenation expression: {a, b, c}
-  const Type* InferConcat(const verible::Symbol& concat);
+  const Type* InferConcat(const verible::Symbol& concat) const;
 
   // Infer type from replication: {N{a}}
-  const Type* InferReplication(const verible::Symbol& replication);
+  const Type* InferReplication(const verible::Symbol& replication) const;
 
   // Infer type from bit/part select: a[3:0]
-  const Type* InferSelect(const verible::Symbol& select);
+  const Type* InferSelect(const verible::Symbol& select) const;
 
   // Infer type from function call
-  const Type* InferFunctionCall(const verible::Symbol& call);
+  const Type* InferFunctionCall(const verible::Symbol& call) const;
 
   // Infer type from conditional expression: cond ? a : b
-  const Type* InferConditional(const verible::Symbol& conditional);
+  const Type* InferConditional(const verible::Symbol& conditional) const;
 
   // Extract type information from DeclarationTypeInfo
-  Type ExtractDeclaredType(const DeclarationTypeInfo& type_info);
+  Type ExtractDeclaredType(const DeclarationTypeInfo& type_info) const;
 
   // Helper: Check cache, return cached value if found
   template <typename KeyType>
@@ -129,7 +129,7 @@ class TypeInference {
   // Helper: Store in cache
   template <typename KeyType>
   const Type* StoreInCache(std::map<KeyType, std::unique_ptr<Type>>& cache,
-                           KeyType key, std::unique_ptr<Type> type) {
+                           KeyType key, std::unique_ptr<Type> type) const {
     const Type* result = type.get();
     cache[key] = std::move(type);
     return result;

@@ -30,7 +30,7 @@ namespace analysis {
 TypeInference::TypeInference(const SymbolTable* symbol_table)
     : symbol_table_(symbol_table) {}
 
-const Type* TypeInference::InferType(const verible::Symbol& expr) {
+const Type* TypeInference::InferType(const verible::Symbol& expr) const {
   stats_.total_inferences++;
 
   // Check cache first
@@ -91,7 +91,7 @@ const Type* TypeInference::InferType(const verible::Symbol& expr) {
   return nullptr;
 }
 
-const Type* TypeInference::GetDeclaredType(const SymbolTableNode& symbol) {
+const Type* TypeInference::GetDeclaredType(const SymbolTableNode& symbol) const {
   // Check cache first
   const Type* cached = CheckCache(decl_cache_, &symbol);
   if (cached) return cached;
@@ -104,7 +104,7 @@ const Type* TypeInference::GetDeclaredType(const SymbolTableNode& symbol) {
 
 const Type* TypeInference::InferBinaryOp(const verible::Symbol& lhs,
                                          const verible::Symbol& rhs,
-                                         const verible::TokenInfo& op) {
+                                         const verible::TokenInfo& op) const {
   const Type* lhs_type = InferType(lhs);
   const Type* rhs_type = InferType(rhs);
 
@@ -176,7 +176,7 @@ const Type* TypeInference::InferBinaryOp(const verible::Symbol& lhs,
 }
 
 const Type* TypeInference::InferUnaryOp(const verible::Symbol& expr,
-                                        const verible::TokenInfo& op) {
+                                        const verible::TokenInfo& op) const {
   const Type* operand_type = InferType(expr);
   if (!operand_type) {
     auto unknown = std::make_unique<Type>();
@@ -221,7 +221,7 @@ void TypeInference::ClearCache() {
   stats_ = Stats();
 }
 
-Type TypeInference::InferLiteral(const verible::TokenInfo& token) {
+Type TypeInference::InferLiteral(const verible::TokenInfo& token) const {
   Type type;
 
   // Simplified literal inference
@@ -251,7 +251,7 @@ Type TypeInference::InferLiteral(const verible::TokenInfo& token) {
   return type;
 }
 
-const Type* TypeInference::InferIdentifier(const verible::Symbol& id) {
+const Type* TypeInference::InferIdentifier(const verible::Symbol& id) const {
   // Extract identifier name
   std::string id_name(verible::StringSpanOfSymbol(id));
 
@@ -264,7 +264,7 @@ const Type* TypeInference::InferIdentifier(const verible::Symbol& id) {
   return StoreInCache(expr_cache_, &id, std::move(result));
 }
 
-const Type* TypeInference::InferConcat(const verible::Symbol& concat) {
+const Type* TypeInference::InferConcat(const verible::Symbol& concat) const {
   // Concatenation {a, b, c} - sum of all widths
   // Simplified: return 32-bit logic for concatenations
   // Full implementation would traverse children and sum widths
@@ -274,7 +274,7 @@ const Type* TypeInference::InferConcat(const verible::Symbol& concat) {
   return StoreInCache(expr_cache_, &concat, std::move(result));
 }
 
-const Type* TypeInference::InferReplication(const verible::Symbol& replication) {
+const Type* TypeInference::InferReplication(const verible::Symbol& replication) const {
   // Replication {N{a}} - width is N * width(a)
   // Simplified: return 32-bit logic for replications
   // Full implementation would evaluate count and multiply by expression width
@@ -284,7 +284,7 @@ const Type* TypeInference::InferReplication(const verible::Symbol& replication) 
   return StoreInCache(expr_cache_, &replication, std::move(result));
 }
 
-const Type* TypeInference::InferSelect(const verible::Symbol& select) {
+const Type* TypeInference::InferSelect(const verible::Symbol& select) const {
   // Bit/part select: a[3:0] or a[5]
   // Simplified: return single-bit logic for selects
   // Full implementation would analyze the select range
@@ -294,7 +294,7 @@ const Type* TypeInference::InferSelect(const verible::Symbol& select) {
   return StoreInCache(expr_cache_, &select, std::move(result));
 }
 
-const Type* TypeInference::InferFunctionCall(const verible::Symbol& call) {
+const Type* TypeInference::InferFunctionCall(const verible::Symbol& call) const {
   // Function call - look up function return type
   // Simplified: return 32-bit logic for function calls
   // Full implementation would look up function return type in symbol table
@@ -304,7 +304,7 @@ const Type* TypeInference::InferFunctionCall(const verible::Symbol& call) {
   return StoreInCache(expr_cache_, &call, std::move(result));
 }
 
-const Type* TypeInference::InferConditional(const verible::Symbol& conditional) {
+const Type* TypeInference::InferConditional(const verible::Symbol& conditional) const {
   // Ternary operator: cond ? true_expr : false_expr
   // Result type is the common type of true_expr and false_expr
   // Simplified: return 32-bit logic for conditional expressions
@@ -315,7 +315,7 @@ const Type* TypeInference::InferConditional(const verible::Symbol& conditional) 
   return StoreInCache(expr_cache_, &conditional, std::move(result));
 }
 
-Type TypeInference::ExtractDeclaredType(const DeclarationTypeInfo& type_info) {
+Type TypeInference::ExtractDeclaredType(const DeclarationTypeInfo& type_info) const {
   Type type;
 
   // For now, return a basic logic type
