@@ -108,6 +108,28 @@ cc_test(
 )
 
 cc_library(
+    name = "call-graph",
+    srcs = ["call-graph.cc"],
+    hdrs = ["call-graph.h"],
+    deps = [
+        ":symbol-table",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "call-graph_test",
+    srcs = ["call-graph_test.cc"],
+    deps = [
+        ":call-graph",
+        ":symbol-table",
+        ":verilog-project",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "default-rules",
     hdrs = ["default-rules.h"],
     deps = [
