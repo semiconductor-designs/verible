@@ -483,6 +483,18 @@ cc_test(
     ],
 )
 
+# M14 Week 1: Advanced randsequence (complete feature)
+cc_test(
+    name = "verilog-parser-randsequence-advanced_test",
+    srcs = ["verilog-parser-randsequence-advanced_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
 # M11 Feature 2: checker instantiation (TDD)
 cc_test(
     name = "verilog-parser-checker-inst_test",
