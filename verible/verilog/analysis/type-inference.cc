@@ -534,9 +534,47 @@ const Type* TypeInference::InferSelect(const verible::Symbol& select) const {
 }
 
 const Type* TypeInference::InferFunctionCall(const verible::Symbol& call) const {
-  // Function call - look up function return type
-  // Simplified: return 32-bit logic for function calls
-  // Full implementation would look up function return type in symbol table
+  // Function call - look up function return type in symbol table
+  
+  if (call.Kind() != verible::SymbolKind::kNode) {
+    auto unknown = std::make_unique<Type>();
+    unknown->base_type = PrimitiveType::kUnknown;
+    return StoreInCache(expr_cache_, &call, std::move(unknown));
+  }
+  
+  const auto& node = verible::SymbolCastToNode(call);
+  
+  // Try to extract function name from call expression
+  // Typically the first child is the function identifier
+  std::string func_name;
+  for (const auto& child : node.children()) {
+    if (child && child->Kind() == verible::SymbolKind::kLeaf) {
+      const auto& leaf = verible::SymbolCastToLeaf(*child);
+      func_name = std::string(leaf.get().text());
+      break;
+    } else if (child && child->Kind() == verible::SymbolKind::kNode) {
+      // Could be nested - try to get identifier from subtree
+      func_name = std::string(verible::StringSpanOfSymbol(*child));
+      if (!func_name.empty()) break;
+    }
+  }
+  
+  // Look up function in symbol table if name found
+  if (!func_name.empty() && symbol_table_) {
+    const SymbolTableNode* func_node = FindIdentifierInSymbolTable(
+        symbol_table_->Root(), func_name);
+    
+    if (func_node) {
+      const auto& info = func_node->Value();
+      // Check if it's a function
+      if (info.metatype == SymbolMetaType::kFunction) {
+        // Get the declared return type
+        return GetDeclaredType(*func_node);
+      }
+    }
+  }
+  
+  // Fall back: return 32-bit logic if function not found or not inferrable
   auto result = std::make_unique<Type>();
   result->base_type = PrimitiveType::kLogic;
   result->dimensions = {32};
