@@ -134,12 +134,12 @@ class TypeInference {
 ```
 
 **Effort:** 3-4 weeks  
-**Value:** High (enables all other enhancements)  
+**Value:** Very High (enables all other enhancements)  
 **Status:** ✅ Design complete, API validated, POC working
 
 ---
 
-### 2. UnusedDetector ⭐⭐⭐⭐
+### 2. UnusedDetector ⭐⭐⭐⭐⭐
 
 **Purpose:** Find unused symbols project-wide
 
@@ -156,12 +156,12 @@ class UnusedDetector {
 ```
 
 **Effort:** 1-2 weeks  
-**Value:** High (immediate user benefit)  
+**Value:** Very High (every project needs this)  
 **Status:** ✅ Design complete, straightforward implementation
 
 ---
 
-### 3. TypeChecker ⭐⭐⭐⭐
+### 3. TypeChecker ⭐⭐⭐⭐⭐
 
 **Purpose:** Comprehensive type compatibility checking
 
@@ -178,12 +178,12 @@ class TypeChecker {
 ```
 
 **Effort:** 2-3 weeks  
-**Value:** High (catches type errors)  
+**Value:** Very High (prevents costly bugs)  
 **Status:** ✅ Design complete, depends on TypeInference
 
 ---
 
-### 4. CallGraph ⭐⭐⭐
+### 4. CallGraph ⭐⭐⭐⭐⭐
 
 **Purpose:** Function call relationship analysis
 
@@ -200,7 +200,7 @@ class CallGraph {
 ```
 
 **Effort:** 2 weeks  
-**Value:** Medium (analysis tool)  
+**Value:** High (essential for large projects)  
 **Status:** ✅ Design complete, independent feature
 
 ---

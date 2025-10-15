@@ -692,10 +692,10 @@ for (const auto& cycle : cycles) {
 
 | Enhancement | Complexity | Effort | Value | Feasible? |
 |-------------|-----------|--------|-------|-----------|
-| TypeInference | Medium | 3-4 weeks | High | ✅ Yes |
-| TypeChecker | Medium | 2-3 weeks | High | ✅ Yes |
-| UnusedDetector | Low | 1-2 weeks | Medium | ✅ Yes |
-| CallGraph | Low-Medium | 2 weeks | Medium | ✅ Yes |
+| TypeInference | Medium | 3-4 weeks | ⭐⭐⭐⭐⭐ Very High | ✅ Yes |
+| TypeChecker | Medium | 2-3 weeks | ⭐⭐⭐⭐⭐ Very High | ✅ Yes |
+| UnusedDetector | Low | 1-2 weeks | ⭐⭐⭐⭐⭐ Very High | ✅ Yes |
+| CallGraph | Low-Medium | 2 weeks | ⭐⭐⭐⭐⭐ High | ✅ Yes |
 
 **Total Effort:** 8-11 weeks for full implementation
 
