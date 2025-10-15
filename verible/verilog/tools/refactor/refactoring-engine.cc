@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "verible/common/text/concrete-syntax-leaf.h"
@@ -33,6 +34,7 @@
 #include "verible/verilog/CST/verilog-nonterminals.h"
 #include "verible/verilog/analysis/symbol-table.h"
 #include "verible/verilog/analysis/type-inference.h"
+#include "verible/verilog/analysis/verilog-project.h"
 
 namespace verilog {
 namespace tools {
@@ -304,6 +306,51 @@ absl::Status ApplyTextModifications(
   output.close();
   
   return absl::OkStatus();
+}
+
+// Helper to get file information from project
+struct FileContext {
+  const verible::Symbol* cst_root;
+  const verible::TextStructureView* text_structure;
+  std::string content;
+};
+
+absl::StatusOr<FileContext> GetFileContext(
+    const VerilogProject* project,
+    const std::string& filename) {
+  if (!project) {
+    return absl::FailedPreconditionError(
+        "VerilogProject required for file access");
+  }
+  
+  // Lookup file in project
+  const auto* file = project->LookupRegisteredFile(filename);
+  if (!file) {
+    return absl::NotFoundError(
+        absl::StrCat("File not found in project: ", filename));
+  }
+  
+  // Get text structure (contains CST and content)
+  const auto* text_structure = file->GetTextStructure();
+  if (!text_structure) {
+    return absl::FailedPreconditionError(
+        absl::StrCat("File not parsed: ", filename));
+  }
+  
+  // Get CST root
+  const auto& syntax_tree = text_structure->SyntaxTree();
+  const verible::Symbol* cst_root = syntax_tree.get();
+  if (!cst_root) {
+    return absl::FailedPreconditionError(
+        absl::StrCat("No CST available for: ", filename));
+  }
+  
+  FileContext ctx;
+  ctx.cst_root = cst_root;
+  ctx.text_structure = text_structure;
+  ctx.content = std::string(text_structure->Contents());
+  
+  return ctx;
 }
 
 }  // namespace
