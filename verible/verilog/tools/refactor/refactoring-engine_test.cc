@@ -189,7 +189,7 @@ TEST_F(RefactoringEngineTest, MoveDeclarationBasic) {
   Location loc{"test.sv", 5, 2};
   auto status = engine.MoveDeclaration(loc);
   
-  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
 }
 
 TEST_F(RefactoringEngineTest, MoveDeclarationEmptyFilename) {
@@ -207,7 +207,7 @@ TEST_F(RefactoringEngineTest, MoveDeclarationToInnerScope) {
   Location loc{"module.sv", 15, 4};
   auto status = engine.MoveDeclaration(loc);
   
-  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
 }
 
 TEST_F(RefactoringEngineTest, MoveDeclarationToOuterScope) {
@@ -216,7 +216,7 @@ TEST_F(RefactoringEngineTest, MoveDeclarationToOuterScope) {
   Location loc{"design.sv", 30, 6};
   auto status = engine.MoveDeclaration(loc);
   
-  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
 }
 
 TEST_F(RefactoringEngineTest, MoveDeclarationOptimal) {
@@ -225,7 +225,7 @@ TEST_F(RefactoringEngineTest, MoveDeclarationOptimal) {
   Location loc{"optimal.sv", 100, 8};
   auto status = engine.MoveDeclaration(loc);
   
-  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
 }
 
 // Integration Tests with Real Refactoring (Tests 21-35)
@@ -440,7 +440,7 @@ TEST_F(RefactoringEngineTest, ActualRefactoringLimitations) {
   // Test MoveDeclaration
   Location loc2{"test.sv", 30, 5};
   auto status4 = engine.MoveDeclaration(loc2);
-  EXPECT_EQ(status4.code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(status4.code(), absl::StatusCode::kFailedPrecondition);
   
   // DOCUMENTED: All operations validated but not implemented
   // Goal: Replace UnimplementedError with actual refactoring
