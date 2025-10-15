@@ -355,66 +355,51 @@ endmodule
   RefactoringEngine engine(&symbol_table, &type_inference, &project);
 
   // Extract "10 + 20"
+  // NOTE: R"( adds a leading newline, so line numbers are off by 1!
+  // Line 1: empty
+  // Line 2: module test;
+  // Line 3:   logic result;
+  // Line 4:   initial begin
+  // Line 5:     result = 10 + 20;
   Selection sel;
   sel.filename = test_file;
-  sel.start_line = 4;
-  sel.start_column = 14;  // Start of "10"
-  sel.end_line = 4;
-  sel.end_column = 21;    // End of "20"
+  sel.start_line = 5;      // Line 5, not 4!
+  sel.start_column = 14;   // Start of "10"
+  sel.end_line = 5;
+  sel.end_column = 21;     // End of "20"
 
-  // DEBUG: Show what we're trying to extract
-  std::cout << "=== SELECTION ===\n";
-  std::cout << "Line " << sel.start_line << ":" << sel.start_column 
-            << " to " << sel.end_line << ":" << sel.end_column << "\n";
-  std::cout << "Looking for: '10 + 20'\n";
-  
   auto result = engine.ExtractVariable(sel, "sum");
-  std::cout << "Result status: " << result.message() << "\n";
   EXPECT_TRUE(result.ok()) << result.message();
 
   // Read and verify EXACT output
   std::string modified = ReadFile(test_file);
-  std::string backup = ReadFile(test_file + ".bak");
   
-  std::cout << "=== ORIGINAL (from backup) ===\n" << backup << "\n=== END ORIGINAL ===\n";
-  std::cout << "=== MODIFIED (actual file) ===\n" << modified << "\n=== END MODIFIED ===\n";
-  
-  // Check if they're different
-  if (modified == backup) {
-    std::cout << "⚠️  WARNING: File not modified at all!\n";
-  } else if (modified == test_code) {
-    std::cout << "⚠️  WARNING: File matches original, not backup!\n";
-  } else {
-    std::cout << "✅ File was modified\n";
-  }
-  
-  // CRITICAL BUG FOUND BY THIS TEST! 🔴
-  // The output is corrupted:
-  // - "module test;\nbegin" becomes "sumgin"
-  // - File gets duplicated
-  // - Syntax destroyed
+  // BUG NOW FIXED! ✅
+  // The test was finding corruption, investigation revealed:
+  // 1. Wrong line numbers (R"( adds leading newline)
+  // 2. FindNodesInSelection returned wrong node (largest instead of best match)
+  // 
+  // FIXES APPLIED:
+  // 1. Corrected line numbers (line 5, not 4)
+  // 2. Sort nodes by best match to selection boundaries
   //
-  // This is a REAL BUG in ExtractVariable implementation!
-  // Likely issue: offset calculation or text replacement logic
-  //
-  // DOCUMENTED AS KNOWN BUG - needs fix in implementation
+  // Result: ExtractVariable now works correctly!
   
-  // Should contain variable name
-  EXPECT_THAT(modified, HasSubstr("sum"));
+  // Verify the refactoring happened correctly
+  EXPECT_THAT(modified, HasSubstr("sum")) << "Variable name not found";
+  EXPECT_THAT(modified, HasSubstr("logic")) << "Declaration not found";
+  EXPECT_THAT(modified, HasSubstr("logic sum = 10 + 20")) << "Declaration incorrect";
+  EXPECT_THAT(modified, HasSubstr("result = sum")) << "Replacement incorrect";
   
-  // NOTE: Skipping "logic" check due to corruption bug
-  // EXPECT_THAT(modified, HasSubstr("logic"));
-  
-  // Try to parse - will likely fail due to corruption
+  // Verify output is syntactically valid
   VerilogProject verify(test_dir_.string(), std::vector<std::string>{});
   auto verify_or = verify.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(verify_or.ok()) << "Cannot open modified file";
+  EXPECT_TRUE(verify_or.value()->Status().ok()) 
+      << "Modified file has syntax errors";
   
-  if (verify_or.ok() && verify_or.value()->Status().ok()) {
-    std::cout << "✅ Output is valid (bug may be fixed!)\n";
-  } else {
-    std::cout << "⚠️  CONFIRMED BUG: Output has syntax errors\n";
-    std::cout << "This test documents the issue for future fix\n";
-  }
+  // Verify backup was created
+  EXPECT_TRUE(std::filesystem::exists(test_file + ".bak"));
 }
 
 // Test 7: ExtractVariable - Multi-line expression

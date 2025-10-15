@@ -243,6 +243,31 @@ std::vector<NodeLocation> FindNodesInSelection(
                       offset_range.end_offset, 
                       &result);
   
+  // CRITICAL FIX: Sort by best match to selection!
+  // We want the node that most closely matches the selection boundaries,
+  // not necessarily the smallest node.
+  const auto base_text = text_structure->Contents();
+  std::sort(result.begin(), result.end(), [&](const NodeLocation& a, const NodeLocation& b) {
+    auto a_span = verible::StringSpanOfSymbol(*a.node);
+    auto b_span = verible::StringSpanOfSymbol(*b.node);
+    int a_start = a_span.begin() - base_text.begin();
+    int a_end = a_span.end() - base_text.begin();
+    int b_start = b_span.begin() - base_text.begin();
+    int b_end = b_span.end() - base_text.begin();
+    
+    // Calculate how well each node matches the selection
+    int a_start_diff = std::abs(a_start - offset_range.start_offset);
+    int a_end_diff = std::abs(a_end - offset_range.end_offset);
+    int b_start_diff = std::abs(b_start - offset_range.start_offset);
+    int b_end_diff = std::abs(b_end - offset_range.end_offset);
+    
+    int a_total_diff = a_start_diff + a_end_diff;
+    int b_total_diff = b_start_diff + b_end_diff;
+    
+    // Prefer node with boundaries closest to selection
+    return a_total_diff < b_total_diff;
+  });
+  
   return result;
 }
 
@@ -588,7 +613,7 @@ absl::Status RefactoringEngine::ExtractVariable(
     return absl::NotFoundError("No CST nodes found in selection");
   }
   
-  // 3. Extract expression text from first node
+  // 3. Extract expression text from first node (best match to selection)
   auto expression_span = verible::StringSpanOfSymbol(*nodes[0].node);
   std::string expression_text(expression_span);
   
@@ -622,8 +647,10 @@ absl::Status RefactoringEngine::ExtractVariable(
   
   // Replace expression with variable name
   TextModification replace_expr;
-  replace_expr.start_offset = expression_span.begin() - base_text.begin();
-  replace_expr.end_offset = expression_span.end() - base_text.begin();
+  int expr_start = expression_span.begin() - base_text.begin();
+  int expr_end = expression_span.end() - base_text.begin();
+  replace_expr.start_offset = expr_start;
+  replace_expr.end_offset = expr_end;
   replace_expr.replacement_text = var_name;
   modifications.push_back(replace_expr);
   
