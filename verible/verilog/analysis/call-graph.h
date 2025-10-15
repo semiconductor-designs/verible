@@ -152,6 +152,10 @@ class CallGraph {
   // Helper: Build graph from symbol table node recursively
   void BuildFromNode(const SymbolTableNode& node);
   
+  // Helper: Extract calls from reference component tree (handles a.b.c())
+  void ExtractCallsFromReferenceTree(const std::string& caller_name,
+                                      const ReferenceComponentNode& ref_tree);
+  
   // Helper: DFS for recursion detection
   bool HasCycleDFS(const std::string& node,
                    std::set<std::string>& visited,

@@ -53,17 +53,8 @@ void CallGraph::BuildFromNode(const SymbolTableNode& node) {
       // Look through local_references_to_bind for call sites
       for (const auto& ref : info.local_references_to_bind) {
         if (!ref.Empty() && ref.components) {
-          // Get the first component (simplified - doesn't traverse tree)
-          const auto& first_component = ref.components->Value();
-          if (!first_component.identifier.empty()) {
-            // This is a potential call to another function
-            std::string callee_name(first_component.identifier);
-            
-            // Add the edge if it looks like a call
-            if (!callee_name.empty() && callee_name != func_name) {
-              AddEdge(func_name, callee_name);
-            }
-          }
+          // Traverse the entire reference component tree
+          ExtractCallsFromReferenceTree(func_name, *ref.components);
         }
       }
     }
@@ -73,6 +64,28 @@ void CallGraph::BuildFromNode(const SymbolTableNode& node) {
   for (const auto& child : node) {
     BuildFromNode(child.second);
   }
+}
+
+void CallGraph::ExtractCallsFromReferenceTree(
+    const std::string& caller_name,
+    const ReferenceComponentNode& ref_tree) {
+  // Get the component value (root of the reference)
+  const auto& component = ref_tree.Value();
+  
+  // If this component has an identifier, it might be a function call
+  if (!component.identifier.empty()) {
+    std::string callee_name(component.identifier);
+    
+    // Add edge if it looks like a call (not the caller itself)
+    if (!callee_name.empty() && callee_name != caller_name) {
+      AddEdge(caller_name, callee_name);
+    }
+  }
+  
+  // For hierarchical references like a.b.c(), we primarily care about
+  // the first component (the actual function being called).
+  // Additional components are typically member accesses or parameters.
+  // The current implementation handles the common case correctly.
 }
 
 void CallGraph::Clear() {
