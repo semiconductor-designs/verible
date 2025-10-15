@@ -124,6 +124,84 @@ std::string GenerateFunctionSignature(
   
   return sig.str();
 }
+// Helper to find CST nodes within a line/column selection
+// Returns nodes that fall within the selection range
+struct NodeLocation {
+  const verible::Symbol* node;
+  int start_line;
+  int start_column;
+  int end_line;
+  int end_column;
+};
+
+std::vector<NodeLocation> FindNodesInSelection(
+    const verible::Symbol* root,
+    const Selection& selection) {
+  std::vector<NodeLocation> result;
+  
+  if (!root) return result;
+  
+  // For a full implementation, this would:
+  // 1. Traverse the CST
+  // 2. Check each node's TokenInfo for line/column
+  // 3. Collect nodes within selection range
+  //
+  // This requires integration with:
+  // - verible::Symbol traversal
+  // - TokenInfo line/column extraction
+  // - Range intersection logic
+  //
+  // Estimated: 2-3 hours for robust implementation
+  
+  return result;
+}
+
+// Helper to convert line/column to byte offset
+struct OffsetRange {
+  int start_offset;
+  int end_offset;
+};
+
+OffsetRange SelectionToOffsets(
+    const std::string& content,
+    const Selection& selection) {
+  OffsetRange result{0, 0};
+  
+  int current_line = 1;
+  int current_column = 1;
+  int offset = 0;
+  bool found_start = false;
+  
+  for (size_t i = 0; i < content.size(); ++i) {
+    if (current_line == selection.start_line && 
+        current_column == selection.start_column) {
+      result.start_offset = offset;
+      found_start = true;
+    }
+    
+    if (current_line == selection.end_line && 
+        current_column == selection.end_column) {
+      result.end_offset = offset;
+      break;
+    }
+    
+    if (content[i] == '\n') {
+      current_line++;
+      current_column = 1;
+    } else {
+      current_column++;
+    }
+    offset++;
+  }
+  
+  // If end not found, use end of content
+  if (result.end_offset == 0) {
+    result.end_offset = offset;
+  }
+  
+  return result;
+}
+
 // Common file modification helper
 // Pattern: read → backup → apply modifications → write
 struct TextModification {
