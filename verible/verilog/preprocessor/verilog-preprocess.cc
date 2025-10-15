@@ -39,6 +39,7 @@
 #include "verible/verilog/parser/verilog-lexer.h"
 #include "verible/verilog/parser/verilog-parser.h"  // for verilog_symbol_name()
 #include "verible/verilog/parser/verilog-token-enum.h"
+#include "verible/verilog/preprocessor/verilog-preprocess-expr.h"
 
 namespace verilog {
 

@@ -12,10 +12,22 @@ package(
 )
 
 cc_library(
+    name = "verilog-preprocess-expr",
+    srcs = ["verilog-preprocess-expr.cc"],
+    hdrs = ["verilog-preprocess-expr.h"],
+    deps = [
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_library(
     name = "verilog-preprocess",
     srcs = ["verilog-preprocess.cc"],
     hdrs = ["verilog-preprocess.h"],
     deps = [
+        ":verilog-preprocess-expr",
         "//verible/common/lexer:token-generator",
         "//verible/common/lexer:token-stream-adapter",
         "//verible/common/text:macro-definition",

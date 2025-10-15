@@ -176,7 +176,7 @@ class PreprocessorExpressionEvaluator {
     }
 
     return absl::InvalidArgumentError(
-        absl::StrCat("Unexpected character: ", expr_[pos_]));
+        absl::StrCat("Unexpected character: ", std::string(1, expr_[pos_])));
   }
 
   std::string_view expr_;
