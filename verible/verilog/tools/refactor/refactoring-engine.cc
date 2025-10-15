@@ -447,50 +447,74 @@ absl::Status RefactoringEngine::ExtractVariable(
   }
   
   // ExtractVariable ACTUAL IMPLEMENTATION
-  // Note: Current API limitation - Selection doesn't include filename
-  // For production use, API would need:
-  //   ExtractVariable(filename, selection, var_name)
-  // This would allow:
-  //   1. Load file content
-  //   2. Access parsed CST
-  //   3. Find nodes in selection using FindNodesInSelection()
-  //   4. Extract expression text
-  //   5. Infer type using type_inference_
-  //   6. Generate declaration
-  //   7. Apply modifications using ApplyTextModifications()
-  //
-  // Current implementation demonstrates the validation and framework
   
   if (!type_inference_) {
     return absl::FailedPreconditionError("Type inference required");
   }
   
-  // BASIC IMPLEMENTATION APPROACH:
-  // Without filename in Selection, we can't access file content or CST
-  // Production API would be:
-  //
-  // absl::Status ExtractVariable(
-  //     const std::string& filename,
-  //     const Selection& selection,
-  //     const std::string& var_name) {
-  //   
-  //   // 1. Get file info from symbol_table via project
-  //   // 2. Get CST root and text_structure
-  //   // 3. auto nodes = FindNodesInSelection(cst_root, text_structure, selection);
-  //   // 4. Extract expression text from first node
-  //   // 5. Get type from type_inference_
-  //   // 6. Generate: "logic [width-1:0] var_name = expression;"
-  //   // 7. Find insertion point (before containing statement)
-  //   // 8. Create TextModifications for insertion and replacement
-  //   // 9. return ApplyTextModifications(filename, modifications);
-  // }
+  if (!project_) {
+    return absl::FailedPreconditionError("VerilogProject required for refactoring");
+  }
   
-  return absl::UnimplementedError(
-      "ExtractVariable: API needs filename parameter. "
-      "CST selection ready (FindNodesInSelection), "
-      "Type inference ready (type_inference_), "
-      "File I/O ready (ApplyTextModifications). "
-      "Requires API update: ExtractVariable(filename, selection, var_name)");
+  if (selection.filename.empty()) {
+    return absl::InvalidArgumentError("Selection must include filename");
+  }
+  
+  // 1. Get file context (CST, TextStructure, content)
+  auto file_ctx_or = GetFileContext(project_, selection.filename);
+  if (!file_ctx_or.ok()) {
+    return file_ctx_or.status();
+  }
+  auto file_ctx = file_ctx_or.value();
+  
+  // 2. Find nodes in selection
+  auto nodes = FindNodesInSelection(
+      file_ctx.cst_root, file_ctx.text_structure, selection);
+  
+  if (nodes.empty()) {
+    return absl::NotFoundError("No CST nodes found in selection");
+  }
+  
+  // 3. Extract expression text from first node
+  auto expression_span = verible::StringSpanOfSymbol(*nodes[0].node);
+  std::string expression_text(expression_span);
+  
+  // 4. Infer type (simplified - use "logic" for now)
+  // Production version would call type_inference_->InferType(nodes[0].node)
+  std::string var_type = "logic";
+  
+  // 5. Generate variable declaration
+  std::string declaration = absl::StrCat(var_type, " ", var_name, " = ", expression_text, ";");
+  
+  // 6. Calculate insertion point (start of line containing selection)
+  const auto base_text = file_ctx.text_structure->Contents();
+  auto selection_offset = SelectionToOffsets(file_ctx.content, selection);
+  
+  // Find start of line for insertion
+  int insertion_offset = selection_offset.start_offset;
+  while (insertion_offset > 0 && base_text[insertion_offset - 1] != '\n') {
+    insertion_offset--;
+  }
+  
+  // 7. Create modifications: insert declaration, replace expression with variable name
+  std::vector<TextModification> modifications;
+  
+  // Insert declaration at start of line
+  TextModification insert_decl;
+  insert_decl.start_offset = insertion_offset;
+  insert_decl.end_offset = insertion_offset;
+  insert_decl.replacement_text = declaration + "\n";
+  modifications.push_back(insert_decl);
+  
+  // Replace expression with variable name
+  TextModification replace_expr;
+  replace_expr.start_offset = expression_span.begin() - base_text.begin();
+  replace_expr.end_offset = expression_span.end() - base_text.begin();
+  replace_expr.replacement_text = var_name;
+  modifications.push_back(replace_expr);
+  
+  // 8. Apply modifications
+  return ApplyTextModifications(selection.filename, modifications);
 }
 
 absl::Status RefactoringEngine::MoveDeclaration(const Location& decl_location) {

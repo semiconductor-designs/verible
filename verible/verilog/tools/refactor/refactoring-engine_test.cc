@@ -141,7 +141,8 @@ TEST_F(RefactoringEngineTest, ExtractVariableBasic) {
   Selection sel{"test.sv", 5, 10, 5, 25};
   auto status = engine.ExtractVariable(sel, "temp_var");
   
-  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
+  // Without VerilogProject, expects FailedPrecondition
+  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
 }
 
 TEST_F(RefactoringEngineTest, ExtractVariableEmptyName) {
@@ -159,7 +160,7 @@ TEST_F(RefactoringEngineTest, ExtractVariableComplexExpression) {
   Selection sel{"test.sv", 15, 5, 15, 40};
   auto status = engine.ExtractVariable(sel, "intermediate");
   
-  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
 }
 
 TEST_F(RefactoringEngineTest, ExtractVariableWithType) {
@@ -168,7 +169,7 @@ TEST_F(RefactoringEngineTest, ExtractVariableWithType) {
   Selection sel{"test.sv", 20, 8, 20, 30};
   auto status = engine.ExtractVariable(sel, "typed_var");
   
-  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
 }
 
 TEST_F(RefactoringEngineTest, ExtractVariableInLoop) {
@@ -177,7 +178,7 @@ TEST_F(RefactoringEngineTest, ExtractVariableInLoop) {
   Selection sel{"test.sv", 50, 10, 50, 35};
   auto status = engine.ExtractVariable(sel, "loop_temp");
   
-  EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(status.code(), absl::StatusCode::kFailedPrecondition);
 }
 
 // ==================== Move Declaration Tests (5) ====================
@@ -431,10 +432,10 @@ TEST_F(RefactoringEngineTest, ActualRefactoringLimitations) {
   auto status2 = engine.InlineFunction(loc);
   EXPECT_EQ(status2.code(), absl::StatusCode::kUnimplemented);
   
-  // Test ExtractVariable
+  // Test ExtractVariable (now implemented!)
   Selection sel2{"test.sv", 20, 10, 20, 25};
   auto status3 = engine.ExtractVariable(sel2, "extracted_var");
-  EXPECT_EQ(status3.code(), absl::StatusCode::kUnimplemented);
+  EXPECT_EQ(status3.code(), absl::StatusCode::kFailedPrecondition);  // Needs VerilogProject
   
   // Test MoveDeclaration
   Location loc2{"test.sv", 30, 5};
