@@ -259,6 +259,7 @@ enum class NodeEnum {
   kCoverBody,
   kActionBlock,  // is a temporary node, will not be in final CST.
   kArgumentList,
+  kLambdaExpression,  // SV-2023: Lambda for array.map()
   kEventControl,
   kHierarchySegment,
   kHierarchySegmentList,

@@ -412,6 +412,12 @@ event { UpdateLocation(); return TK_event; }
   yy_pop_state();
   return TK_product;
 }
+<AFTER_DOT>map {
+  /* SV-2023: Array map method */
+  UpdateLocation();
+  yy_pop_state();
+  return TK_map;
+}
 <AFTER_DOT>and {
   UpdateLocation();
   yy_pop_state();

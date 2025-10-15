@@ -587,6 +587,7 @@ is not locally defined, so the grammar here uses only generic identifiers.
 
 %token TK_sum "sum"
 %token TK_product "product"
+%token TK_map "map"
 // gen_tokenizer stop
 
 // operator tokens
@@ -4675,6 +4676,9 @@ any_argument
     /* Special functions like $past() take an event_control argument. */
   | parameter_value_byname /* named argument */
     { $$ = std::move($1); }
+  | GenericIdentifier TK_EG expression
+    /* SV-2023: Lambda expression for array.map() */
+    { $$ = MakeTaggedNode(N::kLambdaExpression, $1, $2, $3); }
   ;
 
 expression_or_null_list_opt
@@ -5151,6 +5155,9 @@ builtin_array_method
     { $$ = std::move($1); }
   | array_reduction_method
     { $$ = std::move($1); }
+  | array_transformation_method
+    /* SV-2023: map method */
+    { $$ = std::move($1); }
   ;
 array_locator_method
   /* built-in method calls */
@@ -5195,6 +5202,11 @@ array_reduction_method
   | TK_or
     { $$ = std::move($1); }
   | TK_xor
+    { $$ = std::move($1); }
+  ;
+array_transformation_method
+  /* SV-2023: Array transformation methods */
+  : TK_map
     { $$ = std::move($1); }
   ;
 array_method_with_predicate_opt

@@ -458,3 +458,27 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+# M12 Feature 6: associative array parameters (SV-2023 TDD)
+cc_test(
+    name = "verilog-parser-assoc-array-param_test",
+    srcs = ["verilog-parser-assoc-array-param_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# M12 Feature 7: array map method (SV-2023 TDD)
+cc_test(
+    name = "verilog-parser-array-map_test",
+    srcs = ["verilog-parser-array-map_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
