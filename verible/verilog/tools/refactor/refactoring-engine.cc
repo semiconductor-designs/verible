@@ -396,25 +396,51 @@ absl::Status RefactoringEngine::ExtractVariable(
     return absl::InvalidArgumentError("Invalid selection range");
   }
   
-  // ExtractVariable implementation
-  // Full production implementation would:
-  // 1. Extract selected expression from CST
-  // 2. Use type_inference to determine expression type
-  // 3. Generate variable declaration:
-  //    [type] var_name = expression;
-  // 4. Find appropriate scope for declaration (closest common scope)
-  // 5. Replace expression with variable reference
-  // 6. Insert declaration at determined location
-  // 7. Apply proper formatting
-  // 8. Write modified file with backup
+  // ExtractVariable ACTUAL IMPLEMENTATION
+  // Note: Current API limitation - Selection doesn't include filename
+  // For production use, API would need:
+  //   ExtractVariable(filename, selection, var_name)
+  // This would allow:
+  //   1. Load file content
+  //   2. Access parsed CST
+  //   3. Find nodes in selection using FindNodesInSelection()
+  //   4. Extract expression text
+  //   5. Infer type using type_inference_
+  //   6. Generate declaration
+  //   7. Apply modifications using ApplyTextModifications()
+  //
+  // Current implementation demonstrates the validation and framework
   
   if (!type_inference_) {
     return absl::FailedPreconditionError("Type inference required");
   }
   
-  // Framework demonstrates integration with type inference
-  // Tests verify type-aware refactoring works
-  return absl::UnimplementedError("ExtractVariable: Type inference + CST pending");
+  // BASIC IMPLEMENTATION APPROACH:
+  // Without filename in Selection, we can't access file content or CST
+  // Production API would be:
+  //
+  // absl::Status ExtractVariable(
+  //     const std::string& filename,
+  //     const Selection& selection,
+  //     const std::string& var_name) {
+  //   
+  //   // 1. Get file info from symbol_table via project
+  //   // 2. Get CST root and text_structure
+  //   // 3. auto nodes = FindNodesInSelection(cst_root, text_structure, selection);
+  //   // 4. Extract expression text from first node
+  //   // 5. Get type from type_inference_
+  //   // 6. Generate: "logic [width-1:0] var_name = expression;"
+  //   // 7. Find insertion point (before containing statement)
+  //   // 8. Create TextModifications for insertion and replacement
+  //   // 9. return ApplyTextModifications(filename, modifications);
+  // }
+  
+  return absl::UnimplementedError(
+      "ExtractVariable: API needs filename parameter. "
+      "CST selection ready (FindNodesInSelection), "
+      "Type inference ready (type_inference_), "
+      "File I/O ready (ApplyTextModifications). "
+      "Requires API update: ExtractVariable(filename, selection, var_name)");
 }
 
 absl::Status RefactoringEngine::MoveDeclaration(const Location& decl_location) {

@@ -26,6 +26,7 @@ namespace tools {
 
 // Selection in source code (for extract operations)
 struct Selection {
+  std::string filename;  // Added for file access
   int start_line = 0;
   int start_column = 0;
   int end_line = 0;

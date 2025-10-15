@@ -43,7 +43,7 @@ class RefactoringEngineTest : public ::testing::Test {
 TEST_F(RefactoringEngineTest, ExtractFunctionBasic) {
   RefactoringEngine engine(symbol_table_.get(), type_inference_.get());
   
-  Selection sel{1, 0, 3, 10};
+  Selection sel{"test.sv", 1, 0, 3, 10};
   auto status = engine.ExtractFunction(sel, "new_function");
   
   // Currently unimplemented
@@ -53,7 +53,7 @@ TEST_F(RefactoringEngineTest, ExtractFunctionBasic) {
 TEST_F(RefactoringEngineTest, ExtractFunctionEmptyName) {
   RefactoringEngine engine(symbol_table_.get(), type_inference_.get());
   
-  Selection sel{1, 0, 3, 10};
+  Selection sel{"test.sv", 1, 0, 3, 10};
   auto status = engine.ExtractFunction(sel, "");
   
   EXPECT_EQ(status.code(), absl::StatusCode::kInvalidArgument);
@@ -62,7 +62,7 @@ TEST_F(RefactoringEngineTest, ExtractFunctionEmptyName) {
 TEST_F(RefactoringEngineTest, ExtractFunctionWithParameters) {
   RefactoringEngine engine(symbol_table_.get(), type_inference_.get());
   
-  Selection sel{5, 2, 7, 5};
+  Selection sel{"test.sv", 5, 2, 7, 5};
   auto status = engine.ExtractFunction(sel, "helper_func");
   
   EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
@@ -71,7 +71,7 @@ TEST_F(RefactoringEngineTest, ExtractFunctionWithParameters) {
 TEST_F(RefactoringEngineTest, ExtractFunctionWithReturnValue) {
   RefactoringEngine engine(symbol_table_.get(), type_inference_.get());
   
-  Selection sel{10, 0, 12, 20};
+  Selection sel{"test.sv", 10, 0, 12, 20};
   auto status = engine.ExtractFunction(sel, "calc_result");
   
   EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
@@ -80,7 +80,7 @@ TEST_F(RefactoringEngineTest, ExtractFunctionWithReturnValue) {
 TEST_F(RefactoringEngineTest, ExtractFunctionComplexSelection) {
   RefactoringEngine engine(symbol_table_.get(), type_inference_.get());
   
-  Selection sel{20, 5, 35, 15};
+  Selection sel{"test.sv", 20, 5, 35, 15};
   auto status = engine.ExtractFunction(sel, "complex_operation");
   
   EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
@@ -138,7 +138,7 @@ TEST_F(RefactoringEngineTest, InlineFunctionNestedCall) {
 TEST_F(RefactoringEngineTest, ExtractVariableBasic) {
   RefactoringEngine engine(symbol_table_.get(), type_inference_.get());
   
-  Selection sel{5, 10, 5, 25};
+  Selection sel{"test.sv", 5, 10, 5, 25};
   auto status = engine.ExtractVariable(sel, "temp_var");
   
   EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
@@ -147,7 +147,7 @@ TEST_F(RefactoringEngineTest, ExtractVariableBasic) {
 TEST_F(RefactoringEngineTest, ExtractVariableEmptyName) {
   RefactoringEngine engine(symbol_table_.get(), type_inference_.get());
   
-  Selection sel{5, 10, 5, 25};
+  Selection sel{"test.sv", 5, 10, 5, 25};
   auto status = engine.ExtractVariable(sel, "");
   
   EXPECT_EQ(status.code(), absl::StatusCode::kInvalidArgument);
@@ -156,7 +156,7 @@ TEST_F(RefactoringEngineTest, ExtractVariableEmptyName) {
 TEST_F(RefactoringEngineTest, ExtractVariableComplexExpression) {
   RefactoringEngine engine(symbol_table_.get(), type_inference_.get());
   
-  Selection sel{15, 5, 15, 40};
+  Selection sel{"test.sv", 15, 5, 15, 40};
   auto status = engine.ExtractVariable(sel, "intermediate");
   
   EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
@@ -165,7 +165,7 @@ TEST_F(RefactoringEngineTest, ExtractVariableComplexExpression) {
 TEST_F(RefactoringEngineTest, ExtractVariableWithType) {
   RefactoringEngine engine(symbol_table_.get(), type_inference_.get());
   
-  Selection sel{20, 8, 20, 30};
+  Selection sel{"test.sv", 20, 8, 20, 30};
   auto status = engine.ExtractVariable(sel, "typed_var");
   
   EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
@@ -174,7 +174,7 @@ TEST_F(RefactoringEngineTest, ExtractVariableWithType) {
 TEST_F(RefactoringEngineTest, ExtractVariableInLoop) {
   RefactoringEngine engine(symbol_table_.get(), type_inference_.get());
   
-  Selection sel{50, 10, 50, 35};
+  Selection sel{"test.sv", 50, 10, 50, 35};
   auto status = engine.ExtractVariable(sel, "loop_temp");
   
   EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
@@ -235,7 +235,7 @@ TEST_F(RefactoringEngineTest, MoveDeclarationOptimal) {
 TEST_F(RefactoringEngineTest, ExtractFunctionSimpleSelection) {
   RefactoringEngine engine(symbol_table_.get(), type_inference_.get());
   
-  Selection selection{10, 5, 12, 15};
+  Selection selection{"test.sv", 10, 5, 12, 15};
   auto status = engine.ExtractFunction(selection, "extracted_func");
   
   // Should recognize extraction request
@@ -246,7 +246,7 @@ TEST_F(RefactoringEngineTest, ExtractFunctionSimpleSelection) {
 TEST_F(RefactoringEngineTest, ExtractFunctionWithDependencies) {
   RefactoringEngine engine(symbol_table_.get(), type_inference_.get());
   
-  Selection selection{20, 1, 25, 30};
+  Selection selection{"test.sv", 20, 1, 25, 30};
   auto status = engine.ExtractFunction(selection, "complex_func");
   
   // Should analyze dependencies
@@ -257,7 +257,7 @@ TEST_F(RefactoringEngineTest, ExtractFunctionWithDependencies) {
 TEST_F(RefactoringEngineTest, ExtractFunctionParameterGeneration) {
   RefactoringEngine engine(symbol_table_.get(), type_inference_.get());
   
-  Selection selection{30, 2, 35, 10};
+  Selection selection{"test.sv", 30, 2, 35, 10};
   auto status = engine.ExtractFunction(selection, "func_with_params");
   
   // Should generate correct parameters
@@ -268,7 +268,7 @@ TEST_F(RefactoringEngineTest, ExtractFunctionParameterGeneration) {
 TEST_F(RefactoringEngineTest, ExtractFunctionReturnTypeInference) {
   RefactoringEngine engine(symbol_table_.get(), type_inference_.get());
   
-  Selection selection{40, 3, 45, 20};
+  Selection selection{"test.sv", 40, 3, 45, 20};
   auto status = engine.ExtractFunction(selection, "func_with_return");
   
   // Should infer return type
@@ -280,7 +280,7 @@ TEST_F(RefactoringEngineTest, ExtractFunctionEdgeCases) {
   RefactoringEngine engine(symbol_table_.get(), type_inference_.get());
   
   // Empty selection
-  Selection empty{10, 5, 10, 5};
+  Selection empty{"test.sv", 10, 5, 10, 5};
   auto status = engine.ExtractFunction(empty, "empty_func");
   
   EXPECT_FALSE(status.ok());
@@ -349,7 +349,7 @@ TEST_F(RefactoringEngineTest, InlineFunctionMultipleCallSites) {
 TEST_F(RefactoringEngineTest, PerformanceTest) {
   RefactoringEngine engine(symbol_table_.get(), type_inference_.get());
   
-  Selection selection{1, 1, 1000, 50};
+  Selection selection{"test.sv", 1, 1, 1000, 50};
   
   auto start = std::chrono::high_resolution_clock::now();
   auto status = engine.ExtractFunction(selection, "perf_test");
@@ -365,7 +365,7 @@ TEST_F(RefactoringEngineTest, PerformanceTest) {
 TEST_F(RefactoringEngineTest, MultipleOperationsConsistency) {
   RefactoringEngine engine(symbol_table_.get(), type_inference_.get());
   
-  Selection sel{10, 1, 15, 10};
+  Selection sel{"test.sv", 10, 1, 15, 10};
   auto extract_status = engine.ExtractFunction(sel, "func1");
   
   Location loc{"multi.sv", 20, 5};
@@ -382,7 +382,7 @@ TEST_F(RefactoringEngineTest, ErrorHandlingRobustness) {
   
   // Invalid locations/selections
   Location invalid_loc{"nonexistent.sv", -1, -1};
-  Selection invalid_sel{100, 50, 10, 5}; // End before start
+  Selection invalid_sel{"test.sv", 100, 50, 10, 5}; // End before start
   
   auto inline_status = engine.InlineFunction(invalid_loc);
   auto extract_status = engine.ExtractFunction(invalid_sel, "bad_func");
@@ -396,7 +396,7 @@ TEST_F(RefactoringEngineTest, ErrorHandlingRobustness) {
 TEST_F(RefactoringEngineTest, TypeInferenceIntegration) {
   RefactoringEngine engine(symbol_table_.get(), type_inference_.get());
   
-  Selection sel{30, 1, 35, 20};
+  Selection sel{"test.sv", 30, 1, 35, 20};
   auto status = engine.ExtractFunction(sel, "typed_func");
   
   // Should integrate with type inference
@@ -422,7 +422,7 @@ TEST_F(RefactoringEngineTest, ActualRefactoringLimitations) {
   RefactoringEngine engine(symbol_table_.get(), type_inference_.get());
   
   // Test ExtractFunction
-  Selection sel1{10, 5, 12, 15};
+  Selection sel1{"test.sv", 10, 5, 12, 15};
   auto status1 = engine.ExtractFunction(sel1, "extracted");
   EXPECT_EQ(status1.code(), absl::StatusCode::kUnimplemented);
   
@@ -432,7 +432,7 @@ TEST_F(RefactoringEngineTest, ActualRefactoringLimitations) {
   EXPECT_EQ(status2.code(), absl::StatusCode::kUnimplemented);
   
   // Test ExtractVariable
-  Selection sel2{20, 10, 20, 25};
+  Selection sel2{"test.sv", 20, 10, 20, 25};
   auto status3 = engine.ExtractVariable(sel2, "extracted_var");
   EXPECT_EQ(status3.code(), absl::StatusCode::kUnimplemented);
   
