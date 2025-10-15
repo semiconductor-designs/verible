@@ -130,6 +130,21 @@ cc_test(
     ],
 )
 
+cc_test(
+    name = "semantic-analysis-integration_test",
+    srcs = ["semantic-analysis-integration_test.cc"],
+    deps = [
+        ":call-graph",
+        ":symbol-table",
+        ":type-checker",
+        ":type-inference",
+        ":verilog-project",
+        "//verible/common/util:file-util",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
 cc_library(
     name = "default-rules",
     hdrs = ["default-rules.h"],
