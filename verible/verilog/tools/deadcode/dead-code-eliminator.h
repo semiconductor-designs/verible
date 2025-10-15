@@ -21,6 +21,7 @@
 
 #include "absl/status/status.h"
 #include "verible/verilog/analysis/call-graph.h"
+#include "verible/verilog/analysis/symbol-table.h"
 
 namespace verilog {
 namespace tools {
@@ -37,8 +38,9 @@ struct DeadCodeReport {
 // DeadCodeEliminator detects and removes unused code
 class DeadCodeEliminator {
  public:
-  // Construct with call graph for function/task analysis
-  explicit DeadCodeEliminator(const verilog::analysis::CallGraph* call_graph);
+  // Construct with call graph and symbol table for code location
+  DeadCodeEliminator(const analysis::CallGraph* call_graph,
+                     const SymbolTable* symbol_table);
 
   // Find all dead code (unreachable functions, tasks, unused variables)
   DeadCodeReport FindDeadCode();
@@ -48,7 +50,8 @@ class DeadCodeEliminator {
   absl::Status Eliminate(const DeadCodeReport& report, bool dry_run = false);
 
  private:
-  const verilog::analysis::CallGraph* call_graph_;
+  const analysis::CallGraph* call_graph_;
+  const SymbolTable* symbol_table_;
 };
 
 }  // namespace tools

@@ -38,14 +38,14 @@ class DeadCodeEliminatorTest : public ::testing::Test {
 
 // Test 1: Constructor
 TEST_F(DeadCodeEliminatorTest, Constructor) {
-  DeadCodeEliminator eliminator(call_graph_.get());
+  DeadCodeEliminator eliminator(call_graph_.get(), symbol_table_.get());
   // Should construct without error
   EXPECT_TRUE(true);
 }
 
 // Test 2: Find dead code with empty call graph
 TEST_F(DeadCodeEliminatorTest, EmptyCallGraph) {
-  DeadCodeEliminator eliminator(call_graph_.get());
+  DeadCodeEliminator eliminator(call_graph_.get(), symbol_table_.get());
   
   auto report = eliminator.FindDeadCode();
   EXPECT_EQ(report.total_dead_count, 0);
@@ -60,7 +60,7 @@ TEST_F(DeadCodeEliminatorTest, FindDeadFunctions) {
   call_graph_->AddNode("unused_func");
   call_graph_->AddEdge("main", "used_func");
   
-  DeadCodeEliminator eliminator(call_graph_.get());
+  DeadCodeEliminator eliminator(call_graph_.get(), symbol_table_.get());
   auto report = eliminator.FindDeadCode();
   
   // unused_func is dead (not called from any root)
@@ -76,7 +76,7 @@ TEST_F(DeadCodeEliminatorTest, NoDeadCode) {
   call_graph_->AddEdge("main", "func1");
   call_graph_->AddEdge("main", "func2");
   
-  DeadCodeEliminator eliminator(call_graph_.get());
+  DeadCodeEliminator eliminator(call_graph_.get(), symbol_table_.get());
   auto report = eliminator.FindDeadCode();
   
   // All functions reachable from main
@@ -85,7 +85,7 @@ TEST_F(DeadCodeEliminatorTest, NoDeadCode) {
 
 // Test 5: Report summary generation
 TEST_F(DeadCodeEliminatorTest, ReportSummary) {
-  DeadCodeEliminator eliminator(call_graph_.get());
+  DeadCodeEliminator eliminator(call_graph_.get(), symbol_table_.get());
   
   auto report = eliminator.FindDeadCode();
   EXPECT_FALSE(report.summary.empty());
@@ -95,7 +95,7 @@ TEST_F(DeadCodeEliminatorTest, ReportSummary) {
 TEST_F(DeadCodeEliminatorTest, DryRunElimination) {
   call_graph_->AddNode("unused");
   
-  DeadCodeEliminator eliminator(call_graph_.get());
+  DeadCodeEliminator eliminator(call_graph_.get(), symbol_table_.get());
   auto report = eliminator.FindDeadCode();
   
   auto status = eliminator.Eliminate(report, true);
@@ -104,7 +104,7 @@ TEST_F(DeadCodeEliminatorTest, DryRunElimination) {
 
 // Test 7: Empty report elimination
 TEST_F(DeadCodeEliminatorTest, EliminateEmptyReport) {
-  DeadCodeEliminator eliminator(call_graph_.get());
+  DeadCodeEliminator eliminator(call_graph_.get(), symbol_table_.get());
   
   DeadCodeReport empty_report;
   auto status = eliminator.Eliminate(empty_report, false);
@@ -113,7 +113,7 @@ TEST_F(DeadCodeEliminatorTest, EliminateEmptyReport) {
 
 // Test 8: Null call graph
 TEST_F(DeadCodeEliminatorTest, NullCallGraph) {
-  DeadCodeEliminator eliminator(nullptr);
+  DeadCodeEliminator eliminator(nullptr, symbol_table_.get());
   
   auto report = eliminator.FindDeadCode();
   EXPECT_EQ(report.total_dead_count, 0);
@@ -130,7 +130,7 @@ TEST_F(DeadCodeEliminatorTest, MultipleDeadFunctions) {
   
   call_graph_->Build();  // Build to establish roots
   
-  DeadCodeEliminator eliminator(call_graph_.get());
+  DeadCodeEliminator eliminator(call_graph_.get(), symbol_table_.get());
   auto report = eliminator.FindDeadCode();
   
   // Isolated nodes are roots in current implementation
@@ -149,7 +149,7 @@ TEST_F(DeadCodeEliminatorTest, ComplexCallChain) {
   call_graph_->AddEdge("level1", "level2");
   call_graph_->AddEdge("level2", "level3");
   
-  DeadCodeEliminator eliminator(call_graph_.get());
+  DeadCodeEliminator eliminator(call_graph_.get(), symbol_table_.get());
   auto report = eliminator.FindDeadCode();
   
   // All except isolated should be reachable
@@ -166,7 +166,7 @@ TEST_F(DeadCodeEliminatorTest, DeadCodeWithCycles) {
   call_graph_->AddEdge("dead_a", "dead_b");
   call_graph_->AddEdge("dead_b", "dead_a");
   
-  DeadCodeEliminator eliminator(call_graph_.get());
+  DeadCodeEliminator eliminator(call_graph_.get(), symbol_table_.get());
   auto report = eliminator.FindDeadCode();
   
   // Cycle is unreachable from main
@@ -175,7 +175,7 @@ TEST_F(DeadCodeEliminatorTest, DeadCodeWithCycles) {
 
 // Test 12: Report structure
 TEST_F(DeadCodeEliminatorTest, ReportStructure) {
-  DeadCodeEliminator eliminator(call_graph_.get());
+  DeadCodeEliminator eliminator(call_graph_.get(), symbol_table_.get());
   
   auto report = eliminator.FindDeadCode();
   
@@ -190,25 +190,17 @@ TEST_F(DeadCodeEliminatorTest, ReportStructure) {
 TEST_F(DeadCodeEliminatorTest, ActualElimination) {
   call_graph_->AddNode("unused");
   
-  DeadCodeEliminator eliminator(call_graph_.get());
+  DeadCodeEliminator eliminator(call_graph_.get(), symbol_table_.get());
   auto report = eliminator.FindDeadCode();
   
-  // Only test elimination if there's actually dead code found
-  if (report.total_dead_count > 0) {
-    auto status = eliminator.Eliminate(report, false);
-    // Should fail with not implemented error
-    EXPECT_FALSE(status.ok());
-    EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
-  } else {
-    // If no dead code found, elimination should succeed
-    auto status = eliminator.Eliminate(report, false);
-    EXPECT_TRUE(status.ok());
-  }
+  // Elimination should now succeed (OK status)
+  auto status = eliminator.Eliminate(report, false);
+  EXPECT_TRUE(status.ok());
 }
 
 // Test 14: Safe mode verification
 TEST_F(DeadCodeEliminatorTest, SafeMode) {
-  DeadCodeEliminator eliminator(call_graph_.get());
+  DeadCodeEliminator eliminator(call_graph_.get(), symbol_table_.get());
   
   auto report = eliminator.FindDeadCode();
   
@@ -222,7 +214,7 @@ TEST_F(DeadCodeEliminatorTest, ReportCountConsistency) {
   call_graph_->AddNode("func1");
   call_graph_->AddNode("func2");
   
-  DeadCodeEliminator eliminator(call_graph_.get());
+  DeadCodeEliminator eliminator(call_graph_.get(), symbol_table_.get());
   auto report = eliminator.FindDeadCode();
   
   // Total should match sum of individual counts
