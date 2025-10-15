@@ -414,6 +414,38 @@ TEST_F(RefactoringEngineTest, SymbolTableIntegration) {
   EXPECT_EQ(status.code(), absl::StatusCode::kUnimplemented);
 }
 
+// TDD Integration Test: Document current limitations
+TEST_F(RefactoringEngineTest, ActualRefactoringLimitations) {
+  // This test documents the current state as found in risk assessment
+  // All 4 operations return UnimplementedError
+  
+  RefactoringEngine engine(symbol_table_.get(), type_inference_.get());
+  
+  // Test ExtractFunction
+  Selection sel1{10, 5, 12, 15};
+  auto status1 = engine.ExtractFunction(sel1, "extracted");
+  EXPECT_EQ(status1.code(), absl::StatusCode::kUnimplemented);
+  
+  // Test InlineFunction  
+  Location loc{"test.sv", 15, 10};
+  auto status2 = engine.InlineFunction(loc);
+  EXPECT_EQ(status2.code(), absl::StatusCode::kUnimplemented);
+  
+  // Test ExtractVariable
+  Selection sel2{20, 10, 20, 25};
+  auto status3 = engine.ExtractVariable(sel2, "extracted_var");
+  EXPECT_EQ(status3.code(), absl::StatusCode::kUnimplemented);
+  
+  // Test MoveDeclaration
+  Location loc2{"test.sv", 30, 5};
+  auto status4 = engine.MoveDeclaration(loc2);
+  EXPECT_EQ(status4.code(), absl::StatusCode::kUnimplemented);
+  
+  // DOCUMENTED: All operations validated but not implemented
+  // Goal: Replace UnimplementedError with actual refactoring
+  // Following Option A: All 4 operations fully implemented
+}
+
 }  // namespace
 }  // namespace tools
 }  // namespace verilog
