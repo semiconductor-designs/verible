@@ -32,6 +32,7 @@
 #include "verible/verilog/CST/verilog-matchers.h"
 #include "verible/verilog/CST/verilog-nonterminals.h"
 #include "verible/verilog/CST/statement.h"
+#include "verible/verilog/CST/parameters.h"
 #include "verible/common/analysis/matcher/matcher.h"
 #include "verible/common/analysis/syntax-tree-search.h"
 #include "verible/verilog/parser/verilog-token-enum.h"
@@ -1493,18 +1494,16 @@ std::string VeriPGValidator::GenerateFixRST_001(
 
 absl::Status VeriPGValidator::CheckNamingViolations(
     const verilog::SymbolTable& symbol_table,
-    std::vector<Violation>& violations) {
-  // Full implementation with symbol table traversal
+    std::vector<Violation>& violations,
+    const verilog::VerilogProject* project) {
+  // Hybrid implementation: Symbol table for modules/signals, CST for parameters
   
   const auto& root = symbol_table.Root();
-  if (root.Children().empty()) {
-    return absl::OkStatus();  // Empty symbol table
-  }
   
   // Helper: Check if string is snake_case
   auto is_snake_case = [](const std::string& name) -> bool {
     if (name.empty()) return false;
-    if (std::isupper(name[0])) return false;  // First char must be lowercase
+    if (std::isupper(name[0])) return false;
     for (char c : name) {
       if (!(std::islower(c) || std::isdigit(c) || c == '_')) {
         return false;
@@ -1536,23 +1535,15 @@ absl::Status VeriPGValidator::CheckNamingViolations(
     return reserved.count(lower_name) > 0;
   };
   
-  // Traverse symbol table
-  std::function<void(const verilog::SymbolTableNode&)> traverse = 
+  // PART 1: Traverse symbol table for modules and signals (NAM_001-002)
+  std::function<void(const verilog::SymbolTableNode&)> traverse_st = 
       [&](const verilog::SymbolTableNode& node) {
-    // Iterate over children using range-based for loop
     for (const auto& [name, child_node] : node) {
       const auto& def_info = child_node.Value();
       const std::string node_name(name);
       
-      // Debug: Print what we're seeing (uncomment for debugging)
-      // std::cerr << "DEBUG: Found node '" << node_name << "' with metatype " 
-      //           << static_cast<int>(def_info.metatype) 
-      //           << " (has " << std::distance(child_node.begin(), child_node.end()) 
-      //           << " children)" << std::endl;
-      
       if (node_name.empty()) {
-        // Recurse to children
-        traverse(child_node);
+        traverse_st(child_node);
         continue;
       }
     
@@ -1584,18 +1575,87 @@ absl::Status VeriPGValidator::CheckNamingViolations(
         }
       }
       
-      // NAM_003-007: TODO - These require CST traversal, not symbol table
-      // Parameters are not stored in symbol table traversal
-      // These rules need to be implemented using CST matchers like:
-      // ParamDeclMatcher(), GetAllParameterNameTokens() etc.
-      // For now, skipping to maintain progress on other rules.
+      // NAM_007: No reserved keywords as identifiers
+      if (def_info.metatype == verilog::SymbolMetaType::kDataNetVariableInstance ||
+          def_info.metatype == verilog::SymbolMetaType::kParameter) {
+        if (contains_reserved(node_name)) {
+          Violation v;
+          v.rule = RuleId::kNAM_007;
+          v.severity = Severity::kError;
+          v.message = "reserved keyword used as identifier";
+          v.signal_name = node_name;
+          v.source_location = "";
+          v.fix_suggestion = "Use a different name (e.g., " + node_name + "_sig)";
+          violations.push_back(v);
+        }
+      }
       
-      // Recurse to children
-      traverse(child_node);
+      traverse_st(child_node);
     }
   };
   
-  traverse(root);
+  if (!root.Children().empty()) {
+    traverse_st(root);
+  }
+  
+  // PART 2: Traverse CST for parameters (NAM_003)
+  if (project) {
+    // Iterate through all files in the project
+    for (auto it = project->begin(); it != project->end(); ++it) {
+      const auto* file = it->second.get();
+      if (!file) continue;
+      
+      const auto* text_structure = file->GetTextStructure();
+      if (!text_structure) continue;
+      
+      const auto& syntax_tree = text_structure->SyntaxTree();
+      if (!syntax_tree) continue;
+      
+      // Find all parameter declarations using CST matcher
+      auto param_matchers = verilog::FindAllParamDeclarations(*syntax_tree);
+      
+      for (const auto& match : param_matchers) {
+        if (!match.match) continue;
+        
+        // Get all parameter name tokens
+        auto param_tokens = verilog::GetAllParameterNameTokens(*match.match);
+        
+        for (const auto* token : param_tokens) {
+          if (!token) continue;
+          
+          const std::string param_name(token->text());
+          
+          // NAM_003: Parameter names should be UPPER_CASE
+          if (!is_upper_case(param_name)) {
+            Violation v;
+            v.rule = RuleId::kNAM_003;
+            v.severity = Severity::kWarning;
+            v.message = "parameter names should be UPPER_CASE";
+            v.signal_name = param_name;
+            v.source_location = "";
+            v.fix_suggestion = "Convert to UPPER_CASE";
+            violations.push_back(v);
+          }
+          
+          // NAM_007: No reserved keywords as identifiers (also check parameters)
+          if (contains_reserved(param_name)) {
+            Violation v;
+            v.rule = RuleId::kNAM_007;
+            v.severity = Severity::kError;
+            v.message = "reserved keyword used as parameter identifier";
+            v.signal_name = param_name;
+            v.source_location = "";
+            v.fix_suggestion = "Use a different name (e.g., " + param_name + "_param)";
+            violations.push_back(v);
+          }
+        }
+      }
+    }
+  }
+  
+  // TODO: NAM_004-006 require more complex CST analysis (clock/reset pattern matching)
+  // These will be implemented in next iteration with signal usage analysis
+  
   return absl::OkStatus();
 }
 

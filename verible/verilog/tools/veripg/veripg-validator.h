@@ -176,7 +176,8 @@ class VeriPGValidator {
   
   // Check naming convention violations (NAM_001-007)
   absl::Status CheckNamingViolations(const verilog::SymbolTable& symbol_table,
-                                     std::vector<Violation>& violations);
+                                     std::vector<Violation>& violations,
+                                     const verilog::VerilogProject* project = nullptr);
   
   // Check signal width violations (WID_001-005)
   absl::Status CheckWidthViolations(const verilog::SymbolTable& symbol_table,

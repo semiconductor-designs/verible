@@ -58,7 +58,7 @@ TEST_F(VeriPGValidatorNAMIntegrationTest, DetectModuleNamingViolation) {
   VeriPGValidator validator(&type_checker);
   std::vector<Violation> violations;
   
-  auto status = validator.CheckNamingViolations(symbol_table, violations);
+  auto status = validator.CheckNamingViolations(symbol_table, violations, &project);
   ASSERT_TRUE(status.ok()) << status.message();
   
   bool found_nam_001 = false;
@@ -95,7 +95,7 @@ TEST_F(VeriPGValidatorNAMIntegrationTest, DetectShortSignalNameViolation) {
   VeriPGValidator validator(&type_checker);
   std::vector<Violation> violations;
   
-  auto status = validator.CheckNamingViolations(symbol_table, violations);
+  auto status = validator.CheckNamingViolations(symbol_table, violations, &project);
   ASSERT_TRUE(status.ok()) << status.message();
   
   bool found_nam_002 = false;
@@ -132,7 +132,7 @@ TEST_F(VeriPGValidatorNAMIntegrationTest, DetectParameterNamingViolation) {
   VeriPGValidator validator(&type_checker);
   std::vector<Violation> violations;
   
-  auto status = validator.CheckNamingViolations(symbol_table, violations);
+  auto status = validator.CheckNamingViolations(symbol_table, violations, &project);
   ASSERT_TRUE(status.ok()) << status.message();
   
   bool found_nam_003 = false;
