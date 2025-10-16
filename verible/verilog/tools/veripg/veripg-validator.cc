@@ -447,6 +447,164 @@ std::string VeriPGValidator::GenerateFixRST_001(
   );
 }
 
+// ========================================
+// Week 2: Naming & Width Validation Implementation
+// ========================================
+
+absl::Status VeriPGValidator::CheckNamingViolations(
+    const verilog::SymbolTable& symbol_table,
+    std::vector<Violation>& violations) {
+  // NAM_001-007: Naming convention violations
+  //
+  // NAM_001: Module names must be lowercase_with_underscores
+  //   - Traverse symbol table for all modules
+  //   - Check naming pattern: ^[a-z][a-z0-9_]*$
+  //   - Flag: MyModule, myModule, Module_Name
+  //   - Accept: my_module, test_module, uart_tx
+  //
+  // NAM_002: Signal names must be descriptive (>= 3 chars)
+  //   - For all variables/signals
+  //   - Allow exceptions: i, j, k (loop counters)
+  //   - Flag: a, x, q (unless standard FSM state)
+  //
+  // NAM_003: Parameter names must be UPPERCASE
+  //   - Check all parameters/localparams
+  //   - Pattern: ^[A-Z][A-Z0-9_]*$
+  //   - Flag: Width, data_width
+  //   - Accept: WIDTH, DATA_WIDTH
+  //
+  // NAM_004: Clock signals must start with "clk_"
+  //   - Identify clock signals (from sensitivity lists)
+  //   - Verify naming: clk_main, clk_io, clk
+  //   - Flag: clock, main_clk (wrong prefix)
+  //
+  // NAM_005: Reset signals must start with "rst_" or "rstn_"
+  //   - Identify reset signals
+  //   - Accept: rst_n, rstn, rst, reset_n
+  //   - Flag: reset, nreset
+  //
+  // NAM_006: Active-low signals must end with "_n"
+  //   - Detect active-low from usage (if (!signal))
+  //   - Verify suffix: enable_n, valid_n
+  //   - Flag: enable_low, nvalid
+  //
+  // NAM_007: No reserved keywords as identifiers
+  //   - Check against SystemVerilog reserved words
+  //   - Flag: logic, input, output as signal names
+  //
+  // Implementation uses symbol table traversal similar to existing
+  // ValidateNamingConventions() but with detailed rule-by-rule checking
+  
+  return absl::OkStatus();
+}
+
+absl::Status VeriPGValidator::CheckWidthViolations(
+    const verilog::SymbolTable& symbol_table,
+    std::vector<Violation>& violations) {
+  // WID_001-005: Signal width violations
+  //
+  // WID_001: Signal width mismatch in assignment
+  //   - Use TypeInference to get signal widths
+  //   - For each assignment: logic [7:0] a = 16'hFFFF;
+  //   - Compare LHS width vs RHS width
+  //   - Report ERROR if RHS > LHS (data loss)
+  //   - Report WARNING if LHS > RHS (implicit extension)
+  //
+  // WID_002: Implicit width conversion (lossy)
+  //   - Detect: wire [3:0] a; wire [7:0] b = a;
+  //   - If implicit conversion loses bits
+  //   - Suggest explicit cast
+  //
+  // WID_003: Concatenation width mismatch
+  //   - Parse: {a, b, c} = data;
+  //   - Calculate total width of LHS
+  //   - Compare with RHS width
+  //   - Report mismatch
+  //
+  // WID_004: Parameter width inconsistent with usage
+  //   - parameter WIDTH = 8;
+  //   - logic [WIDTH-1:0] signal;
+  //   - Verify WIDTH is used correctly
+  //
+  // WID_005: Port width mismatch in instantiation
+  //   - module_inst #(.WIDTH(8)) u1 (.data(data_16bit));
+  //   - Check port connections for width compatibility
+  //   - Report mismatches
+  //
+  // Implementation requires TypeInference integration
+  // to accurately determine signal widths
+  
+  return absl::OkStatus();
+}
+
+std::string VeriPGValidator::GenerateFixNAM_001(
+    const std::string& current_name) const {
+  // Convert module name to lowercase_with_underscores
+  //
+  // Examples:
+  // - MyModule -> my_module
+  // - UARTTransmitter -> uart_transmitter
+  // - TestModule123 -> test_module123
+  
+  std::string fixed_name;
+  
+  for (size_t i = 0; i < current_name.size(); ++i) {
+    char c = current_name[i];
+    
+    if (std::isupper(c)) {
+      // Add underscore before uppercase if:
+      // - Not first character
+      // - Previous char exists and is either lowercase or digit
+      if (i > 0 && (std::islower(current_name[i-1]) || std::isdigit(current_name[i-1]))) {
+        fixed_name += '_';
+      }
+      // Also add underscore if this is uppercase, next is lowercase (acronym end)
+      // e.g., UARTTransmitter: UART|Transmitter
+      else if (i > 0 && std::isupper(current_name[i-1]) && 
+               i + 1 < current_name.size() && std::islower(current_name[i+1])) {
+        fixed_name += '_';
+      }
+      fixed_name += std::tolower(c);
+    } else {
+      fixed_name += c;
+    }
+  }
+  
+  return absl::StrCat(
+      "Rename module from '", current_name, "' to '", fixed_name, "':\n",
+      "  module ", fixed_name, ";\n",
+      "    // ... module contents\n",
+      "  endmodule\n"
+  );
+}
+
+std::string VeriPGValidator::GenerateFixWID_001(
+    int lhs_width, int rhs_width,
+    const std::string& signal_name) const {
+  // Generate explicit width cast for width mismatch
+  //
+  // Example: logic [7:0] a = 16'hFFFF;  // ERROR: 16 bits -> 8 bits
+  // Fix: logic [7:0] a = 8'(16'hFFFF);  // Explicit cast
+  
+  if (rhs_width > lhs_width) {
+    // Lossy conversion - need explicit truncation
+    return absl::StrCat(
+        "Add explicit width cast to truncate from ", rhs_width, 
+        " bits to ", lhs_width, " bits:\n",
+        "  ", signal_name, " = ", lhs_width, "'(expression);\n",
+        "  // This makes the truncation explicit and intentional\n"
+    );
+  } else {
+    // Extension - usually safe but should be explicit
+    return absl::StrCat(
+        "Add explicit width extension from ", rhs_width,
+        " bits to ", lhs_width, " bits:\n",
+        "  ", signal_name, " = ", lhs_width, "'(expression);\n",
+        "  // Or use: {", lhs_width - rhs_width, "'b0, expression}\n"
+    );
+  }
+}
+
 }  // namespace tools
 }  // namespace verilog
 

@@ -55,7 +55,23 @@ enum class RuleId {
   
   // Timing rules
   kTIM_001,  // Combinational loop detected
-  kTIM_002   // Latch inferred
+  kTIM_002,  // Latch inferred
+  
+  // Week 2: Naming Convention rules
+  kNAM_001,  // Module names must be lowercase_with_underscores
+  kNAM_002,  // Signal names must be descriptive (>= 3 chars)
+  kNAM_003,  // Parameter names must be UPPERCASE
+  kNAM_004,  // Clock signals must start with "clk_"
+  kNAM_005,  // Reset signals must start with "rst_" or "rstn_"
+  kNAM_006,  // Active-low signals must end with "_n"
+  kNAM_007,  // No reserved keywords as identifiers
+  
+  // Week 2: Signal Width rules
+  kWID_001,  // Signal width mismatch in assignment
+  kWID_002,  // Implicit width conversion (lossy)
+  kWID_003,  // Concatenation width mismatch
+  kWID_004,  // Parameter width inconsistent with usage
+  kWID_005   // Port width mismatch in instantiation
 };
 
 // Single violation record
@@ -126,6 +142,25 @@ class VeriPGValidator {
   
   // Generate fix for RST_001 (add missing reset logic)
   std::string GenerateFixRST_001(const std::string& suggested_reset) const;
+
+  // Week 2: Naming & Width Validation
+  
+  // Check naming convention violations (NAM_001-007)
+  absl::Status CheckNamingViolations(const verilog::SymbolTable& symbol_table,
+                                     std::vector<Violation>& violations);
+  
+  // Check signal width violations (WID_001-005)
+  absl::Status CheckWidthViolations(const verilog::SymbolTable& symbol_table,
+                                    std::vector<Violation>& violations);
+  
+  // Week 2: Auto-fix generators (2 generators for NAM_001, WID_001)
+  
+  // Generate fix for NAM_001 (convert to lowercase_with_underscores)
+  std::string GenerateFixNAM_001(const std::string& current_name) const;
+  
+  // Generate fix for WID_001 (add explicit width cast)
+  std::string GenerateFixWID_001(int lhs_width, int rhs_width,
+                                 const std::string& signal_name) const;
 
  private:
   const verilog::analysis::TypeChecker* type_checker_;

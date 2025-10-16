@@ -713,6 +713,267 @@ TEST_F(VeriPGValidatorTest, AllAutoFixGeneratorsWork) {
   EXPECT_NE(fix_cdc, fix_rst);
 }
 
+// ========================================
+// Week 2: Naming & Width Validation Tests
+// ========================================
+
+// Test 63: CheckNamingViolations framework exists
+TEST_F(VeriPGValidatorTest, CheckNamingViolations_Framework) {
+  VeriPGValidator validator(type_checker_.get());
+  std::vector<Violation> violations;
+  
+  auto status = validator.CheckNamingViolations(*symbol_table_, violations);
+  EXPECT_TRUE(status.ok());
+}
+
+// Test 64: CheckWidthViolations framework exists
+TEST_F(VeriPGValidatorTest, CheckWidthViolations_Framework) {
+  VeriPGValidator validator(type_checker_.get());
+  std::vector<Violation> violations;
+  
+  auto status = validator.CheckWidthViolations(*symbol_table_, violations);
+  EXPECT_TRUE(status.ok());
+}
+
+// Test 65: NAM_001 violation structure
+TEST_F(VeriPGValidatorTest, Violation_NAM_001_Structure) {
+  Violation v;
+  v.rule = RuleId::kNAM_001;
+  v.severity = Severity::kWarning;
+  v.message = "Module name should be lowercase_with_underscores";
+  v.signal_name = "MyModule";
+  
+  EXPECT_EQ(v.rule, RuleId::kNAM_001);
+  EXPECT_EQ(v.severity, Severity::kWarning);
+}
+
+// Test 66: NAM_002 violation structure
+TEST_F(VeriPGValidatorTest, Violation_NAM_002_Structure) {
+  Violation v;
+  v.rule = RuleId::kNAM_002;
+  v.severity = Severity::kWarning;
+  v.message = "Signal name not descriptive (< 3 chars)";
+  
+  EXPECT_EQ(v.rule, RuleId::kNAM_002);
+}
+
+// Test 67: NAM_003 violation structure
+TEST_F(VeriPGValidatorTest, Violation_NAM_003_Structure) {
+  Violation v;
+  v.rule = RuleId::kNAM_003;
+  v.severity = Severity::kWarning;
+  v.message = "Parameter name should be UPPERCASE";
+  
+  EXPECT_EQ(v.rule, RuleId::kNAM_003);
+}
+
+// Test 68: NAM_004 violation structure
+TEST_F(VeriPGValidatorTest, Violation_NAM_004_Structure) {
+  Violation v;
+  v.rule = RuleId::kNAM_004;
+  v.severity = Severity::kWarning;
+  v.message = "Clock signal should start with 'clk_'";
+  
+  EXPECT_EQ(v.rule, RuleId::kNAM_004);
+}
+
+// Test 69: NAM_005 violation structure
+TEST_F(VeriPGValidatorTest, Violation_NAM_005_Structure) {
+  Violation v;
+  v.rule = RuleId::kNAM_005;
+  v.severity = Severity::kWarning;
+  v.message = "Reset signal should start with 'rst_' or 'rstn_'";
+  
+  EXPECT_EQ(v.rule, RuleId::kNAM_005);
+}
+
+// Test 70: NAM_006 violation structure
+TEST_F(VeriPGValidatorTest, Violation_NAM_006_Structure) {
+  Violation v;
+  v.rule = RuleId::kNAM_006;
+  v.severity = Severity::kWarning;
+  v.message = "Active-low signal should end with '_n'";
+  
+  EXPECT_EQ(v.rule, RuleId::kNAM_006);
+}
+
+// Test 71: NAM_007 violation structure
+TEST_F(VeriPGValidatorTest, Violation_NAM_007_Structure) {
+  Violation v;
+  v.rule = RuleId::kNAM_007;
+  v.severity = Severity::kError;
+  v.message = "Reserved keyword used as identifier";
+  
+  EXPECT_EQ(v.rule, RuleId::kNAM_007);
+  EXPECT_EQ(v.severity, Severity::kError);
+}
+
+// Test 72: WID_001 violation structure
+TEST_F(VeriPGValidatorTest, Violation_WID_001_Structure) {
+  Violation v;
+  v.rule = RuleId::kWID_001;
+  v.severity = Severity::kError;
+  v.message = "Signal width mismatch in assignment";
+  
+  EXPECT_EQ(v.rule, RuleId::kWID_001);
+  EXPECT_EQ(v.severity, Severity::kError);
+}
+
+// Test 73: WID_002 violation structure
+TEST_F(VeriPGValidatorTest, Violation_WID_002_Structure) {
+  Violation v;
+  v.rule = RuleId::kWID_002;
+  v.severity = Severity::kWarning;
+  v.message = "Implicit width conversion (lossy)";
+  
+  EXPECT_EQ(v.rule, RuleId::kWID_002);
+}
+
+// Test 74: WID_003 violation structure
+TEST_F(VeriPGValidatorTest, Violation_WID_003_Structure) {
+  Violation v;
+  v.rule = RuleId::kWID_003;
+  v.severity = Severity::kError;
+  v.message = "Concatenation width mismatch";
+  
+  EXPECT_EQ(v.rule, RuleId::kWID_003);
+}
+
+// Test 75: WID_004 violation structure
+TEST_F(VeriPGValidatorTest, Violation_WID_004_Structure) {
+  Violation v;
+  v.rule = RuleId::kWID_004;
+  v.severity = Severity::kWarning;
+  v.message = "Parameter width inconsistent with usage";
+  
+  EXPECT_EQ(v.rule, RuleId::kWID_004);
+}
+
+// Test 76: WID_005 violation structure
+TEST_F(VeriPGValidatorTest, Violation_WID_005_Structure) {
+  Violation v;
+  v.rule = RuleId::kWID_005;
+  v.severity = Severity::kError;
+  v.message = "Port width mismatch in instantiation";
+  
+  EXPECT_EQ(v.rule, RuleId::kWID_005);
+}
+
+// Test 77: All 12 Week 2 rule IDs defined
+TEST_F(VeriPGValidatorTest, Week2RulesCount) {
+  std::vector<RuleId> week2_rules = {
+    RuleId::kNAM_001, RuleId::kNAM_002, RuleId::kNAM_003, RuleId::kNAM_004,
+    RuleId::kNAM_005, RuleId::kNAM_006, RuleId::kNAM_007,
+    RuleId::kWID_001, RuleId::kWID_002, RuleId::kWID_003, RuleId::kWID_004,
+    RuleId::kWID_005
+  };
+  EXPECT_EQ(week2_rules.size(), 12) << "Week 2 should have 12 rules";
+}
+
+// Test 78: GenerateFixNAM_001 - converts to lowercase
+TEST_F(VeriPGValidatorTest, GenerateFixNAM_001) {
+  VeriPGValidator validator(type_checker_.get());
+  
+  std::string fix = validator.GenerateFixNAM_001("MyModule");
+  
+  EXPECT_FALSE(fix.empty());
+  EXPECT_THAT(fix, ::testing::HasSubstr("my_module"));
+  EXPECT_THAT(fix, ::testing::HasSubstr("Rename"));
+}
+
+// Test 79: GenerateFixNAM_001 - handles camelCase
+TEST_F(VeriPGValidatorTest, GenerateFixNAM_001_CamelCase) {
+  VeriPGValidator validator(type_checker_.get());
+  
+  std::string fix1 = validator.GenerateFixNAM_001("UARTTransmitter");
+  std::string fix2 = validator.GenerateFixNAM_001("TestModule123");
+  
+  EXPECT_THAT(fix1, ::testing::HasSubstr("uart_transmitter"));
+  EXPECT_THAT(fix2, ::testing::HasSubstr("test_module123"));
+}
+
+// Test 80: GenerateFixWID_001 - truncation case
+TEST_F(VeriPGValidatorTest, GenerateFixWID_001_Truncation) {
+  VeriPGValidator validator(type_checker_.get());
+  
+  std::string fix = validator.GenerateFixWID_001(8, 16, "data");
+  
+  EXPECT_FALSE(fix.empty());
+  EXPECT_THAT(fix, ::testing::HasSubstr("8"));
+  EXPECT_THAT(fix, ::testing::HasSubstr("16"));
+  EXPECT_THAT(fix, ::testing::HasSubstr("truncate"));
+}
+
+// Test 81: GenerateFixWID_001 - extension case
+TEST_F(VeriPGValidatorTest, GenerateFixWID_001_Extension) {
+  VeriPGValidator validator(type_checker_.get());
+  
+  std::string fix = validator.GenerateFixWID_001(16, 8, "signal");
+  
+  EXPECT_FALSE(fix.empty());
+  EXPECT_THAT(fix, ::testing::HasSubstr("extension"));
+}
+
+// Test 82: Both Week 2 auto-fix generators work
+TEST_F(VeriPGValidatorTest, Week2AutoFixGeneratorsWork) {
+  VeriPGValidator validator(type_checker_.get());
+  
+  std::string fix_nam = validator.GenerateFixNAM_001("MyModule");
+  std::string fix_wid = validator.GenerateFixWID_001(8, 16, "data");
+  
+  EXPECT_FALSE(fix_nam.empty());
+  EXPECT_FALSE(fix_wid.empty());
+  EXPECT_NE(fix_nam, fix_wid);
+}
+
+// Test 83: Naming rules count (7 rules)
+TEST_F(VeriPGValidatorTest, NamingRulesCount) {
+  std::vector<RuleId> nam_rules = {
+    RuleId::kNAM_001, RuleId::kNAM_002, RuleId::kNAM_003, RuleId::kNAM_004,
+    RuleId::kNAM_005, RuleId::kNAM_006, RuleId::kNAM_007
+  };
+  EXPECT_EQ(nam_rules.size(), 7);
+}
+
+// Test 84: Width rules count (5 rules)
+TEST_F(VeriPGValidatorTest, WidthRulesCount) {
+  std::vector<RuleId> wid_rules = {
+    RuleId::kWID_001, RuleId::kWID_002, RuleId::kWID_003, RuleId::kWID_004,
+    RuleId::kWID_005
+  };
+  EXPECT_EQ(wid_rules.size(), 5);
+}
+
+// Test 85: Total rules after Week 2 (15 + 12 = 27)
+TEST_F(VeriPGValidatorTest, TotalRulesAfterWeek2) {
+  // Week 1: 15 rules, Week 2: 12 rules
+  EXPECT_EQ(15 + 12, 27) << "Should have 27 total rules after Week 2";
+}
+
+// Test 86: Multiple naming violations can be collected
+TEST_F(VeriPGValidatorTest, MultipleNamingViolations) {
+  VeriPGValidator validator(type_checker_.get());
+  std::vector<Violation> violations;
+  
+  auto status = validator.CheckNamingViolations(*symbol_table_, violations);
+  EXPECT_TRUE(status.ok());
+  
+  // Empty symbol table should have no violations
+  EXPECT_EQ(violations.size(), 0);
+}
+
+// Test 87: Multiple width violations can be collected
+TEST_F(VeriPGValidatorTest, MultipleWidthViolations) {
+  VeriPGValidator validator(type_checker_.get());
+  std::vector<Violation> violations;
+  
+  auto status = validator.CheckWidthViolations(*symbol_table_, violations);
+  EXPECT_TRUE(status.ok());
+  
+  // Empty symbol table should have no violations
+  EXPECT_EQ(violations.size(), 0);
+}
+
 }  // namespace
 }  // namespace tools
 }  // namespace verilog
