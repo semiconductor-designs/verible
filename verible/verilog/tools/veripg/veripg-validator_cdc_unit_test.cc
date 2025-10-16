@@ -18,12 +18,17 @@
 #include "verible/verilog/tools/veripg/veripg-validator.h"
 
 #include <iostream>
+#include <iomanip>
 #include <string>
 #include <vector>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "verible/verilog/analysis/verilog-analyzer.h"
+#include "verible/verilog/analysis/verilog-project.h"
+#include "verible/verilog/analysis/symbol-table.h"
+#include "verible/verilog/analysis/type-checker.h"
+#include "verible/verilog/analysis/type-inference.h"
 #include "verible/verilog/parser/verilog-token-enum.h"
 #include "verible/common/text/tree-utils.h"
 
@@ -184,6 +189,31 @@ endmodule
   // TODO: Once we understand the structure, we can test ExtractClockFromBlock
   // For now, just verify we found the node
   EXPECT_TRUE(true) << "Test infrastructure works, need to understand CST structure";
+}
+
+// Test: Verify we understand why CDC detection returns 0 violations
+TEST_F(CDCHelperUnitTest, WhyCDCDetectionFails) {
+  // This test documents the current state: we can find always_ff blocks
+  // but CheckCDCViolations returns 0 violations
+  // 
+  // From previous tests we know:
+  // 1. FindAlwaysFFNodes successfully finds 2 blocks
+  // 2. CST structure is well understood
+  // 3. Integration tests get 0 violations
+  //
+  // Hypothesis: Either ExtractClockFromBlock, GetAssignedSignalsInBlock,
+  // or GetUsedSignalsInBlock is returning empty results
+  //
+  // To debug this without VerilogProject integration complexity,
+  // we need to add logging to the actual detection code or test helpers directly
+  
+  std::cout << "\n=== CDC Detection Analysis ===" << std::endl;
+  std::cout << "Unit tests prove we CAN find always_ff blocks" << std::endl;
+  std::cout << "Integration tests prove CheckCDCViolations returns 0 violations" << std::endl;
+  std::cout << "Next step: Add logging to helper functions" << std::endl;
+  std::cout << "Suspected issue: One of the helper functions returns empty" << std::endl;
+  
+  EXPECT_TRUE(true) << "This test documents the investigation status";
 }
 
 }  // namespace

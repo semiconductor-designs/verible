@@ -262,32 +262,35 @@ absl::Status VeriPGValidator::CheckCDCViolations(
     
     // Manual traversal to find always_ff statements
     // We traverse the entire tree and check for nodes whose first child is TK_always_ff
-    std::function<void(const verible::Symbol&)> find_always_ff = 
-        [&](const verible::Symbol& sym) {
-      if (sym.Kind() == verible::SymbolKind::kNode) {
-        const auto& node = verible::down_cast<const verible::SyntaxTreeNode&>(sym);
+    // Use a helper to traverse with proper pointer storage
+    std::function<void(const verible::Symbol*, const verible::SyntaxTreeNode*)> find_always_ff = 
+        [&](const verible::Symbol* sym, const verible::SyntaxTreeNode* parent) {
+      if (!sym) return;
+      
+      if (sym->Kind() == verible::SymbolKind::kNode) {
+        const auto* node = verible::down_cast<const verible::SyntaxTreeNode*>(sym);
         
         // Check if this node's first child is the TK_always_ff keyword
-        if (node.size() > 0 && node[0]) {
-          if (node[0]->Kind() == verible::SymbolKind::kLeaf) {
-            const auto& leaf = verible::SymbolCastToLeaf(*node[0]);
+        if (node->size() > 0 && (*node)[0]) {
+          if ((*node)[0]->Kind() == verible::SymbolKind::kLeaf) {
+            const auto& leaf = verible::SymbolCastToLeaf(*(*node)[0]);
             verilog_tokentype token_type = static_cast<verilog_tokentype>(leaf.get().token_enum());
             
             if (token_type == TK_always_ff) {
-              // Found an always_ff statement!
-              always_ff_blocks.push_back(&node);
+              // Found an always_ff statement! Store the pointer (it's owned by syntax_tree)
+              always_ff_blocks.push_back(node);
             }
           }
         }
         
         // Recursively traverse children
-        for (const auto& child : node.children()) {
-          if (child) find_always_ff(*child);
+        for (const auto& child : node->children()) {
+          if (child) find_always_ff(child.get(), node);
         }
       }
     };
     
-    find_always_ff(*syntax_tree);
+    find_always_ff(syntax_tree.get(), nullptr);
   }
   
   if (always_ff_blocks.empty()) {
@@ -304,7 +307,6 @@ absl::Status VeriPGValidator::CheckCDCViolations(
     // Extract clock signal from sensitivity list
     // Format: always_ff @(posedge clk) or always_ff @(negedge clk)
     std::string clock_name = ExtractClockFromBlock(block);
-    // TODO: Debug why clock_name might be empty
     if (clock_name.empty()) continue;
     
     // Find all signals assigned in this block
@@ -412,9 +414,16 @@ std::vector<std::string> VeriPGValidator::GetAssignedSignalsInBlock(
   auto assignments = verilog::FindAllNonBlockingAssignments(*block);
   
   for (const auto& assignment : assignments) {
-    if (!assignment.match) continue;
+    if (!assignment.match || assignment.match->Kind() != verible::SymbolKind::kNode) continue;
     
-    // Extract LHS identifier from the assignment
+    const auto* assignment_node = verible::down_cast<const verible::SyntaxTreeNode*>(assignment.match);
+    
+    // Use the dedicated helper to get the LHS (left-hand side)
+    // This avoids accidentally traversing into the RHS
+    const auto* lhs = verilog::GetNonBlockingAssignmentLhs(*assignment_node);
+    if (!lhs) continue;
+    
+    // Extract identifier(s) from LHS
     // The LHS could be:
     // - Simple: data_a <= ...
     // - Indexed: mem[addr] <= ...
@@ -422,14 +431,14 @@ std::vector<std::string> VeriPGValidator::GetAssignedSignalsInBlock(
     // - Struct: packet.header <= ...
     // For CDC analysis, we extract the base signal name
     
-    std::function<void(const verible::Symbol&)> extract_lhs = 
+    std::function<void(const verible::Symbol&)> extract_lhs_identifiers = 
         [&](const verible::Symbol& sym) {
       if (sym.Kind() == verible::SymbolKind::kLeaf) {
         const auto& leaf = verible::SymbolCastToLeaf(sym);
         const auto token = leaf.get();
         verilog_tokentype token_type = static_cast<verilog_tokentype>(token.token_enum());
         
-        // If this is an identifier, it's likely the base signal
+        // If this is an identifier, it's the base signal
         if (IsIdentifierLike(token_type)) {
           std::string signal_name(token.text());
           // Avoid duplicates
@@ -440,19 +449,14 @@ std::vector<std::string> VeriPGValidator::GetAssignedSignalsInBlock(
         }
       } else if (sym.Kind() == verible::SymbolKind::kNode) {
         const auto& n = verible::down_cast<const verible::SyntaxTreeNode&>(sym);
-        // Only traverse the first few children (LHS is usually early in the node)
-        // This avoids traversing into the RHS expression
-        int child_count = 0;
+        // Traverse children to find identifiers
         for (const auto& child : n.children()) {
-          if (child && child_count < 3) {  // Limit depth to avoid RHS
-            extract_lhs(*child);
-            child_count++;
-          }
+          if (child) extract_lhs_identifiers(*child);
         }
       }
     };
     
-    extract_lhs(*assignment.match);
+    extract_lhs_identifiers(*lhs);
   }
   
   return assigned_signals;

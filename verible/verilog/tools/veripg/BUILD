@@ -51,10 +51,13 @@ cc_test(
     deps = [
         ":veripg-validator",
         "//verible/verilog/analysis:verilog-analyzer",
+        "//verible/verilog/analysis:verilog-project",
+        "//verible/verilog/analysis:symbol-table",
         "//verible/verilog/analysis:type-checker",
         "//verible/verilog/analysis:type-inference",
         "//verible/verilog/parser:verilog-token-enum",
         "//verible/common/text:tree-utils",
+        "@abseil-cpp//absl/status",
         "@googletest//:gtest",
         "@googletest//:gtest_main",
     ],
