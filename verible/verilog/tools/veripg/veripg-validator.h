@@ -71,7 +71,24 @@ enum class RuleId {
   kWID_002,  // Implicit width conversion (lossy)
   kWID_003,  // Concatenation width mismatch
   kWID_004,  // Parameter width inconsistent with usage
-  kWID_005   // Port width mismatch in instantiation
+  kWID_005,  // Port width mismatch in instantiation
+  
+  // Week 3: Power Intent rules
+  kPWR_001,  // Missing power domain annotation
+  kPWR_002,  // Level shifter required at domain boundary
+  kPWR_003,  // Isolation cell required for power-down domain
+  kPWR_004,  // Retention register without retention annotation
+  kPWR_005,  // Always-on signal crossing to power-gated domain
+  
+  // Week 3: Structure rules
+  kSTR_001,  // Module has no ports (should be testbench)
+  kSTR_002,  // Module exceeds complexity threshold (50+ statements)
+  kSTR_003,  // Deep hierarchy (>5 levels of instantiation)
+  kSTR_004,  // Missing module header comment
+  kSTR_005,  // Port ordering (clk, rst, inputs, outputs)
+  kSTR_006,  // Instantiation without named ports
+  kSTR_007,  // Generate block without label
+  kSTR_008   // Case statement without default clause
 };
 
 // Single violation record
@@ -161,6 +178,25 @@ class VeriPGValidator {
   // Generate fix for WID_001 (add explicit width cast)
   std::string GenerateFixWID_001(int lhs_width, int rhs_width,
                                  const std::string& signal_name) const;
+
+  // Week 3: Power Intent & Structure Validation
+  
+  // Check power intent violations (PWR_001-005)
+  absl::Status CheckPowerViolations(const verilog::SymbolTable& symbol_table,
+                                    std::vector<Violation>& violations);
+  
+  // Check structural violations (STR_001-008)
+  absl::Status CheckStructureViolations(const verilog::SymbolTable& symbol_table,
+                                        std::vector<Violation>& violations);
+  
+  // Week 3: Auto-fix generators (2 generators for STR_005, STR_006)
+  
+  // Generate fix for STR_005 (reorder ports to clk, rst, inputs, outputs)
+  std::string GenerateFixSTR_005(const std::vector<std::string>& current_order) const;
+  
+  // Generate fix for STR_006 (convert positional to named ports)
+  std::string GenerateFixSTR_006(const std::string& instance_name,
+                                 const std::vector<std::string>& port_names) const;
 
  private:
   const verilog::analysis::TypeChecker* type_checker_;

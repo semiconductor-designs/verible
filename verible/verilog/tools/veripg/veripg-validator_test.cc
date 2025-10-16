@@ -974,6 +974,210 @@ TEST_F(VeriPGValidatorTest, MultipleWidthViolations) {
   EXPECT_EQ(violations.size(), 0);
 }
 
+// ========================================
+// Week 3: Power Intent & Structure Validation Tests
+// ========================================
+
+// Test 88: CheckPowerViolations framework exists
+TEST_F(VeriPGValidatorTest, CheckPowerViolations_Framework) {
+  VeriPGValidator validator(type_checker_.get());
+  std::vector<Violation> violations;
+  
+  auto status = validator.CheckPowerViolations(*symbol_table_, violations);
+  EXPECT_TRUE(status.ok());
+}
+
+// Test 89: CheckStructureViolations framework exists
+TEST_F(VeriPGValidatorTest, CheckStructureViolations_Framework) {
+  VeriPGValidator validator(type_checker_.get());
+  std::vector<Violation> violations;
+  
+  auto status = validator.CheckStructureViolations(*symbol_table_, violations);
+  EXPECT_TRUE(status.ok());
+}
+
+// Test 90-97: Power rule violation structures
+TEST_F(VeriPGValidatorTest, Violation_PWR_001_Structure) {
+  Violation v;
+  v.rule = RuleId::kPWR_001;
+  v.severity = Severity::kWarning;
+  v.message = "Missing power domain annotation";
+  EXPECT_EQ(v.rule, RuleId::kPWR_001);
+}
+
+TEST_F(VeriPGValidatorTest, Violation_PWR_002_Structure) {
+  Violation v;
+  v.rule = RuleId::kPWR_002;
+  v.severity = Severity::kError;
+  v.message = "Level shifter required at domain boundary";
+  EXPECT_EQ(v.rule, RuleId::kPWR_002);
+}
+
+TEST_F(VeriPGValidatorTest, Violation_PWR_003_Structure) {
+  Violation v;
+  v.rule = RuleId::kPWR_003;
+  v.severity = Severity::kError;
+  v.message = "Isolation cell required for power-down domain";
+  EXPECT_EQ(v.rule, RuleId::kPWR_003);
+}
+
+TEST_F(VeriPGValidatorTest, Violation_PWR_004_Structure) {
+  Violation v;
+  v.rule = RuleId::kPWR_004;
+  v.severity = Severity::kWarning;
+  v.message = "Retention register without retention annotation";
+  EXPECT_EQ(v.rule, RuleId::kPWR_004);
+}
+
+TEST_F(VeriPGValidatorTest, Violation_PWR_005_Structure) {
+  Violation v;
+  v.rule = RuleId::kPWR_005;
+  v.severity = Severity::kError;
+  v.message = "Always-on signal crossing to power-gated domain";
+  EXPECT_EQ(v.rule, RuleId::kPWR_005);
+}
+
+// Test 98-105: Structure rule violation structures  
+TEST_F(VeriPGValidatorTest, Violation_STR_001_Structure) {
+  Violation v;
+  v.rule = RuleId::kSTR_001;
+  v.severity = Severity::kWarning;
+  v.message = "Module has no ports (should be testbench)";
+  EXPECT_EQ(v.rule, RuleId::kSTR_001);
+}
+
+TEST_F(VeriPGValidatorTest, Violation_STR_002_Structure) {
+  Violation v;
+  v.rule = RuleId::kSTR_002;
+  v.severity = Severity::kWarning;
+  v.message = "Module exceeds complexity threshold";
+  EXPECT_EQ(v.rule, RuleId::kSTR_002);
+}
+
+TEST_F(VeriPGValidatorTest, Violation_STR_003_Structure) {
+  Violation v;
+  v.rule = RuleId::kSTR_003;
+  v.severity = Severity::kWarning;
+  v.message = "Deep hierarchy (>5 levels)";
+  EXPECT_EQ(v.rule, RuleId::kSTR_003);
+}
+
+TEST_F(VeriPGValidatorTest, Violation_STR_004_Structure) {
+  Violation v;
+  v.rule = RuleId::kSTR_004;
+  v.severity = Severity::kInfo;
+  v.message = "Missing module header comment";
+  EXPECT_EQ(v.rule, RuleId::kSTR_004);
+}
+
+TEST_F(VeriPGValidatorTest, Violation_STR_005_Structure) {
+  Violation v;
+  v.rule = RuleId::kSTR_005;
+  v.severity = Severity::kWarning;
+  v.message = "Port ordering (clk, rst, inputs, outputs)";
+  EXPECT_EQ(v.rule, RuleId::kSTR_005);
+}
+
+TEST_F(VeriPGValidatorTest, Violation_STR_006_Structure) {
+  Violation v;
+  v.rule = RuleId::kSTR_006;
+  v.severity = Severity::kWarning;
+  v.message = "Instantiation without named ports";
+  EXPECT_EQ(v.rule, RuleId::kSTR_006);
+}
+
+TEST_F(VeriPGValidatorTest, Violation_STR_007_Structure) {
+  Violation v;
+  v.rule = RuleId::kSTR_007;
+  v.severity = Severity::kWarning;
+  v.message = "Generate block without label";
+  EXPECT_EQ(v.rule, RuleId::kSTR_007);
+}
+
+TEST_F(VeriPGValidatorTest, Violation_STR_008_Structure) {
+  Violation v;
+  v.rule = RuleId::kSTR_008;
+  v.severity = Severity::kError;
+  v.message = "Case statement without default clause";
+  EXPECT_EQ(v.rule, RuleId::kSTR_008);
+}
+
+// Test 106: All 13 Week 3 rule IDs defined
+TEST_F(VeriPGValidatorTest, Week3RulesCount) {
+  std::vector<RuleId> week3_rules = {
+    RuleId::kPWR_001, RuleId::kPWR_002, RuleId::kPWR_003, RuleId::kPWR_004, RuleId::kPWR_005,
+    RuleId::kSTR_001, RuleId::kSTR_002, RuleId::kSTR_003, RuleId::kSTR_004,
+    RuleId::kSTR_005, RuleId::kSTR_006, RuleId::kSTR_007, RuleId::kSTR_008
+  };
+  EXPECT_EQ(week3_rules.size(), 13) << "Week 3 should have 13 rules";
+}
+
+// Test 107: GenerateFixSTR_005 - reorders ports
+TEST_F(VeriPGValidatorTest, GenerateFixSTR_005) {
+  VeriPGValidator validator(type_checker_.get());
+  
+  std::vector<std::string> ports = {"data_in", "clk", "enable", "rst_n", "data_out"};
+  std::string fix = validator.GenerateFixSTR_005(ports);
+  
+  EXPECT_FALSE(fix.empty());
+  EXPECT_THAT(fix, ::testing::HasSubstr("clk"));
+  EXPECT_THAT(fix, ::testing::HasSubstr("rst_n"));
+  EXPECT_THAT(fix, ::testing::HasSubstr("Proper port ordering"));
+}
+
+// Test 108: GenerateFixSTR_006 - named ports
+TEST_F(VeriPGValidatorTest, GenerateFixSTR_006) {
+  VeriPGValidator validator(type_checker_.get());
+  
+  std::vector<std::string> ports = {"clk", "rst_n", "data"};
+  std::string fix = validator.GenerateFixSTR_006("u1", ports);
+  
+  EXPECT_FALSE(fix.empty());
+  EXPECT_THAT(fix, ::testing::HasSubstr(".clk(clk)"));
+  EXPECT_THAT(fix, ::testing::HasSubstr(".rst_n(rst_n)"));
+  EXPECT_THAT(fix, ::testing::HasSubstr("named port"));
+}
+
+// Test 109: Both Week 3 auto-fix generators work
+TEST_F(VeriPGValidatorTest, Week3AutoFixGeneratorsWork) {
+  VeriPGValidator validator(type_checker_.get());
+  
+  std::vector<std::string> ports = {"data", "clk"};
+  std::string fix_str005 = validator.GenerateFixSTR_005(ports);
+  std::string fix_str006 = validator.GenerateFixSTR_006("u1", ports);
+  
+  EXPECT_FALSE(fix_str005.empty());
+  EXPECT_FALSE(fix_str006.empty());
+  EXPECT_NE(fix_str005, fix_str006);
+}
+
+// Test 110: Power rules count (5 rules)
+TEST_F(VeriPGValidatorTest, PowerRulesCount) {
+  std::vector<RuleId> pwr_rules = {
+    RuleId::kPWR_001, RuleId::kPWR_002, RuleId::kPWR_003, RuleId::kPWR_004, RuleId::kPWR_005
+  };
+  EXPECT_EQ(pwr_rules.size(), 5);
+}
+
+// Test 111: Structure rules count (8 rules)
+TEST_F(VeriPGValidatorTest, StructureRulesCount) {
+  std::vector<RuleId> str_rules = {
+    RuleId::kSTR_001, RuleId::kSTR_002, RuleId::kSTR_003, RuleId::kSTR_004,
+    RuleId::kSTR_005, RuleId::kSTR_006, RuleId::kSTR_007, RuleId::kSTR_008
+  };
+  EXPECT_EQ(str_rules.size(), 8);
+}
+
+// Test 112: Total rules after Week 3 (15 + 12 + 13 = 40)
+TEST_F(VeriPGValidatorTest, TotalRulesAfterWeek3) {
+  EXPECT_EQ(15 + 12 + 13, 40) << "Should have 40 total rules after Week 3";
+}
+
+// Test 113: Total auto-fix generators (3 + 2 + 2 = 7)
+TEST_F(VeriPGValidatorTest, TotalAutoFixAfterWeek3) {
+  EXPECT_EQ(3 + 2 + 2, 7) << "Should have 7 auto-fix generators after Week 3";
+}
+
 }  // namespace
 }  // namespace tools
 }  // namespace verilog

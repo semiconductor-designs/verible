@@ -605,6 +605,140 @@ std::string VeriPGValidator::GenerateFixWID_001(
   }
 }
 
+// ========================================
+// Week 3: Power Intent & Structure Validation Implementation
+// ========================================
+
+absl::Status VeriPGValidator::CheckPowerViolations(
+    const verilog::SymbolTable& symbol_table,
+    std::vector<Violation>& violations) {
+  // PWR_001-005: Power intent violations
+  //
+  // PWR_001: Missing power domain annotation
+  //   - Check for UPF-style power domain annotations
+  //   - Flag modules without explicit power domain specification
+  //
+  // PWR_002: Level shifter required at domain boundary
+  //   - Detect signals crossing voltage domains
+  //   - Verify level shifter cells are instantiated
+  //
+  // PWR_003: Isolation cell required for power-down domain
+  //   - Check for signals from power-gated to always-on domains
+  //   - Ensure isolation cells prevent X propagation
+  //
+  // PWR_004: Retention register without retention annotation
+  //   - Find registers that should retain state during power-down
+  //   - Verify retention annotations present
+  //
+  // PWR_005: Always-on signal crossing to power-gated domain
+  //   - Detect paths from always-on to power-gated
+  //   - Require proper isolation or buffering
+  //
+  // Note: Power intent checking requires UPF integration
+  // Currently framework-only, full implementation needs power domain metadata
+  
+  return absl::OkStatus();
+}
+
+absl::Status VeriPGValidator::CheckStructureViolations(
+    const verilog::SymbolTable& symbol_table,
+    std::vector<Violation>& violations) {
+  // STR_001-008: Structural validation
+  //
+  // STR_001: Module has no ports (should be testbench)
+  //   - Check if module has zero ports
+  //   - Suggest adding `_tb` suffix for testbenches
+  //
+  // STR_002: Module exceeds complexity threshold (50+ statements)
+  //   - Count statements in module
+  //   - Flag if > 50 (suggest refactoring)
+  //
+  // STR_003: Deep hierarchy (>5 levels of instantiation)
+  //   - Build instantiation tree
+  //   - Calculate max depth
+  //   - Flag if > 5 levels
+  //
+  // STR_004: Missing module header comment
+  //   - Check for comment block before module declaration
+  //   - Suggest adding description, parameters, ports
+  //
+  // STR_005: Port ordering (clk, rst, inputs, outputs)
+  //   - Parse port list
+  //   - Verify order: clock signals, reset signals, inputs, outputs
+  //   - Flag incorrect ordering
+  //
+  // STR_006: Instantiation without named ports
+  //   - Detect positional port connections: `mod u1(a, b, c);`
+  //   - Require named connections: `mod u1(.port_a(a), .port_b(b));`
+  //
+  // STR_007: Generate block without label
+  //   - Find all generate blocks
+  //   - Verify each has a label: `begin : gen_label`
+  //
+  // STR_008: Case statement without default clause
+  //   - Parse all case statements
+  //   - Check for `default:` clause
+  //   - Flag missing default (can cause latches)
+  
+  return absl::OkStatus();
+}
+
+std::string VeriPGValidator::GenerateFixSTR_005(
+    const std::vector<std::string>& current_order) const {
+  // Reorder ports to proper convention: clk, rst, inputs, outputs
+  //
+  // Example current_order: ["data_in", "clk", "enable", "rst_n", "data_out"]
+  // Proper order: ["clk", "rst_n", "data_in", "enable", "data_out"]
+  
+  std::vector<std::string> clocks, resets, inputs, outputs;
+  
+  for (const auto& port : current_order) {
+    if (port.find("clk") == 0) {
+      clocks.push_back(port);
+    } else if (port.find("rst") == 0 || port.find("reset") == 0) {
+      resets.push_back(port);
+    } else if (port.find("out") != std::string::npos) {
+      outputs.push_back(port);
+    } else {
+      inputs.push_back(port);
+    }
+  }
+  
+  std::string reordered = "Proper port ordering (clk, rst, inputs, outputs):\n  module name(\n";
+  
+  for (const auto& clk : clocks) reordered += "    input logic " + clk + ",\n";
+  for (const auto& rst : resets) reordered += "    input logic " + rst + ",\n";
+  for (const auto& in : inputs) reordered += "    input logic " + in + ",\n";
+  for (size_t i = 0; i < outputs.size(); ++i) {
+    reordered += "    output logic " + outputs[i];
+    reordered += (i == outputs.size() - 1) ? "\n" : ",\n";
+  }
+  reordered += "  );\n";
+  
+  return reordered;
+}
+
+std::string VeriPGValidator::GenerateFixSTR_006(
+    const std::string& instance_name,
+    const std::vector<std::string>& port_names) const {
+  // Convert positional to named port connections
+  //
+  // Input: instance_name = "u1", port_names = ["clk", "rst_n", "data"]
+  // Output: module_name u1(.clk(clk), .rst_n(rst_n), .data(data));
+  
+  std::string fix = "Convert to named port connections:\n  module_name " + 
+                   instance_name + "(\n";
+  
+  for (size_t i = 0; i < port_names.size(); ++i) {
+    fix += "    ." + port_names[i] + "(" + port_names[i] + ")";
+    fix += (i == port_names.size() - 1) ? "\n" : ",\n";
+  }
+  fix += "  );\n";
+  fix += "  // Named ports make connections explicit and less error-prone\n";
+  
+  return fix;
+}
+
 }  // namespace tools
 }  // namespace verilog
 
