@@ -274,6 +274,8 @@ absl::Status VeriPGValidator::CheckCDCViolations(
     return absl::OkStatus();
   }
   
+  // DEBUG: Found N always_ff blocks (see integration test results)
+  
   // Step 2: Extract clock domains (map signal -> clock domain)
   std::map<std::string, std::string> signal_to_clock;
   
@@ -281,6 +283,7 @@ absl::Status VeriPGValidator::CheckCDCViolations(
     // Extract clock signal from sensitivity list
     // Format: always_ff @(posedge clk) or always_ff @(negedge clk)
     std::string clock_name = ExtractClockFromBlock(block);
+    // TODO: Debug why clock_name might be empty
     if (clock_name.empty()) continue;
     
     // Find all signals assigned in this block

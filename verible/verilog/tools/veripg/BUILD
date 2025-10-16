@@ -29,6 +29,22 @@ cc_test(
     ],
 )
 
+cc_test(
+    name = "veripg-validator_cdc_integration_test",
+    srcs = ["veripg-validator_cdc_integration_test.cc"],
+    data = glob(["testdata/cdc/*.sv"]),
+    deps = [
+        ":veripg-validator",
+        "//verible/verilog/analysis:symbol-table",
+        "//verible/verilog/analysis:type-checker",
+        "//verible/verilog/analysis:type-inference",
+        "//verible/verilog/analysis:verilog-project",
+        "@abseil-cpp//absl/status",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
 cc_library(
     name = "rule-config",
     srcs = ["rule-config.cc"],
