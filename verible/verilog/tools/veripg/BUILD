@@ -94,6 +94,38 @@ cc_test(
 )
 
 cc_test(
+    name = "veripg-validator_nam_integration_test",
+    srcs = ["veripg-validator_nam_integration_test.cc"],
+    data = glob(["testdata/nam/*.sv"]),
+    deps = [
+        ":veripg-validator",
+        "//verible/verilog/analysis:symbol-table",
+        "//verible/verilog/analysis:type-checker",
+        "//verible/verilog/analysis:type-inference",
+        "//verible/verilog/analysis:verilog-project",
+        "@abseil-cpp//absl/status",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "veripg-validator_wid_integration_test",
+    srcs = ["veripg-validator_wid_integration_test.cc"],
+    data = glob(["testdata/wid/*.sv"]),
+    deps = [
+        ":veripg-validator",
+        "//verible/verilog/analysis:symbol-table",
+        "//verible/verilog/analysis:type-checker",
+        "//verible/verilog/analysis:type-inference",
+        "//verible/verilog/analysis:verilog-project",
+        "@abseil-cpp//absl/status",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
     name = "veripg-validator_cdc_unit_test",
     srcs = ["veripg-validator_cdc_unit_test.cc"],
     deps = [
