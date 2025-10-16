@@ -294,6 +294,45 @@ TEST_F(VeriPGValidatorCDCIntegrationTest, DetectClockMuxViolation) {
   EXPECT_TRUE(found_cdc_003) << "Should detect CDC_003 violation for clock muxing";
 }
 
+// Test: CDC_004 - Async reset crossing clock domains
+TEST_F(VeriPGValidatorCDCIntegrationTest, DetectAsyncResetCrossingViolation) {
+  const std::string testdata_dir = "verible/verilog/tools/veripg/testdata/cdc/";
+  
+  VerilogProject project(".", std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(testdata_dir + "cdc_async_reset_violation.sv");
+  ASSERT_TRUE(file_or.ok()) << file_or.status().message();
+  
+  auto* file = file_or.value();
+  ASSERT_NE(file, nullptr);
+  ASSERT_TRUE(file->Status().ok()) << "Parse failed: " << file->Status().message();
+  
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> diagnostics;
+  symbol_table.Build(&diagnostics);
+  ASSERT_TRUE(diagnostics.empty()) << "Symbol table build had errors";
+  
+  analysis::TypeInference type_inference(&symbol_table);
+  analysis::TypeChecker type_checker(&symbol_table, &type_inference);
+  
+  VeriPGValidator validator(&type_checker);
+  std::vector<Violation> violations;
+  auto status = validator.CheckCDCViolations(symbol_table, violations, &project);
+  EXPECT_TRUE(status.ok());
+  
+  // Should detect CDC_004: Async reset crossing domains without synchronizer
+  bool found_cdc_004 = false;
+  for (const auto& v : violations) {
+    if (v.rule == RuleId::kCDC_004) {
+      found_cdc_004 = true;
+      EXPECT_EQ(v.severity, Severity::kWarning);
+      EXPECT_THAT(v.message, HasSubstr("reset"));
+      EXPECT_THAT(v.message, HasSubstr("async"));
+    }
+  }
+  
+  EXPECT_TRUE(found_cdc_004) << "Should detect CDC_004 violation for async reset crossing";
+}
+
 }  // namespace
 }  // namespace tools
 }  // namespace verilog

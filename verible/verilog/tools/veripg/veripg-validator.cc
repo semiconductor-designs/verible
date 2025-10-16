@@ -452,8 +452,71 @@ absl::Status VeriPGValidator::CheckCDCViolations(
     }
   }
   
-  // TODO: Implement CDC_004
-  // CDC_004: Async reset in sync logic (check sensitivity list)
+  // CDC_004: Async reset crossing domains
+  // Detect when async resets (in sensitivity lists) are used across multiple clock domains
+  // This is a TDD implementation using heuristics: find signals with "rst" or "reset" in their name
+  // that appear in multiple always_ff blocks with different clocks
+  
+  std::map<std::string, std::set<std::string>> reset_to_clocks;  // reset -> set of clocks using it
+  
+  for (const auto* block : always_ff_blocks) {
+    std::string clock = ExtractClockFromBlock(block);
+    if (clock.empty()) continue;
+    
+    // Extract reset signals from the sensitivity list (signals after "or")
+    // For now, use a simple heuristic: find all identifiers in the block's timing control
+    const auto* timing_ctrl = verilog::GetProceduralTimingControlFromAlways(*block);
+    if (!timing_ctrl) continue;
+    
+    std::function<void(const verible::Symbol&)> find_resets = 
+        [&](const verible::Symbol& sym) {
+      if (sym.Kind() == verible::SymbolKind::kLeaf) {
+        const auto& leaf = verible::SymbolCastToLeaf(sym);
+        const auto token = leaf.get();
+        verilog_tokentype token_type = static_cast<verilog_tokentype>(token.token_enum());
+        
+        if (IsIdentifierLike(token_type)) {
+          std::string sig_name(token.text());
+          // Heuristic: Check if signal name contains "rst" or "reset"
+          if (sig_name.find("rst") != std::string::npos || 
+              sig_name.find("reset") != std::string::npos) {
+            // This looks like a reset signal
+            reset_to_clocks[sig_name].insert(clock);
+          }
+        }
+      } else if (sym.Kind() == verible::SymbolKind::kNode) {
+        const auto& n = verible::down_cast<const verible::SyntaxTreeNode&>(sym);
+        for (const auto& child : n.children()) {
+          if (child) find_resets(*child);
+        }
+      }
+    };
+    
+    find_resets(*timing_ctrl);
+  }
+  
+  // Report violations for resets used in multiple clock domains
+  for (const auto& [reset_name, clocks] : reset_to_clocks) {
+    if (clocks.size() > 1) {
+      // Async reset is used in multiple clock domains!
+      Violation v;
+      v.rule = RuleId::kCDC_004;
+      v.severity = Severity::kWarning;
+      std::string clock_list;
+      for (const auto& clk : clocks) {
+        if (!clock_list.empty()) clock_list += ", ";
+        clock_list += clk;
+      }
+      v.message = absl::StrCat(
+          "async reset '", reset_name, 
+          "' crosses clock domains (", clock_list, 
+          ") - consider synchronizing or using per-domain resets");
+      v.signal_name = reset_name;
+      v.source_location = "";
+      v.fix_suggestion = "Use reset synchronizer or per-domain reset signals";
+      violations.push_back(v);
+    }
+  }
   
   return absl::OkStatus();
 }
