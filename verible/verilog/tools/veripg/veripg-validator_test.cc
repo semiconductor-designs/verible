@@ -307,6 +307,32 @@ TEST_F(VeriPGValidatorTest, CheckCDCViolations_Framework) {
   EXPECT_TRUE(status.ok());
 }
 
+// Test 26a: CDC_001 - Framework test (actual detection requires 40-50h of CST work)
+// TDD Status: RED - This test documents what the implementation SHOULD do
+// Current limitation: VerilogProject integration with inline code is complex
+// Next step: Implement ExtractClockFromBlock, GetAssignedSignalsInBlock, etc.
+TEST_F(VeriPGValidatorTest, CDC_001_DetectionFramework) {
+  // This test verifies the API structure is correct
+  // Full CDC detection implementation is tracked as a separate work item
+  // Estimated: 40-50 hours for complete CST traversal logic
+  
+  VeriPGValidator validator(type_checker_.get());
+  std::vector<Violation> violations;
+  
+  // Test with nullptr project (framework mode)
+  auto status = validator.CheckCDCViolations(*symbol_table_, violations, nullptr);
+  EXPECT_TRUE(status.ok());
+  EXPECT_EQ(violations.size(), 0) << "Framework mode should return no violations";
+  
+  // TODO: Add real CDC detection test once VerilogProject integration is done
+  // The test should:
+  // 1. Create a module with always_ff blocks in different clock domains
+  // 2. Pass signal from clk_a domain to clk_b domain without synchronizer
+  // 3. Verify CDC_001 violation is detected
+  // 4. Verify violation message contains "clock domain" and signal name
+  // 5. Verify fix suggestion contains "synchronizer"
+}
+
 // Test 27: Clock rules framework exists
 TEST_F(VeriPGValidatorTest, CheckClockRules_Framework) {
   VeriPGValidator validator(type_checker_.get());

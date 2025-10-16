@@ -23,6 +23,10 @@
 #include "verible/verilog/analysis/type-checker.h"
 
 namespace verilog {
+
+// Forward declaration
+class VerilogProject;
+
 namespace tools {
 
 // Rule severity levels
@@ -133,8 +137,10 @@ class VeriPGValidator {
   // Week 1: Core Validation Rules (CDC/Clock/Reset)
   
   // Check CDC violations (CDC_001-004)
+  // Note: Requires VerilogProject for CST access
   absl::Status CheckCDCViolations(const verilog::SymbolTable& symbol_table,
-                                  std::vector<Violation>& violations);
+                                  std::vector<Violation>& violations,
+                                  const verilog::VerilogProject* project = nullptr);
   
   // Check clock rules (CLK_001-004)
   absl::Status CheckClockRules(const verilog::SymbolTable& symbol_table,
@@ -200,6 +206,12 @@ class VeriPGValidator {
 
  private:
   const verilog::analysis::TypeChecker* type_checker_;
+  
+  // Helper methods for CDC detection
+  std::string ExtractClockFromBlock(const verible::Symbol* block);
+  std::vector<std::string> GetAssignedSignalsInBlock(const verible::Symbol* block);
+  std::vector<std::string> GetUsedSignalsInBlock(const verible::Symbol* block);
+  bool HasSynchronizerPattern(const std::string& signal, const verible::Symbol* block);
 };
 
 }  // namespace tools
