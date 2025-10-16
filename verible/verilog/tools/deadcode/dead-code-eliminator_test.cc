@@ -73,16 +73,21 @@ TEST_F(DeadCodeEliminatorTest, FindDeadFunctions) {
 
 // Test 4: No dead code when all connected
 TEST_F(DeadCodeEliminatorTest, NoDeadCode) {
+  // Add $module_scope as entry point (simulates procedural call)
+  call_graph_->AddNode("$module_scope");
   call_graph_->AddNode("main");
   call_graph_->AddNode("func1");
   call_graph_->AddNode("func2");
+  call_graph_->AddEdge("$module_scope", "main");  // main is called from procedural
   call_graph_->AddEdge("main", "func1");
   call_graph_->AddEdge("main", "func2");
   
   DeadCodeEliminator eliminator(call_graph_.get(), symbol_table_.get());
   auto report = eliminator.FindDeadCode();
   
-  // All functions reachable from main
+  // All functions reachable from $module_scope (entry point)
+  // main, func1, func2 are all live
+  // $module_scope itself is skipped by FindDeadCode
   EXPECT_EQ(report.total_dead_count, 0);
 }
 
