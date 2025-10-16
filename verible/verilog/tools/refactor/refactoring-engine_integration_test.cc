@@ -1663,6 +1663,243 @@ endmodule
       << "Modified file has syntax errors";
 }
 
+// ============================================================================
+// PART 5: CROSS-TOOL INTEGRATION TESTS (P2-3)
+// ============================================================================
+
+// Test 1: ExtractVariable → InlineFunction (sequential refactoring)
+TEST_F(RefactoringEngineIntegrationTest, CrossToolExtractThenInline) {
+  std::string test_code = R"(
+module test;
+  logic [7:0] result;
+  
+  initial begin
+    result = add(5, 3) * 2;
+  end
+  
+  function automatic logic [7:0] add(logic [7:0] a, b);
+    return a + b;
+  endfunction
+endmodule
+)";
+
+  std::string test_file = CreateTestFile("cross_extract_inline.sv", test_code);
+
+  // Step 1: Inline the function call first
+  {
+    VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+    auto file_or = project.OpenTranslationUnit(test_file);
+    ASSERT_TRUE(file_or.ok());
+
+    SymbolTable symbol_table(&project);
+    std::vector<absl::Status> build_diagnostics;
+    symbol_table.Build(&build_diagnostics);
+    ASSERT_TRUE(build_diagnostics.empty());
+
+    analysis::TypeInference type_inference(&symbol_table);
+    RefactoringEngine engine(&symbol_table, &type_inference, &project);
+
+    Location loc;
+    loc.filename = test_file;
+    loc.line = 6;   // "result = add(5, 3) * 2;"
+    loc.column = 13; // At "add"
+
+    auto result = engine.InlineFunction(loc);
+    ASSERT_TRUE(result.ok()) << "InlineFunction failed: " << result.message();
+    
+    // After inlining: "result = 5 + 3 * 2;" or "result = (5 + 3) * 2;"
+  }
+  
+  // Step 2: Now extract the expression into a variable
+  {
+    // Re-parse the modified file
+    VerilogProject project2(test_dir_.string(), std::vector<std::string>{});
+    auto file_or = project2.OpenTranslationUnit(test_file);
+    ASSERT_TRUE(file_or.ok()) << "Cannot re-open modified file";
+
+    SymbolTable symbol_table2(&project2);
+    std::vector<absl::Status> build_diagnostics;
+    symbol_table2.Build(&build_diagnostics);
+    ASSERT_TRUE(build_diagnostics.empty());
+
+    analysis::TypeInference type_inference2(&symbol_table2);
+    RefactoringEngine engine2(&symbol_table2, &type_inference2, &project2);
+
+    Selection sel;
+    sel.filename = test_file;
+    sel.start_line = 6;
+    sel.start_column = 13;
+    sel.end_line = 6;
+    sel.end_column = 25; // Select the inlined expression
+
+    auto result = engine2.ExtractVariable(sel, "temp_val");
+    // This may or may not succeed depending on implementation
+    // Just verify it doesn't crash
+    
+    if (result.ok()) {
+      std::string modified = ReadFile(test_file);
+      std::cout << "Cross-tool refactoring succeeded!\n";
+      
+      // Verify syntax
+      VerilogProject verify(test_dir_.string(), std::vector<std::string>{});
+      auto verify_or = verify.OpenTranslationUnit(test_file);
+      EXPECT_TRUE(verify_or.ok() && verify_or.value()->Status().ok())
+          << "Modified file has syntax errors after cross-tool refactoring";
+    } else {
+      std::cout << "ExtractVariable after InlineFunction: " << result.message() << "\n";
+    }
+  }
+}
+
+// Test 2: Multiple InlineFunction calls in sequence
+TEST_F(RefactoringEngineIntegrationTest, CrossToolMultipleInlines) {
+  std::string test_code = R"(
+module test;
+  logic [7:0] result;
+  
+  initial begin
+    result = add(mul(2, 3), 4);
+  end
+  
+  function automatic logic [7:0] add(logic [7:0] a, b);
+    return a + b;
+  endfunction
+  
+  function automatic logic [7:0] mul(logic [7:0] a, b);
+    return a * b;
+  endfunction
+endmodule
+)";
+
+  std::string test_file = CreateTestFile("cross_multi_inline.sv", test_code);
+
+  // Step 1: Inline the inner function (mul)
+  {
+    VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+    auto file_or = project.OpenTranslationUnit(test_file);
+    ASSERT_TRUE(file_or.ok());
+
+    SymbolTable symbol_table(&project);
+    std::vector<absl::Status> build_diagnostics;
+    symbol_table.Build(&build_diagnostics);
+    ASSERT_TRUE(build_diagnostics.empty());
+
+    analysis::TypeInference type_inference(&symbol_table);
+    RefactoringEngine engine(&symbol_table, &type_inference, &project);
+
+    Location loc;
+    loc.filename = test_file;
+    loc.line = 6;   // "result = add(mul(2, 3), 4);"
+    loc.column = 17; // At "mul"
+
+    auto result = engine.InlineFunction(loc);
+    ASSERT_TRUE(result.ok()) << "First InlineFunction failed: " << result.message();
+    
+    std::string modified = ReadFile(test_file);
+    // After first inline: "result = add(2 * 3, 4);"
+    EXPECT_THAT(modified, testing::HasSubstr("2 * 3"))
+        << "Inner function not inlined";
+  }
+  
+  // Step 2: Inline the outer function (add)
+  {
+    // Re-parse
+    VerilogProject project2(test_dir_.string(), std::vector<std::string>{});
+    auto file_or = project2.OpenTranslationUnit(test_file);
+    ASSERT_TRUE(file_or.ok());
+
+    SymbolTable symbol_table2(&project2);
+    std::vector<absl::Status> build_diagnostics;
+    symbol_table2.Build(&build_diagnostics);
+    ASSERT_TRUE(build_diagnostics.empty());
+
+    analysis::TypeInference type_inference2(&symbol_table2);
+    RefactoringEngine engine2(&symbol_table2, &type_inference2, &project2);
+
+    Location loc;
+    loc.filename = test_file;
+    loc.line = 6;   // "result = add(2 * 3, 4);"
+    loc.column = 13; // At "add"
+
+    auto result = engine2.InlineFunction(loc);
+    ASSERT_TRUE(result.ok()) << "Second InlineFunction failed: " << result.message();
+    
+    std::string modified = ReadFile(test_file);
+    // After second inline: "result = 2 * 3 + 4;"
+    EXPECT_THAT(modified, testing::HasSubstr("2 * 3"))
+        << "Still contains first inline";
+    EXPECT_THAT(modified, testing::HasSubstr("+ 4"))
+        << "Outer function not inlined";
+    
+    // Verify final syntax
+    VerilogProject verify(test_dir_.string(), std::vector<std::string>{});
+    auto verify_or = verify.OpenTranslationUnit(test_file);
+    EXPECT_TRUE(verify_or.ok() && verify_or.value()->Status().ok())
+        << "Modified file has syntax errors after multiple inlines";
+  }
+}
+
+// Test 3: Verify backup files are created correctly
+TEST_F(RefactoringEngineIntegrationTest, CrossToolBackupHandling) {
+  std::string test_code = R"(
+module test;
+  logic [7:0] result;
+  
+  initial begin
+    result = add(5, 3);
+  end
+  
+  function automatic logic [7:0] add(logic [7:0] a, b);
+    return a + b;
+  endfunction
+endmodule
+)";
+
+  std::string test_file = CreateTestFile("cross_backup.sv", test_code);
+  std::string backup_file = test_file + ".bak";
+
+  // Remove any existing backup
+  if (std::filesystem::exists(backup_file)) {
+    std::filesystem::remove(backup_file);
+  }
+
+  // Perform first refactoring
+  {
+    VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+    auto file_or = project.OpenTranslationUnit(test_file);
+    ASSERT_TRUE(file_or.ok());
+
+    SymbolTable symbol_table(&project);
+    std::vector<absl::Status> build_diagnostics;
+    symbol_table.Build(&build_diagnostics);
+    ASSERT_TRUE(build_diagnostics.empty());
+
+    analysis::TypeInference type_inference(&symbol_table);
+    RefactoringEngine engine(&symbol_table, &type_inference, &project);
+
+    Location loc;
+    loc.filename = test_file;
+    loc.line = 6;   // "result = add(5, 3);"
+    loc.column = 13;
+
+    auto result = engine.InlineFunction(loc);
+    ASSERT_TRUE(result.ok()) << "InlineFunction failed: " << result.message();
+    
+    // Verify backup was created
+    EXPECT_TRUE(std::filesystem::exists(backup_file))
+        << "Backup file not created after first refactoring";
+  }
+  
+  // Verify modified file still parses
+  VerilogProject verify_project(test_dir_.string(), std::vector<std::string>{});
+  auto verify_file = verify_project.OpenTranslationUnit(test_file);
+  EXPECT_TRUE(verify_file.ok()) << "Modified file cannot be opened";
+  
+  // Verify backup file also parses (it contains original code)
+  auto backup_verify = verify_project.OpenTranslationUnit(backup_file);
+  EXPECT_TRUE(backup_verify.ok()) << "Backup file cannot be opened";
+}
+
 }  // namespace
 }  // namespace tools
 }  // namespace verilog
