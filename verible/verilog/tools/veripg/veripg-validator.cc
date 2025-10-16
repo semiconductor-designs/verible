@@ -1075,31 +1075,87 @@ absl::Status VeriPGValidator::CheckResetRules(
     const verilog::SymbolTable& symbol_table,
     std::vector<Violation>& violations,
     const verilog::VerilogProject* project) {
-  // RST_001-005: Reset-related rules
-  //
-  // RST_001: Missing reset in sequential logic
-  //   - For each always_ff without reset in sensitivity list
-  //   - Check if there's an if (rst) inside
-  //   - Report if no reset mechanism found
-  //
-  // RST_002: Asynchronous reset not properly synchronized
-  //   - Detect async reset (@(negedge rst_n))
-  //   - Verify it's not used in multi-clock domain
-  //   - Suggest synchronous reset release
-  //
-  // RST_003: Active-low reset mixed with active-high
-  //   - Track reset polarity (rst vs rst_n)
-  //   - Flag inconsistency across module
-  //   - Enforce single polarity convention
-  //
-  // RST_004: Reset signal used as data
-  //   - Similar to CLK_003
-  //   - Ensure reset only used for reset purposes
-  //
-  // RST_005: Reset width check (minimum assertion time)
-  //   - Verify reset is held for minimum cycles
-  //   - Check reset release timing
-  //   - This requires timing analysis (advanced)
+  if (!project) {
+    return absl::OkStatus(); // Framework mode
+  }
+  
+  // Find all always_ff blocks
+  std::vector<const verible::SyntaxTreeNode*> always_ff_blocks;
+  for (auto it = project->begin(); it != project->end(); ++it) {
+    const auto* file = it->second.get();
+    if (!file) continue;
+    const auto* text_structure = file->GetTextStructure();
+    if (!text_structure) continue;
+    const auto& syntax_tree = text_structure->SyntaxTree();
+    if (!syntax_tree) continue;
+
+    // Manual traversal to find always_ff statements
+    std::function<void(const verible::Symbol*)> find_always_ff = 
+        [&](const verible::Symbol* sym) {
+      if (!sym || sym->Kind() != verible::SymbolKind::kNode) return;
+      const auto* node = verible::down_cast<const verible::SyntaxTreeNode*>(sym);
+      if (node->size() > 0 && (*node)[0]) {
+        if ((*node)[0]->Kind() == verible::SymbolKind::kLeaf) {
+          const auto& leaf = verible::SymbolCastToLeaf(*(*node)[0]);
+          verilog_tokentype token_type = static_cast<verilog_tokentype>(leaf.get().token_enum());
+          if (token_type == TK_always_ff) {
+            always_ff_blocks.push_back(node);
+          }
+        }
+      }
+      for (const auto& child : node->children()) {
+        if (child) find_always_ff(child.get());
+      }
+    };
+    find_always_ff(syntax_tree.get());
+  }
+  
+  // RST_001: Check for missing reset
+  for (const auto* block : always_ff_blocks) {
+    const auto* timing_control = verilog::GetProceduralTimingControlFromAlways(*block);
+    if (!timing_control) continue;
+    
+    // Check if timing control has reset in sensitivity list
+    // Look for identifiers with "rst" or "reset" in name
+    bool has_reset_in_sensitivity = false;
+    std::function<void(const verible::Symbol&)> check_for_reset = 
+        [&](const verible::Symbol& sym) {
+      if (sym.Kind() == verible::SymbolKind::kLeaf) {
+        const auto& leaf = verible::SymbolCastToLeaf(sym);
+        const auto token = leaf.get();
+        verilog_tokentype token_type = static_cast<verilog_tokentype>(token.token_enum());
+        if (IsIdentifierLike(token_type)) {
+          std::string sig(token.text());
+          std::string lower_sig = sig;
+          for (char& c : lower_sig) c = std::tolower(c);
+          if (lower_sig.find("rst") != std::string::npos || 
+              lower_sig.find("reset") != std::string::npos) {
+            has_reset_in_sensitivity = true;
+          }
+        }
+      } else if (sym.Kind() == verible::SymbolKind::kNode) {
+        const auto& n = verible::down_cast<const verible::SyntaxTreeNode&>(sym);
+        for (const auto& child : n.children()) {
+          if (child) check_for_reset(*child);
+        }
+      }
+    };
+    check_for_reset(*timing_control);
+    
+    if (!has_reset_in_sensitivity) {
+      // No reset in sensitivity list - WARNING
+      Violation v;
+      v.rule = RuleId::kRST_001;
+      v.severity = Severity::kWarning;
+      v.message = "always_ff without reset in sensitivity list";
+      v.signal_name = "";
+      v.source_location = "";
+      v.fix_suggestion = GenerateFixRST_001("rst_n");
+      violations.push_back(v);
+    }
+  }
+  
+  // TODO: RST_002-005 implementation
   
   return absl::OkStatus();
 }
