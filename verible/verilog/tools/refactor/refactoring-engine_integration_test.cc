@@ -977,6 +977,116 @@ endmodule
   }
 }
 
+// TDD Test: InlineFunction should preserve context (not destroy file!)
+TEST_F(RefactoringEngineIntegrationTest, InlineFunctionPreservesContext) {
+  // This test verifies EXACT output - will FAIL with current bug!
+  std::string test_code = R"(
+module test;
+  logic [7:0] result;
+  
+  initial begin
+    result = add(3, 5);
+  end
+  
+  function automatic logic [7:0] add(logic [7:0] a, b);
+    return a + b;
+  endfunction
+endmodule
+)";
+
+  std::string test_file = CreateTestFile("inline_preserve.sv", test_code);
+
+  VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(file_or.ok());
+
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> build_diagnostics;
+  symbol_table.Build(&build_diagnostics);
+  ASSERT_TRUE(build_diagnostics.empty());
+
+  analysis::TypeInference type_inference(&symbol_table);
+  RefactoringEngine engine(&symbol_table, &type_inference, &project);
+
+  // Inline the function call
+  Location loc;
+  loc.filename = test_file;
+  loc.line = 5;  // "result = add(3, 5);"
+  loc.column = 13;  // At "add" (column 13 is the 'a' in 'add')
+
+  auto result = engine.InlineFunction(loc);
+  ASSERT_TRUE(result.ok()) << "InlineFunction failed: " << result.message();
+
+  // Read modified file
+  std::string modified = ReadFile(test_file);
+  
+  // STRONG TEST: Verify EXACT expected output (not just "contains")
+  std::string expected = R"(
+module test;
+  logic [7:0] result;
+  
+  initial begin
+    result = 3 + 5;
+  end
+  
+  function automatic logic [7:0] add(logic [7:0] a, b);
+    return a + b;
+  endfunction
+endmodule
+)";
+
+  // Normalize whitespace for comparison
+  auto normalize = [](const std::string& s) {
+    std::string result = s;
+    // Remove leading/trailing whitespace
+    size_t first = result.find_first_not_of(" \t\n\r");
+    size_t last = result.find_last_not_of(" \t\n\r");
+    if (first != std::string::npos && last != std::string::npos) {
+      result = result.substr(first, last - first + 1);
+    }
+    // Normalize internal whitespace
+    std::string normalized;
+    bool in_space = false;
+    for (char c : result) {
+      if (std::isspace(c)) {
+        if (!in_space) {
+          normalized += ' ';
+          in_space = true;
+        }
+      } else {
+        normalized += c;
+        in_space = false;
+      }
+    }
+    return normalized;
+  };
+
+  std::string normalized_modified = normalize(modified);
+  std::string normalized_expected = normalize(expected);
+  
+  std::cout << "=== INLINE FUNCTION PRESERVE CONTEXT TEST ===\n";
+  std::cout << "Expected (normalized):\n" << normalized_expected << "\n\n";
+  std::cout << "Actual (normalized):\n" << normalized_modified << "\n\n";
+  
+  // KEY ASSERTION: Exact match (not just "contains")
+  EXPECT_EQ(normalized_modified, normalized_expected)
+      << "InlineFunction should preserve context!\n"
+      << "Expected to replace ONLY the call site: 'add(3, 5)' → '3 + 5'\n"
+      << "But it seems to have modified more than that!";
+  
+  // Additional checks
+  EXPECT_THAT(modified, HasSubstr("logic [7:0] result"))
+      << "Should preserve variable declaration";
+  EXPECT_THAT(modified, HasSubstr("initial begin"))
+      << "Should preserve initial block";
+  EXPECT_THAT(modified, HasSubstr("function automatic"))
+      << "Should preserve function definition";
+  EXPECT_THAT(modified, HasSubstr("result = 3 + 5"))
+      << "Should inline the call: add(3,5) → 3+5";
+  EXPECT_THAT(modified, Not(HasSubstr("return")))
+      << "Should NOT have 'return' at module level (that's invalid!)";
+}
+
 }  // namespace
 }  // namespace tools
 }  // namespace verilog

@@ -659,13 +659,14 @@ absl::Status RefactoringEngine::InlineFunction(const Location& call_site) {
   auto file_ctx = file_ctx_or.value();
   
   // 2. Find token at call site location
-  // Simplified: Create a small selection around the location
+  // Use a very small selection (just 3 characters) to get precise node
+  // This helps avoid selecting the entire module/statement
   Selection call_selection;
   call_selection.filename = call_site.filename;
   call_selection.start_line = call_site.line;
   call_selection.start_column = call_site.column;
   call_selection.end_line = call_site.line;
-  call_selection.end_column = call_site.column + 20;  // Approximate call range
+  call_selection.end_column = call_site.column + 3;  // Just 3 chars - enough for function name start
   
   auto nodes = FindNodesInSelection(
       file_ctx.cst_root, file_ctx.text_structure, call_selection);
@@ -674,22 +675,61 @@ absl::Status RefactoringEngine::InlineFunction(const Location& call_site) {
     return absl::NotFoundError("No CST nodes found at call site");
   }
   
-  // 3. Extract function call text
-  auto call_span = verible::StringSpanOfSymbol(*nodes[0].node);
+  // 3. Find the SMALLEST node (most specific) that contains the call
+  // Filter out large structural nodes (module, class, etc.) and find smallest
+  // node that actually looks like a function call
+  const verible::Symbol* call_node = nullptr;
+  absl::string_view call_span;
+  size_t smallest_size = std::numeric_limits<size_t>::max();
+  
+  for (const auto& node_info : nodes) {
+    auto span = verible::StringSpanOfSymbol(*node_info.node);
+    std::string span_text(span);
+    size_t span_size = span.length();
+    
+    // Skip if this node is too large (likely module/class/package)
+    // Function calls are typically < 100 characters
+    if (span_size > 200) continue;
+    
+    // Check if this node contains a function call pattern: identifier '('
+    if (span_text.find('(') != std::string::npos && 
+        span_text.find(')') != std::string::npos) {
+      // Use smallest node that looks like a function call
+      if (span_size < smallest_size) {
+        call_node = node_info.node;
+        call_span = span;
+        smallest_size = span_size;
+      }
+    }
+  }
+  
+  if (!call_node) {
+    return absl::NotFoundError(
+        absl::StrCat("No function call node found at location. ",
+                    "Found ", nodes.size(), " nodes, but none look like function calls."));
+  }
+  
   std::string call_text(call_span);
   
   // 4. Parse function name and arguments from call
-  // The call_text might contain the full assignment, so extract the actual call
-  // Look for pattern: identifier '('
-  size_t paren_pos = call_text.find('(');
-  if (paren_pos == std::string::npos) {
-    return absl::InvalidArgumentError("No function call found at location");
+  // The call_text should be small now (just the call expression)
+  // But it might still have extra context, so find the function call pattern
+  
+  // Find the rightmost '(' in the text (should be the function call)
+  size_t last_paren = call_text.rfind('(');
+  if (last_paren == std::string::npos) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("No function call found. call_text = '", call_text, "'"));
   }
   
-  // Extract the identifier before '('
-  // Work backwards from '(' to find the start of the identifier
-  int id_end = paren_pos - 1;
+  // Extract the identifier before this '('
+  int id_end = static_cast<int>(last_paren) - 1;
   while (id_end >= 0 && std::isspace(call_text[id_end])) id_end--;
+  
+  if (id_end < 0) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("No function name found before '('. call_text = '", call_text, "'"));
+  }
   
   int id_start = id_end;
   while (id_start >= 0 && (std::isalnum(call_text[id_start]) || call_text[id_start] == '_')) {
@@ -697,7 +737,31 @@ absl::Status RefactoringEngine::InlineFunction(const Location& call_site) {
   }
   id_start++;  // Move back to the first character
   
+  if (id_start > id_end) {
+    return absl::InvalidArgumentError("Empty function name");
+  }
+  
   std::string function_name = call_text.substr(id_start, id_end - id_start + 1);
+  
+  // Now extract the full call including arguments
+  // Find matching ')' for the '('
+  int paren_depth = 1;
+  size_t close_paren = last_paren + 1;
+  while (close_paren < call_text.length() && paren_depth > 0) {
+    if (call_text[close_paren] == '(') paren_depth++;
+    else if (call_text[close_paren] == ')') paren_depth--;
+    close_paren++;
+  }
+  
+  if (paren_depth != 0) {
+    return absl::InvalidArgumentError("Unmatched parentheses in function call");
+  }
+  
+  // Extract just the function call: "add(3, 5)"
+  std::string full_call = call_text.substr(id_start, close_paren - id_start);
+  
+  // Update call_text to be just the call (for argument parsing)
+  call_text = full_call;
   
   // Extract arguments
   size_t arg_start = call_text.find('(');
