@@ -916,76 +916,74 @@ absl::Status VeriPGValidator::CheckClockRules(
     if (!timing_control) continue;
     
     // Extract clock signal names following posedge/negedge
-    std::function<void(const verible::Symbol&, bool)> extract_clocks = 
-        [&](const verible::Symbol& sym, bool after_edge) {
+    bool next_is_clock = false;
+    std::function<void(const verible::Symbol&)> extract_clocks = 
+        [&](const verible::Symbol& sym) {
       if (sym.Kind() == verible::SymbolKind::kLeaf) {
         const auto& leaf = verible::SymbolCastToLeaf(sym);
         const auto token = leaf.get();
         verilog_tokentype token_type = static_cast<verilog_tokentype>(token.token_enum());
         
         if (token_type == TK_posedge || token_type == TK_negedge) {
-          after_edge = true;
-        } else if (after_edge && IsIdentifierLike(token_type)) {
+          next_is_clock = true;
+        } else if (next_is_clock && IsIdentifierLike(token_type)) {
           std::string clk_name(token.text());
           clock_signals.insert(clk_name);
-          after_edge = false;
+          next_is_clock = false;
         }
       } else if (sym.Kind() == verible::SymbolKind::kNode) {
         const auto& n = verible::down_cast<const verible::SyntaxTreeNode&>(sym);
         for (const auto& child : n.children()) {
-          if (child) extract_clocks(*child, after_edge);
+          if (child) extract_clocks(*child);
         }
       }
     };
-    extract_clocks(*timing_control, false);
+    extract_clocks(*timing_control);
   }
   
   // Now check if any clock signals are used as data (in RHS of assignments)
+  std::set<std::string> checked_signals;  // Avoid duplicate violations
   for (const auto* block : always_ff_blocks) {
     auto assignments = verilog::FindAllNonBlockingAssignments(*block);
     for (const auto& assignment : assignments) {
       if (!assignment.match || assignment.match->Kind() != verible::SymbolKind::kNode) continue;
       const auto* assignment_node = verible::down_cast<const verible::SyntaxTreeNode*>(assignment.match);
       
-      // Get RHS by skipping LHS (which is typically child 0) and the <= operator
-      // In "lhs <= rhs", we want to check "rhs" only
-      // Assuming child 0 is LHS, child 1 is <=, child 2+ is RHS
-      std::set<std::string> checked_signals;  // Avoid duplicate violations for same signal
-      for (size_t i = 2; i < assignment_node->size(); ++i) {
-        const auto& child = (*assignment_node)[i];
-        if (!child) continue;
-        
-        std::function<void(const verible::Symbol&)> check_rhs = 
-            [&](const verible::Symbol& sym) {
-          if (sym.Kind() == verible::SymbolKind::kLeaf) {
-            const auto& leaf = verible::SymbolCastToLeaf(sym);
-            const auto token = leaf.get();
-            verilog_tokentype token_type = static_cast<verilog_tokentype>(token.token_enum());
-            if (IsIdentifierLike(token_type)) {
-              std::string signal_name(token.text());
-              if (clock_signals.count(signal_name) > 0 && 
-                  checked_signals.count(signal_name) == 0) {
-                // Found clock used as data!
-                Violation v;
-                v.rule = RuleId::kCLK_003;
-                v.severity = Severity::kWarning;
-                v.message = "clock signal used as data in assignment";
-                v.signal_name = signal_name;
-                v.source_location = "";
-                v.fix_suggestion = "Avoid using clock signals as data; use proper clock dividers or enable logic";
-                violations.push_back(v);
-                checked_signals.insert(signal_name);
-              }
-            }
-          } else if (sym.Kind() == verible::SymbolKind::kNode) {
-            const auto& n = verible::down_cast<const verible::SyntaxTreeNode&>(sym);
-            for (const auto& child_sym : n.children()) {
-              if (child_sym) check_rhs(*child_sym);
+      // Use Verible helper to get RHS
+      const auto* rhs = verilog::GetNonBlockingAssignmentRhs(*assignment_node);
+      if (!rhs) continue;
+      
+      // Check RHS for clock signal usage
+      std::function<void(const verible::Symbol&)> check_rhs = 
+          [&](const verible::Symbol& sym) {
+        if (sym.Kind() == verible::SymbolKind::kLeaf) {
+          const auto& leaf = verible::SymbolCastToLeaf(sym);
+          const auto token = leaf.get();
+          verilog_tokentype token_type = static_cast<verilog_tokentype>(token.token_enum());
+          if (IsIdentifierLike(token_type)) {
+            std::string signal_name(token.text());
+            if (clock_signals.count(signal_name) > 0 && 
+                checked_signals.count(signal_name) == 0) {
+              // Found clock used as data!
+              Violation v;
+              v.rule = RuleId::kCLK_003;
+              v.severity = Severity::kWarning;
+              v.message = "clock signal used as data in assignment";
+              v.signal_name = signal_name;
+              v.source_location = "";
+              v.fix_suggestion = "Avoid using clock signals as data; use proper clock dividers or enable logic";
+              violations.push_back(v);
+              checked_signals.insert(signal_name);
             }
           }
-        };
-        check_rhs(*child);
-      }
+        } else if (sym.Kind() == verible::SymbolKind::kNode) {
+          const auto& n = verible::down_cast<const verible::SyntaxTreeNode&>(sym);
+          for (const auto& child_sym : n.children()) {
+            if (child_sym) check_rhs(*child_sym);
+          }
+        }
+      };
+      check_rhs(*rhs);
     }
   }
   
