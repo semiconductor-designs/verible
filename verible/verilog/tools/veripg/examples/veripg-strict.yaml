@@ -1,0 +1,48 @@
+# Strict VeriPG Configuration
+# For production code - errors for most violations
+
+global:
+  default_severity: error
+
+rules:
+  # All CDC/CLK/RST rules are errors (already error by default in this config)
+  
+  # Timing violations are errors
+  TIM_001: { severity: error }
+  TIM_002: { severity: error }
+  
+  # Naming violations are warnings
+  NAM_001: { severity: warning }
+  NAM_002: { severity: warning }
+  NAM_003: { severity: warning }
+  NAM_004: { severity: warning }
+  NAM_005: { severity: warning }
+  NAM_006: { severity: warning }
+  NAM_007: { severity: error }  # Keywords are serious
+  
+  # Width mismatches are errors
+  WID_001: { severity: error }
+  WID_002: { severity: error }
+  WID_003: { severity: error }
+  WID_004: { severity: warning }
+  WID_005: { severity: error }
+  
+  # Power rules disabled (not reliable enough)
+  PWR_001: { enabled: false }
+  PWR_002: { enabled: false }
+  PWR_003: { enabled: false }
+  PWR_004: { enabled: false }
+  PWR_005: { enabled: false }
+  
+  # Structure rules are warnings
+  STR_001: { severity: warning }
+  STR_002: { severity: warning }
+  STR_003: { severity: warning }
+  STR_004: { severity: warning }
+  STR_005: { severity: warning }
+  STR_006: { severity: warning }
+  STR_007: { severity: warning }
+  STR_008: { severity: error }  # Missing default is serious
+
+# No exclusions in strict mode
+

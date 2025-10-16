@@ -1,0 +1,211 @@
+# VeriPG Validator Configuration
+# Format: YAML 1.2
+# This is an example configuration file showing all available options
+
+# Global settings
+global:
+  # Default severity for all rules
+  default_severity: warning
+  
+  # Enable all rules by default
+  default_enabled: true
+
+# Per-rule configuration
+rules:
+  # === CDC Rules (Clock Domain Crossing) ===
+  CDC_001:
+    enabled: true
+    severity: error  # CDC violations are serious
+    exclude_files:
+      - "*_tb.sv"
+      - "test_*.sv"
+    exclude_modules:
+      - "test_*"
+  
+  CDC_002:
+    enabled: true
+    severity: error
+  
+  CDC_003:
+    enabled: true
+    severity: warning
+  
+  CDC_004:
+    enabled: true
+    severity: error
+  
+  # === Clock Rules ===
+  CLK_001:
+    enabled: true
+    severity: error  # Missing clock is a bug
+  
+  CLK_002:
+    enabled: true
+    severity: error
+  
+  CLK_003:
+    enabled: true
+    severity: warning  # Clock as data may be intentional
+  
+  CLK_004:
+    enabled: true
+    severity: warning
+  
+  # === Reset Rules ===
+  RST_001:
+    enabled: true
+    severity: warning  # Some designs don't use reset
+  
+  RST_002:
+    enabled: true
+    severity: error
+  
+  RST_003:
+    enabled: true
+    severity: warning
+  
+  RST_004:
+    enabled: true
+    severity: warning
+  
+  # === Timing Rules ===
+  TIM_001:
+    enabled: true
+    severity: error  # Combinational loops are bugs
+  
+  TIM_002:
+    enabled: true
+    severity: warning  # Latches may be intentional
+  
+  # === Naming Convention Rules ===
+  NAM_001:
+    enabled: true
+    severity: info  # Style, not correctness
+    exclude_modules:
+      - "legacy_*"  # Don't enforce on legacy code
+  
+  NAM_002:
+    enabled: true
+    severity: info
+    parameters:
+      min_length: "3"  # Minimum signal name length
+  
+  NAM_003:
+    enabled: true
+    severity: info
+  
+  NAM_004:
+    enabled: true
+    severity: info
+  
+  NAM_005:
+    enabled: true
+    severity: info
+  
+  NAM_006:
+    enabled: true
+    severity: info
+  
+  NAM_007:
+    enabled: true
+    severity: warning  # Using keywords is more serious
+  
+  # === Width Mismatch Rules ===
+  WID_001:
+    enabled: true
+    severity: warning
+  
+  WID_002:
+    enabled: true
+    severity: warning
+  
+  WID_003:
+    enabled: true
+    severity: warning
+  
+  WID_004:
+    enabled: true
+    severity: info
+  
+  WID_005:
+    enabled: true
+    severity: warning
+  
+  # === Power Intent Rules (Experimental) ===
+  PWR_001:
+    enabled: false  # Disabled by default (low confidence)
+    severity: info
+  
+  PWR_002:
+    enabled: false
+    severity: info
+  
+  PWR_003:
+    enabled: false
+    severity: info
+  
+  PWR_004:
+    enabled: false
+    severity: info
+  
+  PWR_005:
+    enabled: false
+    severity: info
+  
+  # === Structure Rules ===
+  STR_001:
+    enabled: true
+    severity: info
+    exclude_files:
+      - "*_tb.sv"  # Testbenches have no ports
+  
+  STR_002:
+    enabled: true
+    severity: info
+    parameters:
+      max_statements: "50"  # Complexity threshold
+    exclude_files:
+      - "*_tb.sv"
+  
+  STR_003:
+    enabled: true
+    severity: info
+    parameters:
+      max_depth: "5"  # Maximum hierarchy depth
+  
+  STR_004:
+    enabled: true
+    severity: info
+    exclude_modules:
+      - "generated_*"
+  
+  STR_005:
+    enabled: true
+    severity: info
+  
+  STR_006:
+    enabled: true
+    severity: info
+    exclude_files:
+      - "primitives/*.sv"  # Allow positional for primitives
+  
+  STR_007:
+    enabled: true
+    severity: info
+  
+  STR_008:
+    enabled: true
+    severity: warning  # Missing default is more serious
+
+# File-level exclusions (apply to all rules)
+exclude_files:
+  - "vendor/**/*.sv"     # Third-party code
+  - "generated/**/*.sv"  # Auto-generated code
+  - "legacy/**/*.sv"     # Legacy code (different standards)
+
+# Module-level exclusions (apply to all rules)
+exclude_modules:
+  - "tb_*"        # Testbench modules
+  - "test_*"      # Test modules
+  - "*_wrapper"   # Auto-generated wrappers
+
