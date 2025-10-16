@@ -241,3 +241,44 @@ cc_test(
     ],
 )
 
+cc_library(
+    name = "validator-cache",
+    srcs = ["validator-cache.cc"],
+    hdrs = ["validator-cache.h"],
+    deps = [],
+)
+
+cc_test(
+    name = "validator-cache_test",
+    srcs = ["validator-cache_test.cc"],
+    deps = [
+        ":validator-cache",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "batch-processor",
+    srcs = ["batch-processor.cc"],
+    hdrs = ["batch-processor.h"],
+    deps = [
+        ":veripg-validator",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+        "@abseil-cpp//absl/strings:str_format",
+    ],
+)
+
+cc_test(
+    name = "batch-processor_test",
+    srcs = ["batch-processor_test.cc"],
+    deps = [
+        ":batch-processor",
+        ":veripg-validator",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
