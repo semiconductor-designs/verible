@@ -29,3 +29,50 @@ cc_test(
     ],
 )
 
+cc_library(
+    name = "rule-config",
+    srcs = ["rule-config.cc"],
+    hdrs = ["rule-config.h"],
+    deps = [
+        ":veripg-validator",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_library(
+    name = "auto-fix-engine",
+    srcs = ["auto-fix-engine.cc"],
+    hdrs = ["auto-fix-engine.h"],
+    deps = [
+        ":veripg-validator",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "rule-config_test",
+    srcs = ["rule-config_test.cc"],
+    deps = [
+        ":rule-config",
+        ":veripg-validator",
+        "@abseil-cpp//absl/status",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "auto-fix-engine_test",
+    srcs = ["auto-fix-engine_test.cc"],
+    deps = [
+        ":auto-fix-engine",
+        ":veripg-validator",
+        "@abseil-cpp//absl/status",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
