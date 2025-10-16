@@ -76,3 +76,24 @@ cc_test(
     ],
 )
 
+cc_library(
+    name = "output-formatter",
+    srcs = ["output-formatter.cc"],
+    hdrs = ["output-formatter.h"],
+    deps = [
+        ":veripg-validator",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "output-formatter_test",
+    srcs = ["output-formatter_test.cc"],
+    deps = [
+        ":output-formatter",
+        ":veripg-validator",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
