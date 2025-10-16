@@ -348,12 +348,31 @@ absl::Status VeriPGValidator::CheckCDCViolations(
           v.fix_suggestion = "Add 2-stage synchronizer";
           violations.push_back(v);
         }
+        
+        // CDC_002: Check if multi-bit signal crossing without Gray code
+        // Multi-bit signals (width > 1) should use Gray code encoding when crossing
+        // For now, we detect any multi-bit CDC and warn about it
+        // TODO: Add Gray code pattern detection to suppress this warning
+        bool is_multibit = IsMultiBitSignal(sig, symbol_table);
+        if (is_multibit && has_sync) {
+          // Has synchronizer but is multi-bit (may need Gray code)
+          Violation v;
+          v.rule = RuleId::kCDC_002;
+          v.severity = Severity::kWarning;
+          v.message = absl::StrCat(
+              "multi-bit signal '", sig, "' crosses from clock domain '",
+              it->second, "' to '", dest_clock,
+              "' - consider using Gray code encoding");
+          v.signal_name = sig;
+          v.source_location = "";
+          v.fix_suggestion = "Use Gray code for multi-bit CDC";
+          violations.push_back(v);
+        }
       }
     }
   }
   
-  // TODO: Implement CDC_002-004
-  // CDC_002: Multi-bit signal CDC (check bit width > 1)
+  // TODO: Implement CDC_003-004
   // CDC_003: Clock mux (detect clock in data path)
   // CDC_004: Async reset in sync logic (check sensitivity list)
   
@@ -583,6 +602,45 @@ bool VeriPGValidator::HasSynchronizerPattern(
   }
   
   return false;
+}
+
+// Helper: Check if a signal is multi-bit (width > 1)
+bool VeriPGValidator::IsMultiBitSignal(const std::string& signal, 
+                                        const verilog::SymbolTable& symbol_table) {
+  // Find the signal in the symbol table and check its declared width
+  // This is a simplified implementation that checks for common multi-bit patterns
+  
+  // Try to find the symbol in the table
+  const auto& root = symbol_table.Root();
+  
+  // Simple traversal to find signal declaration
+  // Look for signals declared with explicit width: logic [7:0] data_a;
+  std::function<bool(const verilog::SymbolTableNode&, std::string_view)> find_signal = 
+      [&](const verilog::SymbolTableNode& node, std::string_view node_name) -> bool {
+    // Check if this node's name matches our signal
+    if (node_name == signal) {
+      const auto& info = node.Value();
+      if (info.declared_type.syntax_origin) {
+        // Get the text of the declaration type
+        std::string_view decl_text = verible::StringSpanOfSymbol(*info.declared_type.syntax_origin);
+        
+        // Simple heuristic: Check if type contains '['
+        // Examples: "logic [7:0]", "reg [31:0]", "wire [15:0]"
+        if (decl_text.find('[') != std::string_view::npos) {
+          return true;
+        }
+      }
+    }
+    
+    // Recursively check children
+    for (const auto& [name, child_node] : node.Children()) {
+      if (find_signal(child_node, name)) return true;
+    }
+    
+    return false;
+  };
+  
+  return find_signal(root, "");  // Root has empty name
 }
 
 absl::Status VeriPGValidator::CheckClockRules(

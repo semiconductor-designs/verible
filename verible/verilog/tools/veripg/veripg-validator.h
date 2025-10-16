@@ -212,6 +212,7 @@ class VeriPGValidator {
   std::vector<std::string> GetAssignedSignalsInBlock(const verible::SyntaxTreeNode* block);
   std::vector<std::string> GetUsedSignalsInBlock(const verible::SyntaxTreeNode* block);
   bool HasSynchronizerPattern(const std::string& signal, const verible::SyntaxTreeNode* block);
+  bool IsMultiBitSignal(const std::string& signal, const verilog::SymbolTable& symbol_table);
 };
 
 }  // namespace tools
