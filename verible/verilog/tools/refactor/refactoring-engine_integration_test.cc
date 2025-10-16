@@ -1153,6 +1153,253 @@ endmodule
   }
 }
 
+// ============================================================================
+// PART 3: PARAMETER SUBSTITUTION EDGE CASES (P1-3)
+// ============================================================================
+
+// Test 1: Parameters in comments should NOT be substituted
+TEST_F(RefactoringEngineIntegrationTest, InlineFunctionParameterInComment) {
+  std::string test_code = R"(
+module test;
+  logic [7:0] result;
+  
+  initial begin
+    result = add(3, 5);  // Using add with a=3, b=5
+  end
+  
+  function automatic logic [7:0] add(logic [7:0] a, b);
+    // Comment mentioning parameter 'a' and 'b'
+    return a + b;  // Adding a and b
+  endfunction
+endmodule
+)";
+
+  std::string test_file = CreateTestFile("inline_comment.sv", test_code);
+
+  VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(file_or.ok());
+
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> build_diagnostics;
+  symbol_table.Build(&build_diagnostics);
+  ASSERT_TRUE(build_diagnostics.empty());
+
+  analysis::TypeInference type_inference(&symbol_table);
+  RefactoringEngine engine(&symbol_table, &type_inference, &project);
+
+  Location loc;
+  loc.filename = test_file;
+  loc.line = 6;   // "result = add(3, 5);"
+  loc.column = 13;
+
+  auto result = engine.InlineFunction(loc);
+  ASSERT_TRUE(result.ok()) << "InlineFunction failed: " << result.message();
+
+  std::string modified = ReadFile(test_file);
+  
+  // EDGE CASE VERIFICATION:
+  // 1. Parameters should be substituted in expression: "3 + 5"
+  EXPECT_THAT(modified, HasSubstr("result = 3 + 5"))
+      << "Parameters not substituted in expression";
+  
+  // 2. Parameters in COMMENTS should remain as-is (NOT substituted)
+  // The original comment "// Using add with a=3, b=5" should still have 'a' and 'b'
+  EXPECT_THAT(modified, HasSubstr("a=3"))
+      << "Parameter 'a' in comment was incorrectly substituted!";
+  EXPECT_THAT(modified, HasSubstr("b=5"))
+      << "Parameter 'b' in comment was incorrectly substituted!";
+}
+
+// Test 2: Parameters as part of larger identifiers should NOT be substituted
+TEST_F(RefactoringEngineIntegrationTest, InlineFunctionParameterPartOfIdentifier) {
+  std::string test_code = R"(
+module test;
+  logic [7:0] result;
+  logic [7:0] a_var, b_var;
+  
+  initial begin
+    a_var = 10;
+    b_var = 20;
+    result = add(3, 5);
+  end
+  
+  function automatic logic [7:0] add(logic [7:0] a, b);
+    return a + b + a_var + b_var;  // Uses parameters AND longer identifiers
+  endfunction
+endmodule
+)";
+
+  std::string test_file = CreateTestFile("inline_identifier.sv", test_code);
+
+  VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(file_or.ok());
+
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> build_diagnostics;
+  symbol_table.Build(&build_diagnostics);
+  ASSERT_TRUE(build_diagnostics.empty());
+
+  analysis::TypeInference type_inference(&symbol_table);
+  RefactoringEngine engine(&symbol_table, &type_inference, &project);
+
+  Location loc;
+  loc.filename = test_file;
+  loc.line = 9;   // "result = add(3, 5);"
+  loc.column = 13;
+
+  auto result = engine.InlineFunction(loc);
+  ASSERT_TRUE(result.ok()) << "InlineFunction failed: " << result.message();
+
+  std::string modified = ReadFile(test_file);
+  
+  // EDGE CASE VERIFICATION:
+  // 1. Parameters 'a' and 'b' should be substituted: "3 + 5"
+  EXPECT_THAT(modified, HasSubstr("3 + 5"))
+      << "Parameters not substituted";
+  
+  // 2. Longer identifiers 'a_var' and 'b_var' should NOT be affected
+  EXPECT_THAT(modified, HasSubstr("a_var"))
+      << "Identifier 'a_var' was incorrectly modified!";
+  EXPECT_THAT(modified, HasSubstr("b_var"))
+      << "Identifier 'b_var' was incorrectly modified!";
+  
+  // 3. The inlined expression should have: "3 + 5 + a_var + b_var"
+  EXPECT_THAT(modified, HasSubstr("a_var + b_var"))
+      << "Word boundary check failed - longer identifiers were mangled!";
+}
+
+// Test 3: Multiple occurrences of parameter should ALL be substituted
+TEST_F(RefactoringEngineIntegrationTest, InlineFunctionMultipleOccurrences) {
+  std::string test_code = R"(
+module test;
+  logic [7:0] result;
+  
+  initial begin
+    result = calc(4);
+  end
+  
+  function automatic logic [7:0] calc(logic [7:0] x);
+    return x * x + x - x / 2;  // 4 occurrences of 'x'
+  endfunction
+endmodule
+)";
+
+  std::string test_file = CreateTestFile("inline_multiple.sv", test_code);
+
+  VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(file_or.ok());
+
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> build_diagnostics;
+  symbol_table.Build(&build_diagnostics);
+  ASSERT_TRUE(build_diagnostics.empty());
+
+  analysis::TypeInference type_inference(&symbol_table);
+  RefactoringEngine engine(&symbol_table, &type_inference, &project);
+
+  Location loc;
+  loc.filename = test_file;
+  loc.line = 6;   // "result = calc(4);"
+  loc.column = 13;
+
+  auto result = engine.InlineFunction(loc);
+  ASSERT_TRUE(result.ok()) << "InlineFunction failed: " << result.message();
+
+  std::string modified = ReadFile(test_file);
+  
+  // EDGE CASE VERIFICATION:
+  // All 4 occurrences of 'x' should be replaced with '4'
+  // Expected: "4 * 4 + 4 - 4 / 2"
+  
+  // Count occurrences of '4' in the result line
+  size_t result_pos = modified.find("result =");
+  size_t semicolon_pos = modified.find(";", result_pos);
+  if (result_pos != std::string::npos && semicolon_pos != std::string::npos) {
+    std::string result_line = modified.substr(result_pos, semicolon_pos - result_pos);
+    
+    // Should have "4 * 4 + 4 - 4"
+    EXPECT_THAT(result_line, HasSubstr("4 * 4"))
+        << "First two occurrences not substituted";
+    EXPECT_THAT(result_line, HasSubstr("+ 4"))
+        << "Third occurrence not substituted";
+    EXPECT_THAT(result_line, HasSubstr("- 4"))
+        << "Fourth occurrence not substituted";
+    
+    // Should NOT have any remaining 'x' (except potentially in "xor" or similar)
+    // For safety, check that 'x' appears only as part of hex literals or operators
+    size_t x_pos = result_line.find('x');
+    while (x_pos != std::string::npos) {
+      // Check if it's standalone (bad) or part of hex/operator (ok)
+      bool is_standalone = (x_pos == 0 || std::isspace(result_line[x_pos-1])) &&
+                           (x_pos + 1 >= result_line.length() || std::isspace(result_line[x_pos+1]));
+      EXPECT_FALSE(is_standalone)
+          << "Found un-substituted parameter 'x' at position " << x_pos;
+      x_pos = result_line.find('x', x_pos + 1);
+    }
+  }
+}
+
+// Test 4: Parameters in operators/expressions should be substituted correctly
+TEST_F(RefactoringEngineIntegrationTest, InlineFunctionComplexExpression) {
+  std::string test_code = R"(
+module test;
+  logic [7:0] result;
+  
+  initial begin
+    result = complex(7, 2);
+  end
+  
+  function automatic logic [7:0] complex(logic [7:0] a, b);
+    return (a << b) | (a >> 1) & a[b];  // Complex operators
+  endfunction
+endmodule
+)";
+
+  std::string test_file = CreateTestFile("inline_complex.sv", test_code);
+
+  VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(file_or.ok());
+
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> build_diagnostics;
+  symbol_table.Build(&build_diagnostics);
+  ASSERT_TRUE(build_diagnostics.empty());
+
+  analysis::TypeInference type_inference(&symbol_table);
+  RefactoringEngine engine(&symbol_table, &type_inference, &project);
+
+  Location loc;
+  loc.filename = test_file;
+  loc.line = 6;   // "result = complex(7, 2);"
+  loc.column = 13;
+
+  auto result = engine.InlineFunction(loc);
+  ASSERT_TRUE(result.ok()) << "InlineFunction failed: " << result.message();
+
+  std::string modified = ReadFile(test_file);
+  
+  // EDGE CASE VERIFICATION:
+  // Parameters in complex expressions should be substituted: "7" and "2"
+  EXPECT_THAT(modified, HasSubstr("7 <<"))
+      << "Parameter 'a' not substituted in shift operator";
+  EXPECT_THAT(modified, HasSubstr("<< 2"))
+      << "Parameter 'b' not substituted in shift operator";
+  EXPECT_THAT(modified, HasSubstr("7 >>"))
+      << "Parameter 'a' not substituted in second operator";
+  EXPECT_THAT(modified, HasSubstr("7[2]"))
+      << "Parameters not substituted in bit select";
+  
+  // Verify syntax is valid
+  VerilogProject verify(test_dir_.string(), std::vector<std::string>{});
+  auto verify_or = verify.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(verify_or.ok() && verify_or.value()->Status().ok())
+      << "Modified file has syntax errors";
+}
+
 }  // namespace
 }  // namespace tools
 }  // namespace verilog
