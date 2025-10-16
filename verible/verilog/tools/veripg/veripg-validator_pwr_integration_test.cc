@@ -75,31 +75,31 @@ TEST_F(VeriPGValidatorPWRIntegrationTest, test_name) { \
 
 // PWR_001: Missing power domain annotation
 PWR_TEST(DetectMissingDomainAnnotation,
-         "pwr_missing_domain_annotation.sv",
+         "pwr/pwr_missing_domain_annotation.sv",
          RuleId::kPWR_001,
          "domain")
 
 // PWR_002: Level shifter required at domain boundary
 PWR_TEST(DetectMissingLevelShifter,
-         "pwr_missing_level_shifter.sv",
+         "pwr/pwr_missing_level_shifter.sv",
          RuleId::kPWR_002,
          "level")
 
 // PWR_003: Isolation cell required for power-down domain
 PWR_TEST(DetectMissingIsolation,
-         "pwr_missing_isolation.sv",
+         "pwr/pwr_missing_isolation.sv",
          RuleId::kPWR_003,
          "isolation")
 
 // PWR_004: Retention register without retention annotation
 PWR_TEST(DetectMissingRetention,
-         "pwr_missing_retention.sv",
+         "pwr/pwr_missing_retention.sv",
          RuleId::kPWR_004,
          "retention")
 
 // PWR_005: Always-on signal crossing to power-gated domain
 PWR_TEST(DetectAlwaysOnCrossing,
-         "pwr_always_on_crossing.sv",
+         "pwr/pwr_always_on_crossing.sv",
          RuleId::kPWR_005,
          "always-on")
 

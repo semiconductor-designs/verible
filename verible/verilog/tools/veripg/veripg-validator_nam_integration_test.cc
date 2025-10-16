@@ -149,7 +149,7 @@ TEST_F(VeriPGValidatorNAMIntegrationTest, DetectParameterNamingViolation) {
 // Test NAM_004: Clock signals should start with "clk_"
 TEST_F(VeriPGValidatorNAMIntegrationTest, DetectClockNamingViolation) {
   const std::string test_file = 
-      "verible/verilog/tools/veripg/testdata/nam_clock_naming_violation.sv";
+      "verible/verilog/tools/veripg/testdata/nam/nam_clock_naming_violation.sv";
   
   VerilogProject project(".", {});
   auto file_or = project.OpenTranslationUnit(test_file);
@@ -186,7 +186,7 @@ TEST_F(VeriPGValidatorNAMIntegrationTest, DetectClockNamingViolation) {
 // Test NAM_005: Reset signals should start with "rst_" or "rstn_"
 TEST_F(VeriPGValidatorNAMIntegrationTest, DetectResetNamingViolation) {
   const std::string test_file = 
-      "verible/verilog/tools/veripg/testdata/nam_reset_naming_violation.sv";
+      "verible/verilog/tools/veripg/testdata/nam/nam_reset_naming_violation.sv";
   
   VerilogProject project(".", {});
   auto file_or = project.OpenTranslationUnit(test_file);
@@ -223,7 +223,7 @@ TEST_F(VeriPGValidatorNAMIntegrationTest, DetectResetNamingViolation) {
 // Test NAM_006: Active-low signals should end with "_n"
 TEST_F(VeriPGValidatorNAMIntegrationTest, DetectActiveLowNamingViolation) {
   const std::string test_file = 
-      "verible/verilog/tools/veripg/testdata/nam_active_low_naming_violation.sv";
+      "verible/verilog/tools/veripg/testdata/nam/nam_active_low_naming_violation.sv";
   
   VerilogProject project(".", {});
   auto file_or = project.OpenTranslationUnit(test_file);

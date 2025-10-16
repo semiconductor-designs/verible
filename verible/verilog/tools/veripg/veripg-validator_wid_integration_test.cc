@@ -38,7 +38,7 @@ class VeriPGValidatorWIDIntegrationTest : public ::testing::Test {
 // Test WID_001: Signal width mismatch in assignment
 TEST_F(VeriPGValidatorWIDIntegrationTest, DetectSignalWidthMismatch) {
   const std::string test_file = 
-      "verible/verilog/tools/veripg/testdata/wid_signal_width_mismatch.sv";
+      "verible/verilog/tools/veripg/testdata/wid/wid_signal_width_mismatch.sv";
   
   VerilogProject project(".", {});
   auto file_or = project.OpenTranslationUnit(test_file);
@@ -75,7 +75,7 @@ TEST_F(VeriPGValidatorWIDIntegrationTest, DetectSignalWidthMismatch) {
 // Test WID_002: Implicit width conversion (lossy)
 TEST_F(VeriPGValidatorWIDIntegrationTest, DetectImplicitConversion) {
   const std::string test_file = 
-      "verible/verilog/tools/veripg/testdata/wid_implicit_conversion.sv";
+      "verible/verilog/tools/veripg/testdata/wid/wid_implicit_conversion.sv";
   
   VerilogProject project(".", {});
   auto file_or = project.OpenTranslationUnit(test_file);
@@ -112,7 +112,7 @@ TEST_F(VeriPGValidatorWIDIntegrationTest, DetectImplicitConversion) {
 // Test WID_003: Concatenation width mismatch
 TEST_F(VeriPGValidatorWIDIntegrationTest, DetectConcatenationMismatch) {
   const std::string test_file = 
-      "verible/verilog/tools/veripg/testdata/wid_concatenation_mismatch.sv";
+      "verible/verilog/tools/veripg/testdata/wid/wid_concatenation_mismatch.sv";
   
   VerilogProject project(".", {});
   auto file_or = project.OpenTranslationUnit(test_file);
@@ -149,7 +149,7 @@ TEST_F(VeriPGValidatorWIDIntegrationTest, DetectConcatenationMismatch) {
 // Test WID_004: Parameter width inconsistent with usage
 TEST_F(VeriPGValidatorWIDIntegrationTest, DetectParameterWidthInconsistency) {
   const std::string test_file = 
-      "verible/verilog/tools/veripg/testdata/wid_parameter_width.sv";
+      "verible/verilog/tools/veripg/testdata/wid/wid_parameter_width.sv";
   
   VerilogProject project(".", {});
   auto file_or = project.OpenTranslationUnit(test_file);
@@ -186,7 +186,7 @@ TEST_F(VeriPGValidatorWIDIntegrationTest, DetectParameterWidthInconsistency) {
 // Test WID_005: Port width mismatch in instantiation
 TEST_F(VeriPGValidatorWIDIntegrationTest, DetectPortWidthMismatch) {
   const std::string test_file = 
-      "verible/verilog/tools/veripg/testdata/wid_port_instantiation.sv";
+      "verible/verilog/tools/veripg/testdata/wid/wid_port_instantiation.sv";
   
   VerilogProject project(".", {});
   auto file_or = project.OpenTranslationUnit(test_file);
