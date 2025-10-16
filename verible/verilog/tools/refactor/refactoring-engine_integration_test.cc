@@ -138,7 +138,7 @@ endmodule
       << "Missing declaration keyword";
   EXPECT_THAT(modified, HasSubstr("temp_sum"))
       << "Missing variable name";
-  
+
   // 9. Verify backup was created
   std::string backup_file = test_file + ".bak";
   EXPECT_TRUE(std::filesystem::exists(backup_file)) << "Backup file not created";
@@ -589,7 +589,7 @@ TEST_F(RefactoringEngineIntegrationTest, ExtractVariableFileError) {
   sel.end_column = 5;
 
   auto result = engine.ExtractVariable(sel, "test_var");
-  
+
   // Should fail gracefully
   EXPECT_FALSE(result.ok()) << "Should fail on read-only file";
   EXPECT_FALSE(result.message().empty()) << "Should have error message";
