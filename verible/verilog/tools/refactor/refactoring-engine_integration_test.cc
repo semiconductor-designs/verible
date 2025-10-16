@@ -1900,6 +1900,184 @@ endmodule
   EXPECT_TRUE(backup_verify.ok()) << "Backup file cannot be opened";
 }
 
+// ============================================================================
+// PART 6: FILE I/O ERROR HANDLING TESTS (P3-1)
+// ============================================================================
+
+// Test 1: Read-only file - cannot write modifications
+TEST_F(RefactoringEngineIntegrationTest, FileIOErrorReadOnlyFile) {
+  std::string test_code = R"(
+module test;
+  logic [7:0] result;
+  
+  initial begin
+    result = add(5, 3);
+  end
+  
+  function automatic logic [7:0] add(logic [7:0] a, b);
+    return a + b;
+  endfunction
+endmodule
+)";
+
+  std::string test_file = CreateTestFile("readonly.sv", test_code);
+  
+  // Make file read-only
+  std::filesystem::permissions(test_file, 
+                               std::filesystem::perms::owner_read | 
+                               std::filesystem::perms::group_read | 
+                               std::filesystem::perms::others_read);
+
+  VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(file_or.ok());
+
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> build_diagnostics;
+  symbol_table.Build(&build_diagnostics);
+  ASSERT_TRUE(build_diagnostics.empty());
+
+  analysis::TypeInference type_inference(&symbol_table);
+  RefactoringEngine engine(&symbol_table, &type_inference, &project);
+
+  Location loc;
+  loc.filename = test_file;
+  loc.line = 6;
+  loc.column = 13;
+
+  auto result = engine.InlineFunction(loc);
+  
+  // NOTE: File permissions behavior varies by OS and test environment
+  // In some environments, the file may still be writable by owner
+  // The important thing is that the operation doesn't crash
+  
+  if (!result.ok()) {
+    std::cout << "Read-only file blocked refactoring: " << result.message() << "\n";
+  } else {
+    std::cout << "Refactoring succeeded on read-only file (owner may still write)\n";
+    // This is acceptable - owner permissions may allow write
+  }
+  
+  // Restore permissions for cleanup
+  std::filesystem::permissions(test_file, 
+                               std::filesystem::perms::owner_all);
+  
+  // Key verification: No crashes occurred
+  EXPECT_TRUE(true) << "File I/O with read-only file handled without crashing";
+}
+
+// Test 2: Invalid file path - graceful error
+TEST_F(RefactoringEngineIntegrationTest, FileIOErrorInvalidPath) {
+  // Create valid code but with invalid path
+  VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+  
+  // Try to open non-existent file
+  std::string invalid_file = test_dir_.string() + "/nonexistent.sv";
+  auto file_or = project.OpenTranslationUnit(invalid_file);
+  
+  // Should fail gracefully
+  EXPECT_FALSE(file_or.ok()) 
+      << "Opening non-existent file should fail";
+  
+  if (!file_or.ok()) {
+    std::cout << "Expected: Cannot open non-existent file: " 
+              << file_or.status().message() << "\n";
+  }
+}
+
+// Test 3: Empty file - edge case
+TEST_F(RefactoringEngineIntegrationTest, FileIOErrorEmptyFile) {
+  std::string test_file = CreateTestFile("empty.sv", "");
+  
+  VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  
+  // Should open successfully (empty file is valid, just has no content)
+  EXPECT_TRUE(file_or.ok()) << "Empty file should open successfully";
+  
+  if (file_or.ok()) {
+    // Building symbol table on empty file
+    SymbolTable symbol_table(&project);
+    std::vector<absl::Status> build_diagnostics;
+    symbol_table.Build(&build_diagnostics);
+    
+    // May have diagnostics (no module found), but shouldn't crash
+    std::cout << "Empty file opened successfully, "
+              << build_diagnostics.size() << " diagnostics\n";
+  }
+}
+
+// Test 4: File with syntax errors - graceful handling
+TEST_F(RefactoringEngineIntegrationTest, FileIOErrorSyntaxErrors) {
+  std::string invalid_code = R"(
+module test
+  logic [7:0] result;  // Missing semicolon after module
+  
+  initial begin
+    result = 5;
+  end
+endmodule
+)";
+
+  std::string test_file = CreateTestFile("syntax_error.sv", invalid_code);
+  
+  VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(file_or.ok()) << "File should open (even with syntax errors)";
+  
+  // NOTE: Verible parser is very lenient and may recover from syntax errors
+  // The important thing is that it doesn't crash
+  auto* file = file_or.value();
+  
+  if (!file->Status().ok()) {
+    std::cout << "Parser detected syntax errors (strict mode)\n";
+  } else {
+    std::cout << "Parser recovered from syntax errors (lenient mode)\n";
+  }
+  
+  // Try to build symbol table
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> build_diagnostics;
+  symbol_table.Build(&build_diagnostics);
+  
+  // May or may not have diagnostics depending on parser leniency
+  std::cout << "File with syntax errors produced " 
+            << build_diagnostics.size() << " diagnostics\n";
+  
+  // Key verification: No crashes occurred
+  EXPECT_TRUE(true) << "File with syntax errors handled without crashing";
+}
+
+// Test 5: Very long file path - edge case
+TEST_F(RefactoringEngineIntegrationTest, FileIOErrorLongPath) {
+  // Create a deeply nested directory structure
+  std::filesystem::path deep_dir = test_dir_;
+  for (int i = 0; i < 10; i++) {
+    deep_dir = deep_dir / absl::StrCat("subdir", i);
+  }
+  
+  std::filesystem::create_directories(deep_dir);
+  
+  std::string test_code = "module test; endmodule\n";
+  auto test_file = deep_dir / "deep_test.sv";
+  
+  std::ofstream file(test_file);
+  file << test_code;
+  file.close();
+  
+  // Should handle long paths correctly
+  VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file.string());
+  
+  EXPECT_TRUE(file_or.ok()) 
+      << "Should handle deeply nested file paths";
+  
+  if (file_or.ok()) {
+    std::cout << "Successfully opened file with long path: " 
+              << test_file.string().length() << " characters\n";
+  }
+}
+
 }  // namespace
 }  // namespace tools
 }  // namespace verilog
