@@ -79,6 +79,118 @@ TEST_F(VeriPGValidatorRSTIntegrationTest, DetectMissingResetViolation) {
   EXPECT_TRUE(found_rst_001) << "Should detect RST_001 violation for missing reset";
 }
 
+// Test: RST_002 - Asynchronous reset not properly synchronized
+TEST_F(VeriPGValidatorRSTIntegrationTest, DetectAsyncResetViolation) {
+  const std::string testdata_dir = "verible/verilog/tools/veripg/testdata/rst/";
+  const std::string test_file = testdata_dir + "rst_async_reset_violation.sv";
+  
+  VerilogProject project(".", std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  if (!file_or.ok()) GTEST_SKIP() << "Test file not found";
+  
+  auto* file = file_or.value();
+  ASSERT_NE(file, nullptr);
+  ASSERT_TRUE(file->Status().ok()) << file->Status().message();
+  
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> diagnostics;
+  symbol_table.Build(&diagnostics);
+  ASSERT_TRUE(diagnostics.empty());
+  
+  analysis::TypeInference type_inference(&symbol_table);
+  analysis::TypeChecker type_checker(&symbol_table, &type_inference);
+  VeriPGValidator validator(&type_checker);
+  std::vector<Violation> violations;
+  
+  auto status = validator.CheckResetRules(symbol_table, violations, &project);
+  ASSERT_TRUE(status.ok()) << status.message();
+  
+  bool found_rst_002 = false;
+  for (const auto& v : violations) {
+    if (v.rule == RuleId::kRST_002) {
+      found_rst_002 = true;
+      EXPECT_EQ(v.severity, Severity::kWarning);
+      EXPECT_THAT(v.message, HasSubstr("async"));
+    }
+  }
+  EXPECT_TRUE(found_rst_002) << "Should detect RST_002 for async reset";
+}
+
+// Test: RST_003 - Mixed reset polarity
+TEST_F(VeriPGValidatorRSTIntegrationTest, DetectMixedPolarityViolation) {
+  const std::string testdata_dir = "verible/verilog/tools/veripg/testdata/rst/";
+  const std::string test_file = testdata_dir + "rst_mixed_polarity_violation.sv";
+  
+  VerilogProject project(".", std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  if (!file_or.ok()) GTEST_SKIP() << "Test file not found";
+  
+  auto* file = file_or.value();
+  ASSERT_NE(file, nullptr);
+  ASSERT_TRUE(file->Status().ok()) << file->Status().message();
+  
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> diagnostics;
+  symbol_table.Build(&diagnostics);
+  ASSERT_TRUE(diagnostics.empty());
+  
+  analysis::TypeInference type_inference(&symbol_table);
+  analysis::TypeChecker type_checker(&symbol_table, &type_inference);
+  VeriPGValidator validator(&type_checker);
+  std::vector<Violation> violations;
+  
+  auto status = validator.CheckResetRules(symbol_table, violations, &project);
+  ASSERT_TRUE(status.ok()) << status.message();
+  
+  bool found_rst_003 = false;
+  for (const auto& v : violations) {
+    if (v.rule == RuleId::kRST_003) {
+      found_rst_003 = true;
+      EXPECT_EQ(v.severity, Severity::kWarning);
+      EXPECT_THAT(v.message, HasSubstr("polar"));
+    }
+  }
+  EXPECT_TRUE(found_rst_003) << "Should detect RST_003 for mixed polarity";
+}
+
+// Test: RST_004 - Reset signal used as data
+TEST_F(VeriPGValidatorRSTIntegrationTest, DetectResetAsDataViolation) {
+  const std::string testdata_dir = "verible/verilog/tools/veripg/testdata/rst/";
+  const std::string test_file = testdata_dir + "rst_as_data_violation.sv";
+  
+  VerilogProject project(".", std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  if (!file_or.ok()) GTEST_SKIP() << "Test file not found";
+  
+  auto* file = file_or.value();
+  ASSERT_NE(file, nullptr);
+  ASSERT_TRUE(file->Status().ok()) << file->Status().message();
+  
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> diagnostics;
+  symbol_table.Build(&diagnostics);
+  ASSERT_TRUE(diagnostics.empty());
+  
+  analysis::TypeInference type_inference(&symbol_table);
+  analysis::TypeChecker type_checker(&symbol_table, &type_inference);
+  VeriPGValidator validator(&type_checker);
+  std::vector<Violation> violations;
+  
+  auto status = validator.CheckResetRules(symbol_table, violations, &project);
+  ASSERT_TRUE(status.ok()) << status.message();
+  
+  bool found_rst_004 = false;
+  for (const auto& v : violations) {
+    if (v.rule == RuleId::kRST_004) {
+      found_rst_004 = true;
+      EXPECT_EQ(v.severity, Severity::kWarning);
+      EXPECT_THAT(v.message, HasSubstr("reset"));
+      EXPECT_THAT(v.message, HasSubstr("data"));
+    }
+  }
+  EXPECT_TRUE(found_rst_004) << "Should detect RST_004 for reset as data";
+}
+
 }  // namespace
 }  // namespace tools
 }  // namespace verilog

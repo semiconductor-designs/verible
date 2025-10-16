@@ -1110,28 +1110,54 @@ absl::Status VeriPGValidator::CheckResetRules(
     find_always_ff(syntax_tree.get());
   }
   
-  // RST_001: Check for missing reset
+  // Collect reset signals and check polarity
+  std::set<std::string> reset_signals;
+  std::set<std::string> active_high_resets;
+  std::set<std::string> active_low_resets;
+  
+  // RST_001, RST_002, RST_003: Check for missing reset, async reset, and polarity
   for (const auto* block : always_ff_blocks) {
     const auto* timing_control = verilog::GetProceduralTimingControlFromAlways(*block);
     if (!timing_control) continue;
     
     // Check if timing control has reset in sensitivity list
-    // Look for identifiers with "rst" or "reset" in name
     bool has_reset_in_sensitivity = false;
+    bool has_async_reset = false;
+    bool after_negedge = false;
+    bool after_posedge = false;
+    
     std::function<void(const verible::Symbol&)> check_for_reset = 
         [&](const verible::Symbol& sym) {
       if (sym.Kind() == verible::SymbolKind::kLeaf) {
         const auto& leaf = verible::SymbolCastToLeaf(sym);
         const auto token = leaf.get();
         verilog_tokentype token_type = static_cast<verilog_tokentype>(token.token_enum());
-        if (IsIdentifierLike(token_type)) {
+        
+        if (token_type == TK_negedge) {
+          after_negedge = true;
+          after_posedge = false;
+        } else if (token_type == TK_posedge) {
+          after_posedge = true;
+          after_negedge = false;
+        } else if (IsIdentifierLike(token_type)) {
           std::string sig(token.text());
           std::string lower_sig = sig;
           for (char& c : lower_sig) c = std::tolower(c);
           if (lower_sig.find("rst") != std::string::npos || 
               lower_sig.find("reset") != std::string::npos) {
             has_reset_in_sensitivity = true;
+            reset_signals.insert(sig);
+            
+            // RST_002: Check for async reset (negedge)
+            if (after_negedge) {
+              has_async_reset = true;
+              active_low_resets.insert(sig);
+            } else if (after_posedge) {
+              active_high_resets.insert(sig);
+            }
           }
+          after_negedge = false;
+          after_posedge = false;
         }
       } else if (sym.Kind() == verible::SymbolKind::kNode) {
         const auto& n = verible::down_cast<const verible::SyntaxTreeNode&>(sym);
@@ -1142,8 +1168,8 @@ absl::Status VeriPGValidator::CheckResetRules(
     };
     check_for_reset(*timing_control);
     
+    // RST_001: Missing reset
     if (!has_reset_in_sensitivity) {
-      // No reset in sensitivity list - WARNING
       Violation v;
       v.rule = RuleId::kRST_001;
       v.severity = Severity::kWarning;
@@ -1153,9 +1179,76 @@ absl::Status VeriPGValidator::CheckResetRules(
       v.fix_suggestion = GenerateFixRST_001("rst_n");
       violations.push_back(v);
     }
+    
+    // RST_002: Async reset
+    if (has_async_reset) {
+      Violation v;
+      v.rule = RuleId::kRST_002;
+      v.severity = Severity::kWarning;
+      v.message = "async reset (negedge) - consider synchronous reset release";
+      v.signal_name = "";
+      v.source_location = "";
+      v.fix_suggestion = "Use synchronous reset release for better timing";
+      violations.push_back(v);
+    }
   }
   
-  // TODO: RST_002-005 implementation
+  // RST_003: Mixed polarity
+  if (!active_high_resets.empty() && !active_low_resets.empty()) {
+    Violation v;
+    v.rule = RuleId::kRST_003;
+    v.severity = Severity::kWarning;
+    v.message = "mixed reset polarity detected (active-high and active-low)";
+    v.signal_name = "";
+    v.source_location = "";
+    v.fix_suggestion = "Use consistent reset polarity throughout module";
+    violations.push_back(v);
+  }
+  
+  // RST_004: Reset used as data (similar to CLK_003)
+  std::set<std::string> checked_resets;
+  for (const auto* block : always_ff_blocks) {
+    auto assignments = verilog::FindAllNonBlockingAssignments(*block);
+    for (const auto& assignment : assignments) {
+      if (!assignment.match || assignment.match->Kind() != verible::SymbolKind::kNode) continue;
+      const auto* assignment_node = verible::down_cast<const verible::SyntaxTreeNode*>(assignment.match);
+      
+      const auto* rhs = verilog::GetNonBlockingAssignmentRhs(*assignment_node);
+      if (!rhs) continue;
+      
+      std::function<void(const verible::Symbol&)> check_rhs = 
+          [&](const verible::Symbol& sym) {
+        if (sym.Kind() == verible::SymbolKind::kLeaf) {
+          const auto& leaf = verible::SymbolCastToLeaf(sym);
+          const auto token = leaf.get();
+          verilog_tokentype token_type = static_cast<verilog_tokentype>(token.token_enum());
+          if (IsIdentifierLike(token_type)) {
+            std::string signal_name(token.text());
+            if (reset_signals.count(signal_name) > 0 && 
+                checked_resets.count(signal_name) == 0) {
+              Violation v;
+              v.rule = RuleId::kRST_004;
+              v.severity = Severity::kWarning;
+              v.message = "reset signal used as data in assignment";
+              v.signal_name = signal_name;
+              v.source_location = "";
+              v.fix_suggestion = "Avoid using reset signals as data";
+              violations.push_back(v);
+              checked_resets.insert(signal_name);
+            }
+          }
+        } else if (sym.Kind() == verible::SymbolKind::kNode) {
+          const auto& n = verible::down_cast<const verible::SyntaxTreeNode&>(sym);
+          for (const auto& child_sym : n.children()) {
+            if (child_sym) check_rhs(*child_sym);
+          }
+        }
+      };
+      check_rhs(*rhs);
+    }
+  }
+  
+  // RST_005: Skipped (advanced timing analysis required)
   
   return absl::OkStatus();
 }
