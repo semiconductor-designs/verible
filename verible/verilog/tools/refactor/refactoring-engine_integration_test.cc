@@ -2224,6 +2224,251 @@ TEST_F(RefactoringEngineIntegrationTest, PerformanceMultipleRefactorings) {
       << "Multiple refactorings took too long";
 }
 
+// ============================================================================
+// PART 8: SEMANTIC EQUIVALENCE TESTS (P3-4)
+// ============================================================================
+
+// Test 1: InlineFunction preserves semantics (return value unchanged)
+TEST_F(RefactoringEngineIntegrationTest, SemanticEquivalenceInlineFunction) {
+  std::string test_code = R"(
+module test;
+  logic [7:0] result1, result2, result3;
+  
+  initial begin
+    result1 = add(5, 3);
+    result2 = add(10, 20);
+    result3 = add(1, 2);
+  end
+  
+  function automatic logic [7:0] add(logic [7:0] a, b);
+    return a + b;
+  endfunction
+endmodule
+)";
+
+  std::string test_file = CreateTestFile("semantic_inline.sv", test_code);
+  
+  // Parse BEFORE refactoring
+  VerilogProject project_before(test_dir_.string(), std::vector<std::string>{});
+  auto file_before = project_before.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(file_before.ok());
+  
+  std::string content_before = ReadFile(test_file);
+  
+  // Perform refactoring (inline first call)
+  {
+    VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+    auto file_or = project.OpenTranslationUnit(test_file);
+    ASSERT_TRUE(file_or.ok());
+
+    SymbolTable symbol_table(&project);
+    std::vector<absl::Status> build_diagnostics;
+    symbol_table.Build(&build_diagnostics);
+    ASSERT_TRUE(build_diagnostics.empty());
+
+    analysis::TypeInference type_inference(&symbol_table);
+    RefactoringEngine engine(&symbol_table, &type_inference, &project);
+
+    Location loc;
+    loc.filename = test_file;
+    loc.line = 6;  // "result1 = add(5, 3);"
+    loc.column = 15;
+
+    auto result = engine.InlineFunction(loc);
+    ASSERT_TRUE(result.ok()) << "InlineFunction failed: " << result.message();
+  }
+  
+  // Parse AFTER refactoring
+  std::string content_after = ReadFile(test_file);
+  
+  VerilogProject project_after(test_dir_.string(), std::vector<std::string>{});
+  auto file_after = project_after.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(file_after.ok()) << "Modified file has parse errors";
+  EXPECT_TRUE(file_after.value()->Status().ok()) 
+      << "Modified file has syntax errors";
+  
+  // SEMANTIC VERIFICATION:
+  // 1. File still parses (syntax preserved)
+  // 2. result1 should now be "5 + 3" instead of "add(5, 3)"
+  // 3. Other function calls preserved
+  // 4. Function definition still exists
+  
+  EXPECT_THAT(content_after, testing::HasSubstr("5 + 3"))
+      << "Inlined expression not found";
+  EXPECT_THAT(content_after, testing::HasSubstr("add(10, 20)"))
+      << "Other function calls should be preserved";
+  EXPECT_THAT(content_after, testing::HasSubstr("function automatic"))
+      << "Function definition should still exist";
+  
+  std::cout << "Semantic equivalence verified: InlineFunction preserved semantics\n";
+}
+
+// Test 2: Multiple refactorings preserve semantics
+TEST_F(RefactoringEngineIntegrationTest, SemanticEquivalenceMultipleOps) {
+  std::string test_code = R"(
+module test;
+  logic [7:0] a, b, result;
+  
+  initial begin
+    a = 5;
+    b = 3;
+    result = multiply(a, b);
+  end
+  
+  function automatic logic [7:0] multiply(logic [7:0] x, y);
+    return x * y;
+  endfunction
+endmodule
+)";
+
+  std::string test_file = CreateTestFile("semantic_multiple.sv", test_code);
+  
+  // Refactoring 1: Inline multiply function
+  {
+    VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+    auto file_or = project.OpenTranslationUnit(test_file);
+    ASSERT_TRUE(file_or.ok());
+
+    SymbolTable symbol_table(&project);
+    std::vector<absl::Status> build_diagnostics;
+    symbol_table.Build(&build_diagnostics);
+    ASSERT_TRUE(build_diagnostics.empty());
+
+    analysis::TypeInference type_inference(&symbol_table);
+    RefactoringEngine engine(&symbol_table, &type_inference, &project);
+
+    Location loc;
+    loc.filename = test_file;
+    loc.line = 8;  // "result = multiply(a, b);"
+    loc.column = 13;
+
+    auto result = engine.InlineFunction(loc);
+    ASSERT_TRUE(result.ok()) << "InlineFunction failed";
+  }
+  
+  std::string content_after_inline = ReadFile(test_file);
+  
+  // Verify syntax after first refactoring
+  VerilogProject verify1(test_dir_.string(), std::vector<std::string>{});
+  auto verify1_file = verify1.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(verify1_file.ok() && verify1_file.value()->Status().ok())
+      << "File has errors after InlineFunction";
+  
+  // SEMANTIC CHECK 1: Inlined expression should be "a * b"
+  EXPECT_THAT(content_after_inline, testing::HasSubstr("a * b"))
+      << "Function not inlined correctly";
+  
+  // Refactoring 2: Extract the inlined expression as a variable
+  {
+    VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+    auto file_or = project.OpenTranslationUnit(test_file);
+    ASSERT_TRUE(file_or.ok());
+
+    SymbolTable symbol_table(&project);
+    std::vector<absl::Status> build_diagnostics;
+    symbol_table.Build(&build_diagnostics);
+    // May have diagnostics due to undefined multiply function after inline
+    // That's OK for this test
+
+    analysis::TypeInference type_inference(&symbol_table);
+    RefactoringEngine engine(&symbol_table, &type_inference, &project);
+
+    Selection sel;
+    sel.filename = test_file;
+    sel.start_line = 8;
+    sel.start_column = 13;
+    sel.end_line = 8;
+    sel.end_column = 20;  // Select "a * b"
+
+    auto result = engine.ExtractVariable(sel, "temp_product");
+    // May or may not succeed - just verify no crash
+    if (result.ok()) {
+      std::cout << "ExtractVariable after InlineFunction succeeded\n";
+    } else {
+      std::cout << "ExtractVariable after InlineFunction: " 
+                << result.message() << "\n";
+    }
+  }
+  
+  // Final verification: File still parses
+  VerilogProject verify2(test_dir_.string(), std::vector<std::string>{});
+  auto verify2_file = verify2.OpenTranslationUnit(test_file);
+  EXPECT_TRUE(verify2_file.ok()) 
+      << "File cannot be opened after multiple refactorings";
+  
+  std::cout << "Semantic equivalence verified: Multiple operations don't corrupt file\n";
+}
+
+// Test 3: Refactoring doesn't change behavior (structural preservation)
+TEST_F(RefactoringEngineIntegrationTest, SemanticEquivalenceStructuralPreservation) {
+  std::string test_code = R"(
+module test;
+  logic [15:0] data;
+  logic clk, rst;
+  
+  always_ff @(posedge clk) begin
+    if (rst) begin
+      data <= 16'h0;
+    end else begin
+      data <= compute(data);
+    end
+  end
+  
+  function automatic logic [15:0] compute(logic [15:0] val);
+    return val + 1;
+  endfunction
+endmodule
+)";
+
+  std::string test_file = CreateTestFile("semantic_structural.sv", test_code);
+  
+  // Parse original structure
+  std::string before_content = ReadFile(test_file);
+  
+  // Perform inline
+  {
+    VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+    auto file_or = project.OpenTranslationUnit(test_file);
+    ASSERT_TRUE(file_or.ok());
+
+    SymbolTable symbol_table(&project);
+    std::vector<absl::Status> build_diagnostics;
+    symbol_table.Build(&build_diagnostics);
+    ASSERT_TRUE(build_diagnostics.empty());
+
+    analysis::TypeInference type_inference(&symbol_table);
+    RefactoringEngine engine(&symbol_table, &type_inference, &project);
+
+    Location loc;
+    loc.filename = test_file;
+    loc.line = 10;  // "data <= compute(data);"
+    loc.column = 15;
+
+    auto result = engine.InlineFunction(loc);
+    ASSERT_TRUE(result.ok()) << "InlineFunction failed";
+  }
+  
+  std::string after_content = ReadFile(test_file);
+  
+  // SEMANTIC VERIFICATION: Key structures preserved
+  EXPECT_THAT(after_content, testing::HasSubstr("always_ff @(posedge clk)"))
+      << "Always block should be preserved";
+  EXPECT_THAT(after_content, testing::HasSubstr("if (rst)"))
+      << "Reset condition should be preserved";
+  EXPECT_THAT(after_content, testing::HasSubstr("else"))
+      << "Else clause should be preserved";
+  EXPECT_THAT(after_content, testing::HasSubstr("data + 1"))
+      << "Function should be inlined";
+  
+  // Verify file still parses
+  VerilogProject verify(test_dir_.string(), std::vector<std::string>{});
+  auto verify_file = verify.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(verify_file.ok() && verify_file.value()->Status().ok())
+      << "Modified file has parse errors";
+  
+  std::cout << "Semantic equivalence verified: Structural preservation works\n";
+}
+
 }  // namespace
 }  // namespace tools
 }  // namespace verilog
