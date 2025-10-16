@@ -79,6 +79,50 @@ TEST_F(VeriPGValidatorCLKIntegrationTest, DetectMissingClockViolation) {
   EXPECT_TRUE(found_clk_001) << "Should detect CLK_001 violation for missing clock edge";
 }
 
+// Test: CLK_002 - Multiple clocks in single always block
+TEST_F(VeriPGValidatorCLKIntegrationTest, DetectMultipleClocksViolation) {
+  const std::string testdata_dir = "verible/verilog/tools/veripg/testdata/clk/";
+  const std::string test_file = testdata_dir + "clk_multiple_clocks_violation.sv";
+  
+  VerilogProject project(".", std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  
+  if (!file_or.ok()) {
+    GTEST_SKIP() << "Test file not found: " << test_file;
+  }
+  
+  auto* file = file_or.value();
+  ASSERT_NE(file, nullptr);
+  ASSERT_TRUE(file->Status().ok()) << "Parse failed: " << file->Status().message();
+  
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> diagnostics;
+  symbol_table.Build(&diagnostics);
+  ASSERT_TRUE(diagnostics.empty()) << "Symbol table build had errors";
+  
+  analysis::TypeInference type_inference(&symbol_table);
+  analysis::TypeChecker type_checker(&symbol_table, &type_inference);
+  
+  VeriPGValidator validator(&type_checker);
+  std::vector<Violation> violations;
+  
+  auto status = validator.CheckClockRules(symbol_table, violations, &project);
+  ASSERT_TRUE(status.ok()) << status.message();
+  
+  // Should detect CLK_002 violation
+  bool found_clk_002 = false;
+  for (const auto& v : violations) {
+    if (v.rule == RuleId::kCLK_002) {
+      found_clk_002 = true;
+      EXPECT_EQ(v.severity, Severity::kError);
+      EXPECT_THAT(v.message, HasSubstr("multiple"));
+      EXPECT_THAT(v.message, HasSubstr("clock"));
+    }
+  }
+  
+  EXPECT_TRUE(found_clk_002) << "Should detect CLK_002 violation for multiple clocks";
+}
+
 }  // namespace
 }  // namespace tools
 }  // namespace verilog

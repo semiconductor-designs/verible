@@ -872,10 +872,43 @@ absl::Status VeriPGValidator::CheckClockRules(
       v.source_location = "";
       v.fix_suggestion = GenerateFixCLK_001("clk");
       violations.push_back(v);
+      continue;
+    }
+    
+    // CLK_002: Check for multiple clock edges
+    int clock_edge_count = 0;
+    std::function<void(const verible::Symbol&)> count_clock_edges = 
+        [&](const verible::Symbol& sym) {
+      if (sym.Kind() == verible::SymbolKind::kLeaf) {
+        const auto& leaf = verible::SymbolCastToLeaf(sym);
+        const auto token = leaf.get();
+        verilog_tokentype token_type = static_cast<verilog_tokentype>(token.token_enum());
+        if (token_type == TK_posedge || token_type == TK_negedge) {
+          clock_edge_count++;
+        }
+      } else if (sym.Kind() == verible::SymbolKind::kNode) {
+        const auto& n = verible::down_cast<const verible::SyntaxTreeNode&>(sym);
+        for (const auto& child : n.children()) {
+          if (child) count_clock_edges(*child);
+        }
+      }
+    };
+    count_clock_edges(*timing_control);
+    
+    if (clock_edge_count > 1) {
+      // Multiple clocks in single block - ERROR
+      Violation v;
+      v.rule = RuleId::kCLK_002;
+      v.severity = Severity::kError;
+      v.message = "multiple clock edges in always_ff block (violates single-clock domain rule)";
+      v.signal_name = "";
+      v.source_location = "";
+      v.fix_suggestion = "Split into separate always_ff blocks, one per clock domain";
+      violations.push_back(v);
     }
   }
   
-  // TODO: CLK_002-004 implementation
+  // TODO: CLK_003-004 implementation
   
   return absl::OkStatus();
 }
