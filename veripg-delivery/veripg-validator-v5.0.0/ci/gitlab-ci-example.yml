@@ -1,0 +1,31 @@
+# Example GitLab CI pipeline for VeriPG Validator
+# Copyright 2017-2025 The Verible Authors.
+
+stages:
+  - validate
+
+veripg-validation:
+  stage: validate
+  image: ubuntu:22.04
+  
+  before_script:
+    - apt-get update && apt-get install -y wget tar
+    - wget https://github.com/chipsalliance/verible/releases/download/v0.0-3428-gcfcbb82b/verible-v0.0-3428-gcfcbb82b-Ubuntu-22.04-jammy-x86_64.tar.gz
+    - tar -xzf verible-*.tar.gz
+    - export PATH="$PWD/verible-v0.0-3428-gcfcbb82b/bin:$PATH"
+  
+  script:
+    - veripg-validator --format=json --config=.veripg.yml rtl/**/*.sv > veripg-results.json
+    - cat veripg-results.json
+  
+  artifacts:
+    reports:
+      codequality: veripg-results.json
+    paths:
+      - veripg-results.json
+    when: always
+  
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+

@@ -1,0 +1,161 @@
+# VeriPG Validator Production Configuration
+# v5.0.0 - Production-Ready Rules Only
+#
+# This configuration enables ONLY the 16 production-ready validation rules
+# that have been validated with integration tests and have high confidence.
+#
+# RECOMMENDED FOR: Production use, critical design validation, CI/CD gating
+
+# === Production-Ready CDC Rules (CRITICAL) ===
+# Clock Domain Crossing violations can cause metastability and functional bugs
+rules:
+  CDC_001:
+    enabled: true
+    severity: error
+    # CDC without synchronizer - CRITICAL safety issue
+    
+  CDC_002:
+    enabled: true
+    severity: error
+    # Multi-bit CDC without Gray code - data corruption risk
+    
+  CDC_003:
+    enabled: true
+    severity: warning
+    # Clock muxing - glitch hazard
+    
+  CDC_004:
+    enabled: true
+    severity: error
+    # Async reset crossing clock domains - reset synchronization issue
+
+  # === Production-Ready CLK Rules ===
+  # Clock-related issues cause synthesis/simulation failures
+  CLK_001:
+    enabled: true
+    severity: error
+    # Missing clock signal in always_ff - synthesis error
+    
+  CLK_002:
+    enabled: true
+    severity: error
+    # Multiple clocks in single always block - design error
+    
+  CLK_003:
+    enabled: true
+    severity: warning
+    # Clock used as data signal - design smell, potential glitch
+    
+  CLK_004:
+    enabled: true
+    severity: warning
+    # Gated clock without ICG cell - glitch risk
+
+  # === Production-Ready RST Rules ===
+  # Reset-related issues cause initialization and X-propagation problems
+  RST_001:
+    enabled: true
+    severity: warning
+    # Missing reset in sequential logic - X propagation risk
+    
+  RST_002:
+    enabled: true
+    severity: error
+    # Asynchronous reset not synchronized - reset timing issue
+    
+  RST_003:
+    enabled: true
+    severity: warning
+    # Mixed reset polarity - design inconsistency
+    
+  RST_004:
+    enabled: true
+    severity: warning
+    # Reset signal used as data - design smell
+
+  # === Production-Ready TIM Rules ===
+  # Timing issues cause synthesis failures and functional bugs
+  TIM_001:
+    enabled: true
+    severity: error
+    # Combinational loop detection - CRITICAL synthesis issue
+    
+  TIM_002:
+    enabled: true
+    severity: warning
+    # Latch inference detection - unintentional latches
+
+  # === Production-Ready NAM Rules ===
+  # Naming convention rules for code consistency
+  NAM_001:
+    enabled: true
+    severity: info
+    # Module naming convention (lowercase_with_underscores)
+    
+  NAM_002:
+    enabled: true
+    severity: info
+    # Signal name length (>= 3 characters for readability)
+    
+  NAM_003:
+    enabled: true
+    severity: info
+    # Parameter naming (UPPERCASE convention)
+    
+  NAM_007:
+    enabled: true
+    severity: warning
+    # Reserved keywords as identifiers - parser issues
+
+  # === DISABLE Experimental Rules (24 rules) ===
+  # These rules are framework implementations with detection in development
+  # Enable at your own risk for evaluation purposes
+  
+  # Experimental NAM rules (clock/reset/active-low naming)
+  NAM_004: { enabled: false }  # Clock signal naming
+  NAM_005: { enabled: false }  # Reset signal naming
+  NAM_006: { enabled: false }  # Active-low signal naming
+  
+  # Experimental WID rules (width mismatch detection)
+  # Requires full type inference (planned for v5.1.0)
+  WID_001: { enabled: false }  # Signal width mismatch
+  WID_002: { enabled: false }  # Implicit width conversion
+  WID_003: { enabled: false }  # Concatenation width mismatch
+  WID_004: { enabled: false }  # Parameter width inconsistency
+  WID_005: { enabled: false }  # Port width mismatch
+  
+  # Experimental PWR rules (power intent)
+  # Requires UPF parser (long-term roadmap)
+  PWR_001: { enabled: false }  # Missing power domain annotation
+  PWR_002: { enabled: false }  # Level shifter required
+  PWR_003: { enabled: false }  # Isolation cell required
+  PWR_004: { enabled: false }  # Retention register annotation
+  PWR_005: { enabled: false }  # Always-on signal crossing
+  
+  # Experimental STR rules (structure validation)
+  # Framework implementations, detection in development
+  STR_001: { enabled: false }  # Module has no ports
+  STR_002: { enabled: false }  # Module complexity threshold
+  STR_003: { enabled: false }  # Deep hierarchy
+  STR_004: { enabled: false }  # Missing module header comment
+  STR_005: { enabled: false }  # Port ordering convention
+  STR_006: { enabled: false }  # Unnamed port instantiation
+  STR_007: { enabled: false }  # Unlabeled generate block
+  STR_008: { enabled: false }  # Case statement without default
+
+# Global file exclusions
+# Exclude testbenches, generated code, and third-party IP
+exclude_files:
+  - "*_tb.sv"           # Testbench files
+  - "test_*.sv"         # Test files
+  - "tb_*.sv"           # Testbench modules
+  - "vendor/**/*.sv"    # Third-party IP
+  - "generated/**/*.sv" # Auto-generated code
+  - "legacy/**/*.sv"    # Legacy code (optional)
+
+# Global module exclusions (optional)
+exclude_modules:
+  - "tb_*"              # Testbench modules
+  - "test_*"            # Test modules
+  - "*_wrapper"         # Auto-generated wrappers (optional)
+
