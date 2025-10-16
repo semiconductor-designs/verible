@@ -35,12 +35,12 @@ class VeriPGValidatorWIDIntegrationTest : public ::testing::Test {
   // Note: type_checker is created per-test with the actual symbol_table
 };
 
-// Test: WID_001 - Width mismatch in assignment
-TEST_F(VeriPGValidatorWIDIntegrationTest, DetectWidthMismatchViolation) {
-  const std::string testdata_dir = "verible/verilog/tools/veripg/testdata/wid/";
-  const std::string test_file = testdata_dir + "wid_mismatch_assignment_violation.sv";
+// Test WID_001: Signal width mismatch in assignment
+TEST_F(VeriPGValidatorWIDIntegrationTest, DetectSignalWidthMismatch) {
+  const std::string test_file = 
+      "verible/verilog/tools/veripg/testdata/wid_signal_width_mismatch.sv";
   
-  VerilogProject project(".", std::vector<std::string>{});
+  VerilogProject project(".", {});
   auto file_or = project.OpenTranslationUnit(test_file);
   if (!file_or.ok()) GTEST_SKIP() << "Test file not found";
   
@@ -58,20 +58,26 @@ TEST_F(VeriPGValidatorWIDIntegrationTest, DetectWidthMismatchViolation) {
   VeriPGValidator validator(&type_checker);
   std::vector<Violation> violations;
   
-  auto status = validator.CheckWidthViolations(symbol_table, violations);
+  auto status = validator.CheckWidthViolations(symbol_table, violations, &project);
   ASSERT_TRUE(status.ok()) << status.message();
   
-  // Width checking is complex - we may or may not detect violations
-  // depending on symbol table state. Accept either outcome for now.
-  // This is a framework test.
+  bool found_wid_001 = false;
+  for (const auto& v : violations) {
+    if (v.rule == RuleId::kWID_001) {
+      found_wid_001 = true;
+      EXPECT_EQ(v.severity, Severity::kWarning);
+      EXPECT_THAT(v.message, HasSubstr("width"));
+    }
+  }
+  EXPECT_TRUE(found_wid_001) << "Should detect WID_001 for width mismatch";
 }
 
-// Test: WID_004 - Parameter width inconsistency
-TEST_F(VeriPGValidatorWIDIntegrationTest, DetectParameterWidthViolation) {
-  const std::string testdata_dir = "verible/verilog/tools/veripg/testdata/wid/";
-  const std::string test_file = testdata_dir + "wid_parameter_inconsistency_violation.sv";
+// Test WID_002: Implicit width conversion (lossy)
+TEST_F(VeriPGValidatorWIDIntegrationTest, DetectImplicitConversion) {
+  const std::string test_file = 
+      "verible/verilog/tools/veripg/testdata/wid_implicit_conversion.sv";
   
-  VerilogProject project(".", std::vector<std::string>{});
+  VerilogProject project(".", {});
   auto file_or = project.OpenTranslationUnit(test_file);
   if (!file_or.ok()) GTEST_SKIP() << "Test file not found";
   
@@ -89,7 +95,81 @@ TEST_F(VeriPGValidatorWIDIntegrationTest, DetectParameterWidthViolation) {
   VeriPGValidator validator(&type_checker);
   std::vector<Violation> violations;
   
-  auto status = validator.CheckWidthViolations(symbol_table, violations);
+  auto status = validator.CheckWidthViolations(symbol_table, violations, &project);
+  ASSERT_TRUE(status.ok()) << status.message();
+  
+  bool found_wid_002 = false;
+  for (const auto& v : violations) {
+    if (v.rule == RuleId::kWID_002) {
+      found_wid_002 = true;
+      EXPECT_EQ(v.severity, Severity::kWarning);
+      EXPECT_THAT(v.message, HasSubstr("implicit"));
+    }
+  }
+  EXPECT_TRUE(found_wid_002) << "Should detect WID_002 for implicit conversion";
+}
+
+// Test WID_003: Concatenation width mismatch
+TEST_F(VeriPGValidatorWIDIntegrationTest, DetectConcatenationMismatch) {
+  const std::string test_file = 
+      "verible/verilog/tools/veripg/testdata/wid_concatenation_mismatch.sv";
+  
+  VerilogProject project(".", {});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  if (!file_or.ok()) GTEST_SKIP() << "Test file not found";
+  
+  auto* file = file_or.value();
+  ASSERT_NE(file, nullptr);
+  ASSERT_TRUE(file->Status().ok()) << file->Status().message();
+  
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> diagnostics;
+  symbol_table.Build(&diagnostics);
+  ASSERT_TRUE(diagnostics.empty());
+  
+  analysis::TypeInference type_inference(&symbol_table);
+  analysis::TypeChecker type_checker(&symbol_table, &type_inference);
+  VeriPGValidator validator(&type_checker);
+  std::vector<Violation> violations;
+  
+  auto status = validator.CheckWidthViolations(symbol_table, violations, &project);
+  ASSERT_TRUE(status.ok()) << status.message();
+  
+  bool found_wid_003 = false;
+  for (const auto& v : violations) {
+    if (v.rule == RuleId::kWID_003) {
+      found_wid_003 = true;
+      EXPECT_EQ(v.severity, Severity::kWarning);
+      EXPECT_THAT(v.message, HasSubstr("concatenation"));
+    }
+  }
+  EXPECT_TRUE(found_wid_003) << "Should detect WID_003 for concatenation mismatch";
+}
+
+// Test WID_004: Parameter width inconsistent with usage
+TEST_F(VeriPGValidatorWIDIntegrationTest, DetectParameterWidthInconsistency) {
+  const std::string test_file = 
+      "verible/verilog/tools/veripg/testdata/wid_parameter_width.sv";
+  
+  VerilogProject project(".", {});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  if (!file_or.ok()) GTEST_SKIP() << "Test file not found";
+  
+  auto* file = file_or.value();
+  ASSERT_NE(file, nullptr);
+  ASSERT_TRUE(file->Status().ok()) << file->Status().message();
+  
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> diagnostics;
+  symbol_table.Build(&diagnostics);
+  ASSERT_TRUE(diagnostics.empty());
+  
+  analysis::TypeInference type_inference(&symbol_table);
+  analysis::TypeChecker type_checker(&symbol_table, &type_inference);
+  VeriPGValidator validator(&type_checker);
+  std::vector<Violation> violations;
+  
+  auto status = validator.CheckWidthViolations(symbol_table, violations, &project);
   ASSERT_TRUE(status.ok()) << status.message();
   
   bool found_wid_004 = false;
@@ -97,13 +177,49 @@ TEST_F(VeriPGValidatorWIDIntegrationTest, DetectParameterWidthViolation) {
     if (v.rule == RuleId::kWID_004) {
       found_wid_004 = true;
       EXPECT_EQ(v.severity, Severity::kWarning);
-      EXPECT_THAT(v.message, HasSubstr("WIDTH"));
+      EXPECT_THAT(v.message, HasSubstr("parameter"));
     }
   }
-  EXPECT_TRUE(found_wid_004) << "Should detect WID_004 for hardcoded width";
+  EXPECT_TRUE(found_wid_004) << "Should detect WID_004 for parameter width inconsistency";
+}
+
+// Test WID_005: Port width mismatch in instantiation
+TEST_F(VeriPGValidatorWIDIntegrationTest, DetectPortWidthMismatch) {
+  const std::string test_file = 
+      "verible/verilog/tools/veripg/testdata/wid_port_instantiation.sv";
+  
+  VerilogProject project(".", {});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  if (!file_or.ok()) GTEST_SKIP() << "Test file not found";
+  
+  auto* file = file_or.value();
+  ASSERT_NE(file, nullptr);
+  ASSERT_TRUE(file->Status().ok()) << file->Status().message();
+  
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> diagnostics;
+  symbol_table.Build(&diagnostics);
+  ASSERT_TRUE(diagnostics.empty());
+  
+  analysis::TypeInference type_inference(&symbol_table);
+  analysis::TypeChecker type_checker(&symbol_table, &type_inference);
+  VeriPGValidator validator(&type_checker);
+  std::vector<Violation> violations;
+  
+  auto status = validator.CheckWidthViolations(symbol_table, violations, &project);
+  ASSERT_TRUE(status.ok()) << status.message();
+  
+  bool found_wid_005 = false;
+  for (const auto& v : violations) {
+    if (v.rule == RuleId::kWID_005) {
+      found_wid_005 = true;
+      EXPECT_EQ(v.severity, Severity::kWarning);
+      EXPECT_THAT(v.message, HasSubstr("port"));
+    }
+  }
+  EXPECT_TRUE(found_wid_005) << "Should detect WID_005 for port width mismatch";
 }
 
 }  // namespace
 }  // namespace tools
 }  // namespace verilog
-
