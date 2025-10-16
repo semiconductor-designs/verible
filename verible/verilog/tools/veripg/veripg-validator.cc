@@ -987,7 +987,86 @@ absl::Status VeriPGValidator::CheckClockRules(
     }
   }
   
-  // TODO: CLK_004 implementation
+  // CLK_004: Detect gated clocks without ICG cells
+  // Look for continuous assignments with logic operators where result has "clk" in name
+  for (auto it = project->begin(); it != project->end(); ++it) {
+    const auto* file = it->second.get();
+    if (!file) continue;
+    const auto* text_structure = file->GetTextStructure();
+    if (!text_structure) continue;
+    const auto& syntax_tree = text_structure->SyntaxTree();
+    if (!syntax_tree) continue;
+
+    // Find all continuous assign statements with logic operators
+    std::function<void(const verible::Symbol*)> find_assigns = 
+        [&](const verible::Symbol* sym) {
+      if (!sym || sym->Kind() != verible::SymbolKind::kNode) return;
+      const auto* node = verible::down_cast<const verible::SyntaxTreeNode*>(sym);
+      
+      // Check if this is an assign statement  
+      if (node->size() > 0 && (*node)[0]) {
+        if ((*node)[0]->Kind() == verible::SymbolKind::kLeaf) {
+          const auto& leaf = verible::SymbolCastToLeaf(*(*node)[0]);
+          verilog_tokentype token_type = static_cast<verilog_tokentype>(leaf.get().token_enum());
+          if (token_type == TK_assign) {
+            // Check if assignment contains clock-like name AND logic operators
+            bool has_clk_name = false;
+            bool has_logic_op = false;
+            std::string lhs_signal;
+            
+            std::function<void(const verible::Symbol&)> check_assign = 
+                [&](const verible::Symbol& s) {
+              if (s.Kind() == verible::SymbolKind::kLeaf) {
+                const auto& l = verible::SymbolCastToLeaf(s);
+                const auto tok = l.get();
+                verilog_tokentype tt = static_cast<verilog_tokentype>(tok.token_enum());
+                
+                // Check for identifiers with "clk" in name
+                if (IsIdentifierLike(tt)) {
+                  std::string sig(tok.text());
+                  std::string lower_sig = sig;
+                  for (char& c : lower_sig) c = std::tolower(c);
+                  if (lower_sig.find("clk") != std::string::npos) {
+                    has_clk_name = true;
+                    if (lhs_signal.empty()) lhs_signal = sig;
+                  }
+                }
+                // Check for logic operators
+                else if (tt == '&' || tt == '|' || tt == '^') {
+                  has_logic_op = true;
+                }
+              } else if (s.Kind() == verible::SymbolKind::kNode) {
+                const auto& n = verible::down_cast<const verible::SyntaxTreeNode&>(s);
+                for (const auto& child : n.children()) {
+                  if (child) check_assign(*child);
+                }
+              }
+            };
+            
+            check_assign(*node);
+            
+            if (has_clk_name && has_logic_op && !lhs_signal.empty()) {
+              // Found clock gating without ICG!
+              Violation v;
+              v.rule = RuleId::kCLK_004;
+              v.severity = Severity::kWarning;
+              v.message = "gated clock using combinational logic (use ICG cell)";
+              v.signal_name = lhs_signal;
+              v.source_location = "";
+              v.fix_suggestion = "Use integrated clock gating (ICG) cell instead of combinational logic";
+              violations.push_back(v);
+            }
+          }
+        }
+      }
+      
+      // Recursively check children
+      for (const auto& child : node->children()) {
+        if (child) find_assigns(child.get());
+      }
+    };
+    find_assigns(syntax_tree.get());
+  }
   
   return absl::OkStatus();
 }

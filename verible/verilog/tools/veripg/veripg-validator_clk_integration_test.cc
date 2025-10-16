@@ -167,6 +167,50 @@ TEST_F(VeriPGValidatorCLKIntegrationTest, DetectClockAsDataViolation) {
   EXPECT_TRUE(found_clk_003) << "Should detect CLK_003 violation for clock as data";
 }
 
+// Test: CLK_004 - Gated clock without ICG cell
+TEST_F(VeriPGValidatorCLKIntegrationTest, DetectGatedClockViolation) {
+  const std::string testdata_dir = "verible/verilog/tools/veripg/testdata/clk/";
+  const std::string test_file = testdata_dir + "clk_gated_without_icg_violation.sv";
+  
+  VerilogProject project(".", std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  
+  if (!file_or.ok()) {
+    GTEST_SKIP() << "Test file not found: " << test_file;
+  }
+  
+  auto* file = file_or.value();
+  ASSERT_NE(file, nullptr);
+  ASSERT_TRUE(file->Status().ok()) << "Parse failed: " << file->Status().message();
+  
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> diagnostics;
+  symbol_table.Build(&diagnostics);
+  ASSERT_TRUE(diagnostics.empty()) << "Symbol table build had errors";
+  
+  analysis::TypeInference type_inference(&symbol_table);
+  analysis::TypeChecker type_checker(&symbol_table, &type_inference);
+  
+  VeriPGValidator validator(&type_checker);
+  std::vector<Violation> violations;
+  
+  auto status = validator.CheckClockRules(symbol_table, violations, &project);
+  ASSERT_TRUE(status.ok()) << status.message();
+  
+  // Should detect CLK_004 violation
+  bool found_clk_004 = false;
+  for (const auto& v : violations) {
+    if (v.rule == RuleId::kCLK_004) {
+      found_clk_004 = true;
+      EXPECT_EQ(v.severity, Severity::kWarning);
+      EXPECT_THAT(v.message, HasSubstr("gat"));
+      EXPECT_THAT(v.message, HasSubstr("clock"));
+    }
+  }
+  
+  EXPECT_TRUE(found_clk_004) << "Should detect CLK_004 violation for gated clock";
+}
+
 }  // namespace
 }  // namespace tools
 }  // namespace verilog
