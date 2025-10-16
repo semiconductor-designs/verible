@@ -2078,6 +2078,152 @@ TEST_F(RefactoringEngineIntegrationTest, FileIOErrorLongPath) {
   }
 }
 
+// ============================================================================
+// PART 7: PERFORMANCE TESTS (P3-2)
+// ============================================================================
+
+// Helper: Generate large Verilog file with many functions
+std::string GenerateLargeVerilogFile(int num_functions) {
+  std::string code = "module large_test;\n  logic [31:0] result;\n\n";
+  
+  // Generate many functions
+  for (int i = 0; i < num_functions; i++) {
+    code += absl::StrFormat(
+        "  function automatic logic [31:0] func%d(logic [31:0] x, y);\n"
+        "    return x + y + %d;\n"
+        "  endfunction\n\n", i, i);
+  }
+  
+  // Add initial block that calls some functions
+  code += "  initial begin\n";
+  for (int i = 0; i < std::min(10, num_functions); i++) {
+    code += absl::StrFormat("    result = func%d(%d, %d);\n", i, i, i*2);
+  }
+  code += "  end\n";
+  
+  code += "endmodule\n";
+  return code;
+}
+
+// Test 1: Performance with 100 functions (moderate file)
+TEST_F(RefactoringEngineIntegrationTest, PerformanceModerateFile) {
+  const int NUM_FUNCTIONS = 100;
+  std::string large_code = GenerateLargeVerilogFile(NUM_FUNCTIONS);
+  
+  std::string test_file = CreateTestFile("moderate_file.sv", large_code);
+  
+  auto start_time = std::chrono::high_resolution_clock::now();
+  
+  VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(file_or.ok()) << "Cannot open moderate file";
+  
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> build_diagnostics;
+  symbol_table.Build(&build_diagnostics);
+  ASSERT_TRUE(build_diagnostics.empty()) << "Symbol table build failed";
+  
+  analysis::TypeInference type_inference(&symbol_table);
+  RefactoringEngine engine(&symbol_table, &type_inference, &project);
+  
+  // Inline the first function call
+  Location loc;
+  loc.filename = test_file;
+  loc.line = NUM_FUNCTIONS * 3 + 5;  // Line of first function call
+  loc.column = 13;
+  
+  auto result = engine.InlineFunction(loc);
+  ASSERT_TRUE(result.ok()) << "InlineFunction failed: " << result.message();
+  
+  auto end_time = std::chrono::high_resolution_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+      end_time - start_time);
+  
+  std::cout << "Performance (100 functions): " << duration.count() << "ms\n";
+  
+  // Should complete in reasonable time (< 5 seconds for moderate file)
+  EXPECT_LT(duration.count(), 5000)
+      << "Refactoring took too long for moderate file";
+}
+
+// Test 2: Performance with 500 functions (large file)
+TEST_F(RefactoringEngineIntegrationTest, PerformanceLargeFile) {
+  const int NUM_FUNCTIONS = 500;
+  std::string large_code = GenerateLargeVerilogFile(NUM_FUNCTIONS);
+  
+  std::string test_file = CreateTestFile("large_file.sv", large_code);
+  
+  auto start_time = std::chrono::high_resolution_clock::now();
+  
+  VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  ASSERT_TRUE(file_or.ok()) << "Cannot open large file";
+  
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> build_diagnostics;
+  symbol_table.Build(&build_diagnostics);
+  ASSERT_TRUE(build_diagnostics.empty()) << "Symbol table build failed";
+  
+  auto end_time = std::chrono::high_resolution_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+      end_time - start_time);
+  
+  std::cout << "Performance (500 functions, parse + symbol table): " 
+            << duration.count() << "ms\n";
+  
+  // Should complete in reasonable time (< 15 seconds for large file)
+  EXPECT_LT(duration.count(), 15000)
+      << "Parsing and symbol table build took too long";
+}
+
+// Test 3: Multiple refactorings on same file (stress test)
+TEST_F(RefactoringEngineIntegrationTest, PerformanceMultipleRefactorings) {
+  const int NUM_FUNCTIONS = 50;
+  const int NUM_REFACTORINGS = 5;
+  
+  std::string large_code = GenerateLargeVerilogFile(NUM_FUNCTIONS);
+  std::string test_file = CreateTestFile("stress_test.sv", large_code);
+  
+  auto start_time = std::chrono::high_resolution_clock::now();
+  
+  // Perform multiple refactorings in sequence
+  for (int i = 0; i < NUM_REFACTORINGS; i++) {
+    VerilogProject project(test_dir_.string(), std::vector<std::string>{});
+    auto file_or = project.OpenTranslationUnit(test_file);
+    ASSERT_TRUE(file_or.ok()) << "Iteration " << i << " failed to open file";
+    
+    SymbolTable symbol_table(&project);
+    std::vector<absl::Status> build_diagnostics;
+    symbol_table.Build(&build_diagnostics);
+    ASSERT_TRUE(build_diagnostics.empty()) << "Iteration " << i << " build failed";
+    
+    analysis::TypeInference type_inference(&symbol_table);
+    RefactoringEngine engine(&symbol_table, &type_inference, &project);
+    
+    Location loc;
+    loc.filename = test_file;
+    loc.line = NUM_FUNCTIONS * 3 + 5 + i;  // Different call each time
+    loc.column = 13;
+    
+    auto result = engine.InlineFunction(loc);
+    if (!result.ok()) {
+      std::cout << "Refactoring " << i << " failed (may be expected): " 
+                << result.message() << "\n";
+    }
+  }
+  
+  auto end_time = std::chrono::high_resolution_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+      end_time - start_time);
+  
+  std::cout << "Performance (" << NUM_REFACTORINGS << " sequential refactorings): " 
+            << duration.count() << "ms\n";
+  
+  // Should complete all refactorings in reasonable time (< 10 seconds)
+  EXPECT_LT(duration.count(), 10000)
+      << "Multiple refactorings took too long";
+}
+
 }  // namespace
 }  // namespace tools
 }  // namespace verilog
