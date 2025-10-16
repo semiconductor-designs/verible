@@ -143,16 +143,22 @@ class VeriPGValidator {
                                   const verilog::VerilogProject* project = nullptr);
   
   // Check clock rules (CLK_001-004)
+  // Note: Requires VerilogProject for CST access
   absl::Status CheckClockRules(const verilog::SymbolTable& symbol_table,
-                               std::vector<Violation>& violations);
+                               std::vector<Violation>& violations,
+                               const verilog::VerilogProject* project = nullptr);
   
   // Check reset rules (RST_001-005)
+  // Note: Requires VerilogProject for CST access
   absl::Status CheckResetRules(const verilog::SymbolTable& symbol_table,
-                               std::vector<Violation>& violations);
+                               std::vector<Violation>& violations,
+                               const verilog::VerilogProject* project = nullptr);
   
   // Check timing rules (TIM_001-002)
+  // Note: Requires VerilogProject for CST access
   absl::Status CheckTimingRules(const verilog::SymbolTable& symbol_table,
-                                std::vector<Violation>& violations);
+                                std::vector<Violation>& violations,
+                                const verilog::VerilogProject* project = nullptr);
 
   // Week 1: Auto-fix generators (3 generators for CDC_001, CLK_001, RST_001)
   

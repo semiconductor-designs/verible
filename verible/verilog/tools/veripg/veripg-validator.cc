@@ -787,35 +787,103 @@ bool VeriPGValidator::IsMultiBitSignal(const std::string& signal,
 
 absl::Status VeriPGValidator::CheckClockRules(
     const verilog::SymbolTable& symbol_table,
-    std::vector<Violation>& violations) {
-  // CLK_001-004: Clock-related rules
-  //
-  // CLK_001: Missing clock signal in always_ff
-  //   - Verify every always_ff has @(posedge/negedge clk)
-  //   - Report if sensitivity list is missing or incomplete
-  //
-  // CLK_002: Multiple clocks in single always block
-  //   - Parse sensitivity list: @(posedge clk1 or posedge clk2)
-  //   - Flag as error (violates single-clock domain rule)
-  //
-  // CLK_003: Clock used as data signal
-  //   - Track clock signals from sensitivity lists
-  //   - Check if any clock appears in RHS of assignments
-  //   - Report violation if clock is used as data
-  //
-  // CLK_004: Gated clock without ICG cell
-  //   - Detect patterns like: assign gated_clk = clk & enable;
-  //   - Flag if not using proper ICG (integrated clock gate) cell
-  //   - Suggest: Use ICG cell for clock gating
-  //
-  // Implementation uses CST traversal similar to CDC rules
+    std::vector<Violation>& violations,
+    const verilog::VerilogProject* project) {
+  if (!project) {
+    return absl::OkStatus(); // Framework mode
+  }
+  
+  // Find all always_ff blocks
+  std::vector<const verible::SyntaxTreeNode*> always_ff_blocks;
+  for (auto it = project->begin(); it != project->end(); ++it) {
+    const auto* file = it->second.get();
+    if (!file) continue;
+    const auto* text_structure = file->GetTextStructure();
+    if (!text_structure) continue;
+    const auto& syntax_tree = text_structure->SyntaxTree();
+    if (!syntax_tree) continue;
+
+    // Manual traversal to find always_ff statements
+    std::function<void(const verible::Symbol*, const verible::SyntaxTreeNode*)> find_always_ff = 
+        [&](const verible::Symbol* sym, const verible::SyntaxTreeNode* parent) {
+      if (!sym) return;
+      if (sym->Kind() == verible::SymbolKind::kNode) {
+        const auto* node = verible::down_cast<const verible::SyntaxTreeNode*>(sym);
+        if (node->size() > 0 && (*node)[0]) {
+          if ((*node)[0]->Kind() == verible::SymbolKind::kLeaf) {
+            const auto& leaf = verible::SymbolCastToLeaf(*(*node)[0]);
+            verilog_tokentype token_type = static_cast<verilog_tokentype>(leaf.get().token_enum());
+            if (token_type == TK_always_ff) {
+              always_ff_blocks.push_back(node);
+            }
+          }
+        }
+        for (const auto& child : node->children()) {
+          if (child) find_always_ff(child.get(), node);
+        }
+      }
+    };
+    find_always_ff(syntax_tree.get(), nullptr);
+  }
+  
+  // CLK_001: Check each always_ff for clock in sensitivity list
+  for (const auto* block : always_ff_blocks) {
+    const auto* timing_control = verilog::GetProceduralTimingControlFromAlways(*block);
+    if (!timing_control) {
+      // No sensitivity list at all - ERROR
+      Violation v;
+      v.rule = RuleId::kCLK_001;
+      v.severity = Severity::kError;
+      v.message = "Missing clock signal in always_ff sensitivity list";
+      v.signal_name = "";
+      v.source_location = "";  // TODO: Extract from context
+      v.fix_suggestion = GenerateFixCLK_001("clk");
+      violations.push_back(v);
+      continue;
+    }
+    
+    // Check if timing control has a clock edge (posedge/negedge)
+    bool has_clock_edge = false;
+    std::function<void(const verible::Symbol&)> check_for_edge = 
+        [&](const verible::Symbol& sym) {
+      if (sym.Kind() == verible::SymbolKind::kLeaf) {
+        const auto& leaf = verible::SymbolCastToLeaf(sym);
+        const auto token = leaf.get();
+        verilog_tokentype token_type = static_cast<verilog_tokentype>(token.token_enum());
+        if (token_type == TK_posedge || token_type == TK_negedge) {
+          has_clock_edge = true;
+        }
+      } else if (sym.Kind() == verible::SymbolKind::kNode) {
+        const auto& n = verible::down_cast<const verible::SyntaxTreeNode&>(sym);
+        for (const auto& child : n.children()) {
+          if (child) check_for_edge(*child);
+        }
+      }
+    };
+    check_for_edge(*timing_control);
+    
+    if (!has_clock_edge) {
+      // Has sensitivity list but no clock edge - ERROR
+      Violation v;
+      v.rule = RuleId::kCLK_001;
+      v.severity = Severity::kError;
+      v.message = "always_ff must have clock edge (posedge/negedge) in sensitivity list";
+      v.signal_name = "";
+      v.source_location = "";
+      v.fix_suggestion = GenerateFixCLK_001("clk");
+      violations.push_back(v);
+    }
+  }
+  
+  // TODO: CLK_002-004 implementation
   
   return absl::OkStatus();
 }
 
 absl::Status VeriPGValidator::CheckResetRules(
     const verilog::SymbolTable& symbol_table,
-    std::vector<Violation>& violations) {
+    std::vector<Violation>& violations,
+    const verilog::VerilogProject* project) {
   // RST_001-005: Reset-related rules
   //
   // RST_001: Missing reset in sequential logic
@@ -847,7 +915,8 @@ absl::Status VeriPGValidator::CheckResetRules(
 
 absl::Status VeriPGValidator::CheckTimingRules(
     const verilog::SymbolTable& symbol_table,
-    std::vector<Violation>& violations) {
+    std::vector<Violation>& violations,
+    const verilog::VerilogProject* project) {
   // TIM_001-002: Timing rules (combinational loops, latches)
   //
   // TIM_001: Combinational loop detected
