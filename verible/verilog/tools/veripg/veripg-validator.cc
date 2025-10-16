@@ -385,22 +385,180 @@ std::string VeriPGValidator::ExtractClockFromBlock(const verible::Symbol* block)
 // Helper: Get signals assigned in block
 std::vector<std::string> VeriPGValidator::GetAssignedSignalsInBlock(
     const verible::Symbol* block) {
-  // TODO: Full implementation with CST traversal
-  return {};
+  std::vector<std::string> assigned_signals;
+  
+  if (!block) return assigned_signals;
+  
+  // Find all non-blocking assignments (<= operator) in this block
+  auto assignments = verilog::FindAllNonBlockingAssignments(*block);
+  
+  for (const auto& assignment : assignments) {
+    if (!assignment.match) continue;
+    
+    // Extract LHS identifier from the assignment
+    // The LHS could be:
+    // - Simple: data_a <= ...
+    // - Indexed: mem[addr] <= ...
+    // - Packed: bus[7:0] <= ...
+    // - Struct: packet.header <= ...
+    // For CDC analysis, we extract the base signal name
+    
+    std::function<void(const verible::Symbol&)> extract_lhs = 
+        [&](const verible::Symbol& sym) {
+      if (sym.Kind() == verible::SymbolKind::kLeaf) {
+        const auto& leaf = verible::SymbolCastToLeaf(sym);
+        const auto token = leaf.get();
+        verilog_tokentype token_type = static_cast<verilog_tokentype>(token.token_enum());
+        
+        // If this is an identifier, it's likely the base signal
+        if (IsIdentifierLike(token_type)) {
+          std::string signal_name(token.text());
+          // Avoid duplicates
+          if (std::find(assigned_signals.begin(), assigned_signals.end(), signal_name) == 
+              assigned_signals.end()) {
+            assigned_signals.push_back(signal_name);
+          }
+        }
+      } else if (sym.Kind() == verible::SymbolKind::kNode) {
+        const auto& n = verible::down_cast<const verible::SyntaxTreeNode&>(sym);
+        // Only traverse the first few children (LHS is usually early in the node)
+        // This avoids traversing into the RHS expression
+        int child_count = 0;
+        for (const auto& child : n.children()) {
+          if (child && child_count < 3) {  // Limit depth to avoid RHS
+            extract_lhs(*child);
+            child_count++;
+          }
+        }
+      }
+    };
+    
+    extract_lhs(*assignment.match);
+  }
+  
+  return assigned_signals;
 }
 
 // Helper: Get signals used (read) in block
 std::vector<std::string> VeriPGValidator::GetUsedSignalsInBlock(
     const verible::Symbol* block) {
-  // TODO: Full implementation with CST traversal
-  return {};
+  std::vector<std::string> used_signals;
+  
+  if (!block) return used_signals;
+  
+  // Get all signals assigned in this block (to filter them out later)
+  auto assigned = GetAssignedSignalsInBlock(block);
+  std::set<std::string> assigned_set(assigned.begin(), assigned.end());
+  
+  // Traverse the entire block to find all identifier references
+  std::function<void(const verible::Symbol&)> extract_used = 
+      [&](const verible::Symbol& sym) {
+    if (sym.Kind() == verible::SymbolKind::kLeaf) {
+      const auto& leaf = verible::SymbolCastToLeaf(sym);
+      const auto token = leaf.get();
+      verilog_tokentype token_type = static_cast<verilog_tokentype>(token.token_enum());
+      
+      // If this is an identifier, it might be a signal being read
+      if (IsIdentifierLike(token_type)) {
+        std::string signal_name(token.text());
+        
+        // Skip if this signal is assigned in this same block
+        // (we only care about signals from OTHER blocks/domains)
+        if (assigned_set.find(signal_name) == assigned_set.end()) {
+          // Avoid duplicates
+          if (std::find(used_signals.begin(), used_signals.end(), signal_name) == 
+              used_signals.end()) {
+            used_signals.push_back(signal_name);
+          }
+        }
+      }
+    } else if (sym.Kind() == verible::SymbolKind::kNode) {
+      const auto& n = verible::down_cast<const verible::SyntaxTreeNode&>(sym);
+      for (const auto& child : n.children()) {
+        if (child) extract_used(*child);
+      }
+    }
+  };
+  
+  extract_used(*block);
+  return used_signals;
 }
 
 // Helper: Check for synchronizer pattern (2-stage FF chain)
 bool VeriPGValidator::HasSynchronizerPattern(
     const std::string& signal,
     const verible::Symbol* block) {
-  // TODO: Detect patterns like: sig_sync1 <= sig; sig_sync2 <= sig_sync1;
+  if (!block) return false;
+  
+  // Pattern to detect (2-stage synchronizer):
+  // Stage 1: intermediate1 <= signal;
+  // Stage 2: intermediate2 <= intermediate1;
+  // Use: output <= intermediate2;
+  
+  // Get all assignments in this block
+  auto assignments = verilog::FindAllNonBlockingAssignments(*block);
+  
+  // Build a map of signal dependencies: lhs -> rhs
+  std::map<std::string, std::string> signal_deps;
+  
+  for (const auto& assignment : assignments) {
+    if (!assignment.match) continue;
+    
+    // Extract LHS and RHS identifiers
+    std::string lhs, rhs;
+    
+    std::function<void(const verible::Symbol&, bool)> extract_identifiers = 
+        [&](const verible::Symbol& sym, bool is_lhs) {
+      if (sym.Kind() == verible::SymbolKind::kLeaf) {
+        const auto& leaf = verible::SymbolCastToLeaf(sym);
+        const auto token = leaf.get();
+        verilog_tokentype token_type = static_cast<verilog_tokentype>(token.token_enum());
+        
+        if (IsIdentifierLike(token_type)) {
+          std::string name(token.text());
+          if (is_lhs && lhs.empty()) {
+            lhs = name;
+          } else if (!is_lhs && rhs.empty()) {
+            rhs = name;
+          }
+        }
+      } else if (sym.Kind() == verible::SymbolKind::kNode) {
+        const auto& n = verible::down_cast<const verible::SyntaxTreeNode&>(sym);
+        int child_idx = 0;
+        for (const auto& child : n.children()) {
+          if (child) {
+            // Heuristic: First few children are LHS, later ones are RHS
+            bool is_left = (child_idx < 2);
+            extract_identifiers(*child, is_lhs && is_left);
+            child_idx++;
+          }
+        }
+      }
+    };
+    
+    extract_identifiers(*assignment.match, true);
+    
+    if (!lhs.empty() && !rhs.empty()) {
+      signal_deps[lhs] = rhs;
+    }
+  }
+  
+  // Check if there's a 2-stage chain from 'signal'
+  // Stage 1: intermediate1 <- signal
+  // Stage 2: intermediate2 <- intermediate1
+  for (const auto& [stage1, source] : signal_deps) {
+    if (source == signal) {
+      // Found stage 1: stage1 <= signal
+      // Now look for stage 2: stage2 <= stage1
+      for (const auto& [stage2, intermediate] : signal_deps) {
+        if (intermediate == stage1 && stage2 != stage1) {
+          // Found 2-stage synchronizer!
+          return true;
+        }
+      }
+    }
+  }
+  
   return false;
 }
 
