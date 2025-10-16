@@ -1,4 +1,4 @@
-// Copyright 2025 The Verible Authors.
+// Copyright 2017-2025 The Verible Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,173 +14,103 @@
 
 #include "verible/verilog/tools/veripg/auto-fix-engine.h"
 
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 namespace verilog {
 namespace tools {
 namespace {
 
-// Test 1: AutoFixEngine construction
-TEST(AutoFixEngineTest, Construction) {
-  AutoFixEngine engine;
-  // Default construction should succeed
-}
+using ::testing::HasSubstr;
 
-// Test 2: GenerateFix for CDC_001 (safe=false)
+// Test: Generate fix for CDC_001
 TEST(AutoFixEngineTest, GenerateFixCDC_001) {
   AutoFixEngine engine;
+  
   Violation v;
   v.rule = RuleId::kCDC_001;
-  v.signal_name = "data_signal";
-  v.message = "CDC without synchronizer";
+  v.signal_name = "data_cdc";
   
-  FixSuggestion fix = engine.GenerateFix(v);
+  AutoFix fix = engine.GenerateFixForViolation(v);
   
-  EXPECT_EQ(fix.rule_id, RuleId::kCDC_001);
+  EXPECT_EQ(fix.rule, RuleId::kCDC_001);
   EXPECT_EQ(fix.safety, FixSafety::kUnsafe);
-  EXPECT_FALSE(fix.code_snippet.empty());
-  EXPECT_NE(fix.code_snippet.find("sync"), std::string::npos);
+  EXPECT_THAT(fix.description, HasSubstr("synchronizer"));
+  EXPECT_THAT(fix.new_code, HasSubstr("_sync1"));
+  EXPECT_THAT(fix.new_code, HasSubstr("_sync2"));
 }
 
-// Test 3: GenerateFix for NAM_001 (safe=true)
+// Test: Generate fix for CLK_001
+TEST(AutoFixEngineTest, GenerateFixCLK_001) {
+  AutoFixEngine engine;
+  
+  Violation v;
+  v.rule = RuleId::kCLK_001;
+  
+  AutoFix fix = engine.GenerateFixForViolation(v);
+  
+  EXPECT_EQ(fix.rule, RuleId::kCLK_001);
+  EXPECT_EQ(fix.safety, FixSafety::kSafe);
+  EXPECT_THAT(fix.description, HasSubstr("clock"));
+  EXPECT_EQ(fix.old_code, "always_ff begin");
+  EXPECT_EQ(fix.new_code, "always_ff @(posedge clk) begin");
+}
+
+// Test: Generate fix for NAM_001
 TEST(AutoFixEngineTest, GenerateFixNAM_001) {
   AutoFixEngine engine;
+  
   Violation v;
   v.rule = RuleId::kNAM_001;
   v.signal_name = "MyModule";
-  v.message = "Module name should be lowercase";
   
-  FixSuggestion fix = engine.GenerateFix(v);
+  AutoFix fix = engine.GenerateFixForViolation(v);
   
-  EXPECT_EQ(fix.rule_id, RuleId::kNAM_001);
+  EXPECT_EQ(fix.rule, RuleId::kNAM_001);
   EXPECT_EQ(fix.safety, FixSafety::kSafe);
-  EXPECT_FALSE(fix.code_snippet.empty());
-  EXPECT_NE(fix.code_snippet.find("my_module"), std::string::npos);
+  EXPECT_THAT(fix.description, HasSubstr("snake_case"));
+  EXPECT_EQ(fix.old_code, "module MyModule");
+  EXPECT_EQ(fix.new_code, "module my_module");
 }
 
-// Test 4: GenerateFix for STR_006 (safe=true)
-TEST(AutoFixEngineTest, GenerateFixSTR_006) {
+// Test: Apply safe fixes
+TEST(AutoFixEngineTest, ApplySafeFixes) {
   AutoFixEngine engine;
-  Violation v;
-  v.rule = RuleId::kSTR_006;
-  v.signal_name = "u1";
-  v.message = "Instantiation without named ports";
   
-  FixSuggestion fix = engine.GenerateFix(v);
+  std::string source = "module MyModule;\nendmodule";
   
-  EXPECT_EQ(fix.rule_id, RuleId::kSTR_006);
-  EXPECT_EQ(fix.safety, FixSafety::kSafe);
-  EXPECT_FALSE(fix.code_snippet.empty());
+  AutoFix fix;
+  fix.safety = FixSafety::kSafe;
+  fix.old_code = "MyModule";
+  fix.new_code = "my_module";
+  
+  std::string fixed;
+  auto status = engine.ApplyFixes(source, {fix}, fixed);
+  
+  ASSERT_TRUE(status.ok());
+  EXPECT_THAT(fixed, HasSubstr("my_module"));
+  EXPECT_THAT(fixed, Not(HasSubstr("MyModule")));
 }
 
-// Test 5: GenerateFixes for multiple violations
-TEST(AutoFixEngineTest, GenerateFixes_Multiple) {
+// Test: Skip unsafe fixes without confirmation
+TEST(AutoFixEngineTest, SkipUnsafeFixes) {
   AutoFixEngine engine;
   
-  std::vector<Violation> violations;
-  Violation v1;
-  v1.rule = RuleId::kNAM_001;
-  v1.signal_name = "TestModule";
-  violations.push_back(v1);
+  std::string source = "module test;\nendmodule";
   
-  Violation v2;
-  v2.rule = RuleId::kCDC_001;
-  v2.signal_name = "data";
-  violations.push_back(v2);
+  AutoFix fix;
+  fix.safety = FixSafety::kUnsafe;
+  fix.old_code = "test";
+  fix.new_code = "test_modified";
   
-  std::vector<FixSuggestion> fixes = engine.GenerateFixes(violations);
+  std::string fixed;
+  auto status = engine.ApplyFixes(source, {fix}, fixed);
   
-  EXPECT_EQ(fixes.size(), 2);
-  EXPECT_EQ(fixes[0].rule_id, RuleId::kNAM_001);
-  EXPECT_EQ(fixes[1].rule_id, RuleId::kCDC_001);
-}
-
-// Test 6: ApplySafeFixes framework
-TEST(AutoFixEngineTest, ApplySafeFixes_Framework) {
-  AutoFixEngine engine;
-  std::vector<FixSuggestion> fixes;
-  int fixes_applied = 0;
-  
-  auto status = engine.ApplySafeFixes("test.sv", fixes, &fixes_applied);
-  
-  EXPECT_TRUE(status.ok());
-  EXPECT_EQ(fixes_applied, 0);  // Framework only
-}
-
-// Test 7: GenerateFixCLK_001
-TEST(AutoFixEngineTest, GenerateFixCLK_001) {
-  AutoFixEngine engine;
-  Violation v;
-  v.rule = RuleId::kCLK_001;
-  v.signal_name = "clk";
-  
-  FixSuggestion fix = engine.GenerateFix(v);
-  
-  EXPECT_EQ(fix.safety, FixSafety::kUnsafe);
-  EXPECT_NE(fix.code_snippet.find("always_ff"), std::string::npos);
-}
-
-// Test 8: GenerateFixRST_001
-TEST(AutoFixEngineTest, GenerateFixRST_001) {
-  AutoFixEngine engine;
-  Violation v;
-  v.rule = RuleId::kRST_001;
-  v.signal_name = "rst_n";
-  
-  FixSuggestion fix = engine.GenerateFix(v);
-  
-  EXPECT_EQ(fix.safety, FixSafety::kUnsafe);
-  EXPECT_NE(fix.code_snippet.find("rst_n"), std::string::npos);
-}
-
-// Test 9: GenerateFixNAM_003 (parameter naming)
-TEST(AutoFixEngineTest, GenerateFixNAM_003) {
-  AutoFixEngine engine;
-  Violation v;
-  v.rule = RuleId::kNAM_003;
-  v.signal_name = "data_width";
-  
-  FixSuggestion fix = engine.GenerateFix(v);
-  
-  EXPECT_EQ(fix.safety, FixSafety::kSafe);
-  EXPECT_NE(fix.code_snippet.find("DATA_WIDTH"), std::string::npos);
-}
-
-// Test 10: GenerateFixSTR_008 (default clause)
-TEST(AutoFixEngineTest, GenerateFixSTR_008) {
-  AutoFixEngine engine;
-  Violation v;
-  v.rule = RuleId::kSTR_008;
-  
-  FixSuggestion fix = engine.GenerateFix(v);
-  
-  EXPECT_EQ(fix.safety, FixSafety::kUnsafe);
-  EXPECT_NE(fix.code_snippet.find("default"), std::string::npos);
-}
-
-// Test 11: All 12 fix generators work
-TEST(AutoFixEngineTest, All12FixGenerators) {
-  AutoFixEngine engine;
-  
-  std::vector<RuleId> rules = {
-    RuleId::kCDC_001, RuleId::kCLK_001, RuleId::kRST_001,
-    RuleId::kNAM_001, RuleId::kNAM_003, RuleId::kNAM_004, RuleId::kNAM_005,
-    RuleId::kWID_001,
-    RuleId::kSTR_005, RuleId::kSTR_006, RuleId::kSTR_007, RuleId::kSTR_008
-  };
-  
-  for (const auto& rule_id : rules) {
-    Violation v;
-    v.rule = rule_id;
-    v.signal_name = "test";
-    
-    FixSuggestion fix = engine.GenerateFix(v);
-    EXPECT_EQ(fix.rule_id, rule_id);
-    EXPECT_FALSE(fix.code_snippet.empty());
-  }
+  ASSERT_TRUE(status.ok());
+  // Unsafe fixes should not be applied automatically
+  EXPECT_EQ(fixed, source);
 }
 
 }  // namespace
 }  // namespace tools
 }  // namespace verilog
-

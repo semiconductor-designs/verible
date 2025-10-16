@@ -1,4 +1,4 @@
-// Copyright 2025 The Verible Authors.
+// Copyright 2017-2025 The Verible Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,10 +15,12 @@
 #ifndef VERIBLE_VERILOG_TOOLS_VERIPG_RULE_CONFIG_H_
 #define VERIBLE_VERILOG_TOOLS_VERIPG_RULE_CONFIG_H_
 
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
-#include <map>
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "verible/verilog/tools/veripg/veripg-validator.h"
 
@@ -27,11 +29,15 @@ namespace tools {
 
 // Configuration for a single validation rule
 struct RuleConfig {
-  RuleId rule_id;
   bool enabled = true;
-  Severity severity = Severity::kError;
-  std::vector<std::string> exceptions;  // File patterns to exclude
-  std::map<std::string, std::string> parameters;  // Rule-specific parameters
+  Severity severity = Severity::kWarning;
+  
+  // File/module exceptions (glob patterns)
+  std::vector<std::string> exclude_files;
+  std::vector<std::string> exclude_modules;
+  
+  // Rule-specific parameters
+  std::map<std::string, std::string> parameters;
 };
 
 // Complete validator configuration
@@ -40,39 +46,56 @@ class ValidatorConfig {
   ValidatorConfig() = default;
   
   // Load configuration from YAML file
-  static absl::StatusOr<ValidatorConfig> LoadFromYAML(
-      const std::string& yaml_path);
+  static absl::StatusOr<ValidatorConfig> LoadFromYAML(const std::string& yaml_path);
   
   // Load configuration from JSON file
-  static absl::StatusOr<ValidatorConfig> LoadFromJSON(
-      const std::string& json_path);
+  static absl::StatusOr<ValidatorConfig> LoadFromJSON(const std::string& json_path);
   
-  // Get configuration for a specific rule
-  const RuleConfig* GetRuleConfig(RuleId rule_id) const;
+  // Get configuration for specific rule
+  const RuleConfig& GetRuleConfig(RuleId rule_id) const;
   
-  // Check if a rule is enabled
+  // Check if rule is enabled
   bool IsRuleEnabled(RuleId rule_id) const;
   
-  // Get severity for a rule (returns configured severity or default)
+  // Get severity for rule
   Severity GetRuleSeverity(RuleId rule_id) const;
   
-  // Check if a file matches any exception pattern for a rule
-  bool IsFileExcepted(RuleId rule_id, const std::string& file_path) const;
+  // Check if file/module should be excluded for this rule
+  bool ShouldExclude(RuleId rule_id, 
+                     const std::string& file_path,
+                     const std::string& module_name) const;
   
-  // Add or update rule configuration
-  void SetRuleConfig(const RuleConfig& config);
+  // Set default configuration (all rules enabled with default severity)
+  void SetDefaults();
   
-  // Get all rule configurations
-  const std::map<RuleId, RuleConfig>& GetAllRuleConfigs() const {
-    return rule_configs_;
-  }
-
+  // Enable/disable specific rule
+  void SetRuleEnabled(RuleId rule_id, bool enabled);
+  
+  // Set severity for specific rule
+  void SetRuleSeverity(RuleId rule_id, Severity severity);
+  
+  // Add file exclusion pattern for rule
+  void AddFileExclusion(RuleId rule_id, const std::string& pattern);
+  
+  // Add module exclusion pattern for rule
+  void AddModuleExclusion(RuleId rule_id, const std::string& pattern);
+  
+  // Set parameter for rule
+  void SetRuleParameter(RuleId rule_id, 
+                        const std::string& param_name,
+                        const std::string& param_value);
+  
  private:
   std::map<RuleId, RuleConfig> rule_configs_;
+  
+  // Default configuration for rules not explicitly configured
+  RuleConfig default_config_;
+  
+  // Helper to match glob patterns
+  bool MatchesPattern(const std::string& text, const std::string& pattern) const;
 };
 
 }  // namespace tools
 }  // namespace verilog
 
 #endif  // VERIBLE_VERILOG_TOOLS_VERIPG_RULE_CONFIG_H_
-

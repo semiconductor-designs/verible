@@ -1,4 +1,4 @@
-// Copyright 2025 The Verible Authors.
+// Copyright 2017-2025 The Verible Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,138 +20,90 @@ namespace verilog {
 namespace tools {
 namespace {
 
-// Test 1: ValidatorConfig construction
-TEST(RuleConfigTest, DefaultConstruction) {
+// Test: Default configuration
+TEST(RuleConfigTest, DefaultConfiguration) {
   ValidatorConfig config;
-  EXPECT_TRUE(config.GetAllRuleConfigs().empty());
-}
-
-// Test 2: Set and get rule config
-TEST(RuleConfigTest, SetAndGetRuleConfig) {
-  ValidatorConfig config;
+  config.SetDefaults();
   
-  RuleConfig rule;
-  rule.rule_id = RuleId::kCDC_001;
-  rule.enabled = true;
-  rule.severity = Severity::kError;
-  
-  config.SetRuleConfig(rule);
-  
-  const RuleConfig* retrieved = config.GetRuleConfig(RuleId::kCDC_001);
-  ASSERT_NE(retrieved, nullptr);
-  EXPECT_EQ(retrieved->rule_id, RuleId::kCDC_001);
-  EXPECT_TRUE(retrieved->enabled);
-  EXPECT_EQ(retrieved->severity, Severity::kError);
-}
-
-// Test 3: IsRuleEnabled - enabled rule
-TEST(RuleConfigTest, IsRuleEnabled_Enabled) {
-  ValidatorConfig config;
-  
-  RuleConfig rule;
-  rule.rule_id = RuleId::kNAM_001;
-  rule.enabled = true;
-  
-  config.SetRuleConfig(rule);
+  // All rules should be enabled by default
+  EXPECT_TRUE(config.IsRuleEnabled(RuleId::kCDC_001));
+  EXPECT_TRUE(config.IsRuleEnabled(RuleId::kCLK_001));
   EXPECT_TRUE(config.IsRuleEnabled(RuleId::kNAM_001));
+  
+  // Default severity should be Warning
+  EXPECT_EQ(config.GetRuleSeverity(RuleId::kCDC_001), Severity::kWarning);
 }
 
-// Test 4: IsRuleEnabled - disabled rule
-TEST(RuleConfigTest, IsRuleEnabled_Disabled) {
+// Test: Enable/disable rules
+TEST(RuleConfigTest, EnableDisableRules) {
   ValidatorConfig config;
+  config.SetDefaults();
   
-  RuleConfig rule;
-  rule.rule_id = RuleId::kNAM_001;
-  rule.enabled = false;
+  // Disable specific rule
+  config.SetRuleEnabled(RuleId::kCDC_001, false);
+  EXPECT_FALSE(config.IsRuleEnabled(RuleId::kCDC_001));
+  EXPECT_TRUE(config.IsRuleEnabled(RuleId::kCLK_001));  // Others still enabled
   
-  config.SetRuleConfig(rule);
-  EXPECT_FALSE(config.IsRuleEnabled(RuleId::kNAM_001));
-}
-
-// Test 5: IsRuleEnabled - default (no config)
-TEST(RuleConfigTest, IsRuleEnabled_Default) {
-  ValidatorConfig config;
-  // No config set, should default to enabled
+  // Re-enable
+  config.SetRuleEnabled(RuleId::kCDC_001, true);
   EXPECT_TRUE(config.IsRuleEnabled(RuleId::kCDC_001));
 }
 
-// Test 6: GetRuleSeverity - configured
-TEST(RuleConfigTest, GetRuleSeverity_Configured) {
+// Test: Set severity
+TEST(RuleConfigTest, SetSeverity) {
   ValidatorConfig config;
+  config.SetDefaults();
   
-  RuleConfig rule;
-  rule.rule_id = RuleId::kWID_001;
-  rule.severity = Severity::kWarning;
-  
-  config.SetRuleConfig(rule);
-  EXPECT_EQ(config.GetRuleSeverity(RuleId::kWID_001), Severity::kWarning);
-}
-
-// Test 7: GetRuleSeverity - default
-TEST(RuleConfigTest, GetRuleSeverity_Default) {
-  ValidatorConfig config;
-  // No config, should default to Error
+  // Change severity to Error
+  config.SetRuleSeverity(RuleId::kCDC_001, Severity::kError);
   EXPECT_EQ(config.GetRuleSeverity(RuleId::kCDC_001), Severity::kError);
+  
+  // Other rules unchanged
+  EXPECT_EQ(config.GetRuleSeverity(RuleId::kCLK_001), Severity::kWarning);
 }
 
-// Test 8: IsFileExcepted - no exceptions
-TEST(RuleConfigTest, IsFileExcepted_NoExceptions) {
+// Test: File exclusions
+TEST(RuleConfigTest, FileExclusions) {
   ValidatorConfig config;
+  config.SetDefaults();
   
-  RuleConfig rule;
-  rule.rule_id = RuleId::kSTR_001;
+  // Add file exclusion
+  config.AddFileExclusion(RuleId::kCDC_001, "*_tb.sv");
   
-  config.SetRuleConfig(rule);
-  EXPECT_FALSE(config.IsFileExcepted(RuleId::kSTR_001, "test.sv"));
+  // Check exclusion matching
+  EXPECT_TRUE(config.ShouldExclude(RuleId::kCDC_001, "test_tb.sv", ""));
+  EXPECT_FALSE(config.ShouldExclude(RuleId::kCDC_001, "test.sv", ""));
+  EXPECT_FALSE(config.ShouldExclude(RuleId::kCLK_001, "test_tb.sv", ""));  // Different rule
 }
 
-// Test 9: IsFileExcepted - with exception match
-TEST(RuleConfigTest, IsFileExcepted_Match) {
+// Test: Module exclusions
+TEST(RuleConfigTest, ModuleExclusions) {
   ValidatorConfig config;
+  config.SetDefaults();
   
-  RuleConfig rule;
-  rule.rule_id = RuleId::kSTR_001;
-  rule.exceptions = {"_tb.sv", "testbench/"};
+  // Add module exclusion
+  config.AddModuleExclusion(RuleId::kNAM_001, "legacy_*");
   
-  config.SetRuleConfig(rule);
-  EXPECT_TRUE(config.IsFileExcepted(RuleId::kSTR_001, "uart_tx_tb.sv"));
-  EXPECT_TRUE(config.IsFileExcepted(RuleId::kSTR_001, "testbench/top_tb.sv"));
-  EXPECT_FALSE(config.IsFileExcepted(RuleId::kSTR_001, "uart_tx.sv"));
+  // Check exclusion matching
+  EXPECT_TRUE(config.ShouldExclude(RuleId::kNAM_001, "", "legacy_module"));
+  EXPECT_FALSE(config.ShouldExclude(RuleId::kNAM_001, "", "new_module"));
 }
 
-// Test 10: Multiple rules configuration
-TEST(RuleConfigTest, MultipleRules) {
+// Test: Rule parameters
+TEST(RuleConfigTest, RuleParameters) {
   ValidatorConfig config;
+  config.SetDefaults();
   
-  RuleConfig cdc_rule;
-  cdc_rule.rule_id = RuleId::kCDC_001;
-  cdc_rule.enabled = true;
+  // Set parameter
+  config.SetRuleParameter(RuleId::kSTR_002, "max_statements", "100");
   
-  RuleConfig nam_rule;
-  nam_rule.rule_id = RuleId::kNAM_001;
-  nam_rule.enabled = false;
-  
-  config.SetRuleConfig(cdc_rule);
-  config.SetRuleConfig(nam_rule);
-  
-  EXPECT_EQ(config.GetAllRuleConfigs().size(), 2);
-  EXPECT_TRUE(config.IsRuleEnabled(RuleId::kCDC_001));
-  EXPECT_FALSE(config.IsRuleEnabled(RuleId::kNAM_001));
-}
-
-// Test 11: LoadFromYAML framework
-TEST(RuleConfigTest, LoadFromYAML_Framework) {
-  auto result = ValidatorConfig::LoadFromYAML("test.yaml");
-  EXPECT_TRUE(result.ok());
-}
-
-// Test 12: LoadFromJSON framework
-TEST(RuleConfigTest, LoadFromJSON_Framework) {
-  auto result = ValidatorConfig::LoadFromJSON("test.json");
-  EXPECT_TRUE(result.ok());
+  // Get parameter
+  const auto& rule_config = config.GetRuleConfig(RuleId::kSTR_002);
+  auto it = rule_config.parameters.find("max_statements");
+  ASSERT_NE(it, rule_config.parameters.end());
+  EXPECT_EQ(it->second, "100");
 }
 
 }  // namespace
 }  // namespace tools
 }  // namespace verilog
-

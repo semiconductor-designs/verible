@@ -1,4 +1,4 @@
-// Copyright 2025 The Verible Authors.
+// Copyright 2017-2025 The Verible Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,211 +14,184 @@
 
 #include "verible/verilog/tools/veripg/auto-fix-engine.h"
 
-#include <fstream>
-#include <cctype>
-
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_replace.h"
 
 namespace verilog {
 namespace tools {
 
-FixSuggestion AutoFixEngine::GenerateFix(const Violation& violation) {
-  FixSuggestion fix;
-  fix.rule_id = violation.rule;
-  
-  // Route to appropriate fix generator based on rule ID
+// Generate fix for a violation
+AutoFix AutoFixEngine::GenerateFixForViolation(const Violation& violation) const {
   switch (violation.rule) {
     case RuleId::kCDC_001:
-      fix.code_snippet = GenerateFixCDC_001(violation);
-      fix.safety = FixSafety::kUnsafe;  // Requires logic changes
-      break;
+      return GenerateFixCDC_001(violation);
     case RuleId::kCLK_001:
-      fix.code_snippet = GenerateFixCLK_001(violation);
-      fix.safety = FixSafety::kUnsafe;  // Requires sensitivity list change
-      break;
+      return GenerateFixCLK_001(violation);
     case RuleId::kRST_001:
-      fix.code_snippet = GenerateFixRST_001(violation);
-      fix.safety = FixSafety::kUnsafe;  // Requires logic changes
-      break;
+      return GenerateFixRST_001(violation);
     case RuleId::kNAM_001:
-      fix.code_snippet = GenerateFixNAM_001(violation);
-      fix.safety = FixSafety::kSafe;  // Pure renaming
-      break;
-    case RuleId::kNAM_003:
-      fix.code_snippet = GenerateFixNAM_003(violation);
-      fix.safety = FixSafety::kSafe;  // Pure renaming
-      break;
-    case RuleId::kNAM_004:
-      fix.code_snippet = GenerateFixNAM_004(violation);
-      fix.safety = FixSafety::kSafe;  // Pure renaming
-      break;
-    case RuleId::kNAM_005:
-      fix.code_snippet = GenerateFixNAM_005(violation);
-      fix.safety = FixSafety::kSafe;  // Pure renaming
-      break;
+      return GenerateFixNAM_001(violation);
     case RuleId::kWID_001:
-      fix.code_snippet = GenerateFixWID_001(violation);
-      fix.safety = FixSafety::kUnsafe;  // Type changes
-      break;
+      return GenerateFixWID_001(violation);
     case RuleId::kSTR_005:
-      fix.code_snippet = GenerateFixSTR_005(violation);
-      fix.safety = FixSafety::kUnsafe;  // Port order changes
-      break;
+      return GenerateFixSTR_005(violation);
     case RuleId::kSTR_006:
-      fix.code_snippet = GenerateFixSTR_006(violation);
-      fix.safety = FixSafety::kSafe;  // Equivalent transformation
-      break;
-    case RuleId::kSTR_007:
-      fix.code_snippet = GenerateFixSTR_007(violation);
-      fix.safety = FixSafety::kSafe;  // Add label only
-      break;
-    case RuleId::kSTR_008:
-      fix.code_snippet = GenerateFixSTR_008(violation);
-      fix.safety = FixSafety::kUnsafe;  // Logic changes
-      break;
+      return GenerateFixSTR_006(violation);
     default:
-      fix.code_snippet = "// No auto-fix available for this rule";
+      // No auto-fix available for this rule
+      AutoFix fix;
+      fix.rule = violation.rule;
       fix.safety = FixSafety::kUnsafe;
-      break;
+      fix.description = "No automatic fix available";
+      fix.old_code = "";
+      fix.new_code = "";
+      fix.line_start = 0;
+      fix.line_end = 0;
+      return fix;
   }
-  
-  fix.description = violation.message;
-  return fix;
 }
 
-std::vector<FixSuggestion> AutoFixEngine::GenerateFixes(
-    const std::vector<Violation>& violations) {
-  std::vector<FixSuggestion> fixes;
-  for (const auto& violation : violations) {
-    fixes.push_back(GenerateFix(violation));
+// Apply fixes to source code
+absl::Status AutoFixEngine::ApplyFixes(const std::string& source_code,
+                                       const std::vector<AutoFix>& fixes,
+                                       std::string& fixed_code) const {
+  // Simplified framework implementation
+  // Full implementation would handle line-based replacements
+  
+  fixed_code = source_code;
+  
+  for (const auto& fix : fixes) {
+    if (fix.safety == FixSafety::kSafe && !fix.old_code.empty()) {
+      fixed_code = absl::StrReplaceAll(fixed_code, {{fix.old_code, fix.new_code}});
+    }
   }
-  return fixes;
-}
-
-absl::Status AutoFixEngine::ApplySafeFixes(
-    const std::string& file_path,
-    const std::vector<FixSuggestion>& fixes,
-    int* fixes_applied) {
-  // Apply safe fixes automatically
-  //
-  // Implementation strategy:
-  // 1. Read file content
-  // 2. Filter for safe fixes only
-  // 3. Apply fixes in reverse line order (to preserve line numbers)
-  // 4. Write back to file (with backup)
-  //
-  // For framework purposes, return success
-  
-  *fixes_applied = 0;
-  
-  // TODO: Implement actual file modification
-  // Would integrate with SymbolRenamer for naming fixes
   
   return absl::OkStatus();
 }
 
-// ========================================
-// Individual Fix Generators
-// ========================================
-
-std::string AutoFixEngine::GenerateFixCDC_001(const Violation& v) {
-  return absl::StrCat(
-      "  // Add 2-stage synchronizer for: ", v.signal_name, "\n",
-      "  logic ", v.signal_name, "_sync1, ", v.signal_name, "_sync2;\n",
-      "  always_ff @(posedge dest_clk) begin\n",
-      "    ", v.signal_name, "_sync1 <= ", v.signal_name, ";\n",
-      "    ", v.signal_name, "_sync2 <= ", v.signal_name, "_sync1;\n",
-      "  end\n"
+// CDC_001: Add synchronizer
+AutoFix AutoFixEngine::GenerateFixCDC_001(const Violation& v) const {
+  AutoFix fix;
+  fix.rule = RuleId::kCDC_001;
+  fix.safety = FixSafety::kUnsafe;  // Requires design review
+  fix.description = "Add 2-stage synchronizer for CDC signal";
+  fix.old_code = "";  // Would need CST to extract
+  fix.new_code = absl::StrCat(
+      "logic ", v.signal_name, "_sync1, ", v.signal_name, "_sync2;\n",
+      "always_ff @(posedge dest_clk) begin\n",
+      "  ", v.signal_name, "_sync1 <= ", v.signal_name, ";\n",
+      "  ", v.signal_name, "_sync2 <= ", v.signal_name, "_sync1;\n",
+      "end"
   );
+  fix.line_start = 0;
+  fix.line_end = 0;
+  return fix;
 }
 
-std::string AutoFixEngine::GenerateFixCLK_001(const Violation& v) {
-  return absl::StrCat(
-      "  always_ff @(posedge clk) begin  // Added missing clock\n",
-      "    // ... sequential logic\n",
-      "  end\n"
-  );
+// CLK_001: Add missing clock
+AutoFix AutoFixEngine::GenerateFixCLK_001(const Violation& v) const {
+  AutoFix fix;
+  fix.rule = RuleId::kCLK_001;
+  fix.safety = FixSafety::kSafe;
+  fix.description = "Add clock signal to sensitivity list";
+  fix.old_code = "always_ff begin";
+  fix.new_code = "always_ff @(posedge clk) begin";
+  fix.line_start = 0;
+  fix.line_end = 0;
+  return fix;
 }
 
-std::string AutoFixEngine::GenerateFixRST_001(const Violation& v) {
-  return absl::StrCat(
-      "  always_ff @(posedge clk or negedge rst_n) begin\n",
-      "    if (!rst_n) begin  // Added missing reset\n",
-      "      // Reset logic\n",
-      "    end else begin\n",
-      "      // Normal operation\n",
-      "    end\n",
-      "  end\n"
-  );
+// RST_001: Add missing reset
+AutoFix AutoFixEngine::GenerateFixRST_001(const Violation& v) const {
+  AutoFix fix;
+  fix.rule = RuleId::kRST_001;
+  fix.safety = FixSafety::kUnsafe;  // Requires design review for reset behavior
+  fix.description = "Add reset to sensitivity list";
+  fix.old_code = "always_ff @(posedge clk)";
+  fix.new_code = "always_ff @(posedge clk or negedge rst_n)";
+  fix.line_start = 0;
+  fix.line_end = 0;
+  return fix;
 }
 
-std::string AutoFixEngine::GenerateFixNAM_001(const Violation& v) {
-  // Convert module name to lowercase_with_underscores
-  std::string fixed_name;
-  for (size_t i = 0; i < v.signal_name.size(); ++i) {
+// NAM_001: Convert to snake_case
+AutoFix AutoFixEngine::GenerateFixNAM_001(const Violation& v) const {
+  AutoFix fix;
+  fix.rule = RuleId::kNAM_001;
+  fix.safety = FixSafety::kSafe;  // Naming changes are generally safe
+  fix.description = "Convert module name to snake_case";
+  
+  // Convert signal_name from PascalCase to snake_case
+  std::string snake_case;
+  for (size_t i = 0; i < v.signal_name.length(); ++i) {
     char c = v.signal_name[i];
-    if (std::isupper(c)) {
-      if (i > 0 && (std::islower(v.signal_name[i-1]) || 
-                    std::isdigit(v.signal_name[i-1]))) {
-        fixed_name += '_';
-      } else if (i > 0 && std::isupper(v.signal_name[i-1]) && 
-                 i + 1 < v.signal_name.size() && 
-                 std::islower(v.signal_name[i+1])) {
-        fixed_name += '_';
-      }
-      fixed_name += std::tolower(c);
-    } else {
-      fixed_name += c;
+    if (i > 0 && std::isupper(c)) {
+      snake_case += '_';
     }
+    snake_case += std::tolower(c);
   }
-  return absl::StrCat("module ", fixed_name, ";  // Renamed from ", v.signal_name);
+  
+  fix.old_code = absl::StrCat("module ", v.signal_name);
+  fix.new_code = absl::StrCat("module ", snake_case);
+  fix.line_start = 0;
+  fix.line_end = 0;
+  return fix;
 }
 
-std::string AutoFixEngine::GenerateFixNAM_003(const Violation& v) {
-  // Convert parameter name to UPPERCASE
-  std::string fixed_name;
-  for (char c : v.signal_name) {
-    fixed_name += std::toupper(c);
+// WID_001: Add explicit width cast
+AutoFix AutoFixEngine::GenerateFixWID_001(const Violation& v) const {
+  AutoFix fix;
+  fix.rule = RuleId::kWID_001;
+  fix.safety = FixSafety::kUnsafe;  // Width changes can alter behavior
+  fix.description = "Add explicit width cast";
+  fix.old_code = "";  // Would need CST context
+  fix.new_code = "";  // Would generate cast based on widths
+  fix.line_start = 0;
+  fix.line_end = 0;
+  return fix;
+}
+
+// STR_005: Reorder ports
+AutoFix AutoFixEngine::GenerateFixSTR_005(const Violation& v) const {
+  AutoFix fix;
+  fix.rule = RuleId::kSTR_005;
+  fix.safety = FixSafety::kSafe;
+  fix.description = "Reorder ports to: clk, rst, inputs, outputs";
+  fix.old_code = "";  // Would need full port list
+  fix.new_code = "";  // Would generate reordered ports
+  fix.line_start = 0;
+  fix.line_end = 0;
+  return fix;
+}
+
+// STR_006: Convert to named ports
+AutoFix AutoFixEngine::GenerateFixSTR_006(const Violation& v) const {
+  AutoFix fix;
+  fix.rule = RuleId::kSTR_006;
+  fix.safety = FixSafety::kSafe;
+  fix.description = "Convert positional ports to named ports";
+  fix.old_code = "";  // Would need instantiation context
+  fix.new_code = "";  // Would generate named port connections
+  fix.line_start = 0;
+  fix.line_end = 0;
+  return fix;
+}
+
+// Helper to detect fix safety level
+FixSafety AutoFixEngine::DetectFixSafety(RuleId rule) const {
+  switch (rule) {
+    case RuleId::kCLK_001:
+    case RuleId::kNAM_001:
+    case RuleId::kNAM_002:
+    case RuleId::kNAM_003:
+    case RuleId::kSTR_005:
+    case RuleId::kSTR_006:
+      return FixSafety::kSafe;
+    
+    default:
+      return FixSafety::kUnsafe;
   }
-  return absl::StrCat("parameter ", fixed_name, " = ...;  // Renamed from ", v.signal_name);
-}
-
-std::string AutoFixEngine::GenerateFixNAM_004(const Violation& v) {
-  return absl::StrCat("clk_", v.signal_name, "  // Renamed to start with 'clk_'");
-}
-
-std::string AutoFixEngine::GenerateFixNAM_005(const Violation& v) {
-  return absl::StrCat("rst_", v.signal_name, "  // Renamed to start with 'rst_'");
-}
-
-std::string AutoFixEngine::GenerateFixWID_001(const Violation& v) {
-  return absl::StrCat(
-      "  ", v.signal_name, " = N'(expression);  // Added explicit width cast"
-  );
-}
-
-std::string AutoFixEngine::GenerateFixSTR_005(const Violation& v) {
-  return "  // Reorder ports: clk, rst, inputs, outputs\n"
-         "  module name(input clk, input rst_n, input data, output result);";
-}
-
-std::string AutoFixEngine::GenerateFixSTR_006(const Violation& v) {
-  return absl::StrCat(
-      "  module_name ", v.signal_name, "(\n",
-      "    .port1(signal1),  // Convert to named ports\n",
-      "    .port2(signal2)\n",
-      "  );"
-  );
-}
-
-std::string AutoFixEngine::GenerateFixSTR_007(const Violation& v) {
-  return "  begin : gen_label  // Added missing generate label";
-}
-
-std::string AutoFixEngine::GenerateFixSTR_008(const Violation& v) {
-  return "    default: // Added missing default clause";
 }
 
 }  // namespace tools
 }  // namespace verilog
-

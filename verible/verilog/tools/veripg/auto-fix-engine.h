@@ -1,4 +1,4 @@
-// Copyright 2025 The Verible Authors.
+// Copyright 2017-2025 The Verible Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,63 +26,49 @@ namespace tools {
 
 // Classification of fix safety
 enum class FixSafety {
-  kSafe,    // Can be applied automatically (e.g., add whitespace, rename)
-  kUnsafe   // Requires manual review (e.g., logic changes, signal routing)
+  kSafe,      // Always safe to apply automatically
+  kUnsafe     // Requires human review before applying
 };
 
-// Single fix suggestion
-struct FixSuggestion {
-  RuleId rule_id;
+// A single code fix with metadata
+struct AutoFix {
+  RuleId rule;
   FixSafety safety;
   std::string description;
-  std::string code_snippet;  // Suggested replacement code
-  int line_number = 0;
-  int column_number = 0;
+  std::string old_code;  // Code to be replaced
+  std::string new_code;  // Replacement code
+  int line_start;
+  int line_end;
 };
 
-// Auto-fix engine for VeriPG validation violations
+// Auto-fix engine for generating code fixes
 class AutoFixEngine {
  public:
   AutoFixEngine() = default;
   
-  // Generate fix suggestion for a violation
-  FixSuggestion GenerateFix(const Violation& violation);
+  // Generate fix for a violation
+  AutoFix GenerateFixForViolation(const Violation& violation) const;
   
-  // Generate fixes for all violations
-  std::vector<FixSuggestion> GenerateFixes(
-      const std::vector<Violation>& violations);
+  // Apply fixes to source code
+  absl::Status ApplyFixes(const std::string& source_code,
+                          const std::vector<AutoFix>& fixes,
+                          std::string& fixed_code) const;
   
-  // Apply safe fixes automatically (returns number of fixes applied)
-  absl::Status ApplySafeFixes(
-      const std::string& file_path,
-      const std::vector<FixSuggestion>& fixes,
-      int* fixes_applied);
+  // Rule-specific fix generators
+  AutoFix GenerateFixCDC_001(const Violation& v) const;
+  AutoFix GenerateFixCLK_001(const Violation& v) const;
+  AutoFix GenerateFixRST_001(const Violation& v) const;
+  AutoFix GenerateFixNAM_001(const Violation& v) const;
+  AutoFix GenerateFixWID_001(const Violation& v) const;
+  AutoFix GenerateFixSTR_005(const Violation& v) const;
+  AutoFix GenerateFixSTR_006(const Violation& v) const;
   
-  // Individual fix generators (10+ as specified in plan)
-  
-  // CDC/Clock/Reset fixes
-  std::string GenerateFixCDC_001(const Violation& v);  // Add synchronizer
-  std::string GenerateFixCLK_001(const Violation& v);  // Add clock signal
-  std::string GenerateFixRST_001(const Violation& v);  // Add reset logic
-  
-  // Naming fixes
-  std::string GenerateFixNAM_001(const Violation& v);  // Module naming
-  std::string GenerateFixNAM_003(const Violation& v);  // Parameter naming
-  std::string GenerateFixNAM_004(const Violation& v);  // Clock naming
-  std::string GenerateFixNAM_005(const Violation& v);  // Reset naming
-  
-  // Width fixes
-  std::string GenerateFixWID_001(const Violation& v);  // Width cast
-  
-  // Structure fixes
-  std::string GenerateFixSTR_005(const Violation& v);  // Port ordering
-  std::string GenerateFixSTR_006(const Violation& v);  // Named ports
-  std::string GenerateFixSTR_007(const Violation& v);  // Generate labels
-  std::string GenerateFixSTR_008(const Violation& v);  // Default clause
+ private:
+  // Helper to detect fix safety level
+  FixSafety DetectFixSafety(RuleId rule) const;
 };
 
 }  // namespace tools
 }  // namespace verilog
 
 #endif  // VERIBLE_VERILOG_TOOLS_VERIPG_AUTO_FIX_ENGINE_H_
-
