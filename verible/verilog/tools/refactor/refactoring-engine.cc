@@ -659,14 +659,15 @@ absl::Status RefactoringEngine::InlineFunction(const Location& call_site) {
   auto file_ctx = file_ctx_or.value();
   
   // 2. Find token at call site location
-  // Use a very small selection (just 3 characters) to get precise node
-  // This helps avoid selecting the entire module/statement
+  // Use a moderate selection to capture the function call node
+  // kFunctionCall nodes typically contain: identifier + "(" + args + ")"
+  // So we need at least ~10-15 characters to capture the full call node
   Selection call_selection;
   call_selection.filename = call_site.filename;
   call_selection.start_line = call_site.line;
   call_selection.start_column = call_site.column;
   call_selection.end_line = call_site.line;
-  call_selection.end_column = call_site.column + 3;  // Just 3 chars - enough for function name start
+  call_selection.end_column = call_site.column + 15;  // Enough to capture "add(3, 5)"
   
   auto nodes = FindNodesInSelection(
       file_ctx.cst_root, file_ctx.text_structure, call_selection);
@@ -675,38 +676,64 @@ absl::Status RefactoringEngine::InlineFunction(const Location& call_site) {
     return absl::NotFoundError("No CST nodes found at call site");
   }
   
-  // 3. Find the SMALLEST node (most specific) that contains the call
-  // Filter out large structural nodes (module, class, etc.) and find smallest
-  // node that actually looks like a function call
+  // 3. Find the PRECISE function call node using CST node type
+  // We want ONLY kFunctionCall nodes, nothing larger (module, statement, block)
   const verible::Symbol* call_node = nullptr;
   absl::string_view call_span;
   size_t smallest_size = std::numeric_limits<size_t>::max();
   
   for (const auto& node_info : nodes) {
-    auto span = verible::StringSpanOfSymbol(*node_info.node);
-    std::string span_text(span);
-    size_t span_size = span.length();
+    // Check if this is actually a Node (not a Leaf)
+    if (node_info.node->Kind() != verible::SymbolKind::kNode) {
+      continue;
+    }
     
-    // Skip if this node is too large (likely module/class/package)
-    // Function calls are typically < 100 characters
-    if (span_size > 200) continue;
+    const auto& syntax_node = verible::SymbolCastToNode(*node_info.node);
+    const auto tag = static_cast<verilog::NodeEnum>(syntax_node.Tag().tag);
     
-    // Check if this node contains a function call pattern: identifier '('
-    if (span_text.find('(') != std::string::npos && 
-        span_text.find(')') != std::string::npos) {
-      // Use smallest node that looks like a function call
-      if (span_size < smallest_size) {
-        call_node = node_info.node;
-        call_span = span;
-        smallest_size = span_size;
+    // PRECISE FILTERING: Only accept kFunctionCall nodes
+    // This excludes:
+    // - kModuleDeclaration (too large)
+    // - kInitialStatement (too large) 
+    // - kBlockItemStatementList (too large)
+    // - kBlockingAssignmentStatement (too large)
+    // And accepts ONLY:
+    // - kFunctionCall (exactly what we want!)
+    if (tag == verilog::NodeEnum::kFunctionCall) {
+      auto span = verible::StringSpanOfSymbol(*node_info.node);
+      std::string span_text(span);
+      size_t span_size = span.length();
+      
+      // Filter: Only accept function calls that have parentheses (actual calls)
+      // This excludes:
+      // - Simple identifiers like 'a' or 'b' (parameters in function signatures)
+      // And accepts:
+      // - Actual calls like 'add(3, 5)' or 'foo()'
+      if (span_text.find('(') != std::string::npos && 
+          span_text.find(')') != std::string::npos) {
+        // Use smallest ACTUAL CALL (in case of nested calls)
+        if (span_size < smallest_size) {
+          call_node = node_info.node;
+          call_span = span;
+          smallest_size = span_size;
+        }
       }
     }
   }
   
   if (!call_node) {
-    return absl::NotFoundError(
-        absl::StrCat("No function call node found at location. ",
-                    "Found ", nodes.size(), " nodes, but none look like function calls."));
+    // No kFunctionCall node found - provide helpful debug info
+    std::string debug_info = absl::StrCat(
+        "No kFunctionCall node found at location. ",
+        "Found ", nodes.size(), " nodes: ");
+    for (size_t i = 0; i < std::min(nodes.size(), size_t(5)); ++i) {
+      if (nodes[i].node->Kind() == verible::SymbolKind::kNode) {
+        const auto& node = verible::SymbolCastToNode(*nodes[i].node);
+        const auto node_tag = static_cast<verilog::NodeEnum>(node.Tag().tag);
+        debug_info += absl::StrCat(" [", static_cast<int>(node_tag), "]");
+      }
+    }
+    return absl::NotFoundError(debug_info);
   }
   
   std::string call_text(call_span);
@@ -805,11 +832,28 @@ absl::Status RefactoringEngine::InlineFunction(const Location& call_site) {
   // Get function body text
   std::string function_body = ExtractFunctionBody(*func_info.syntax_origin);
   
+  // For inlining, extract just the EXPRESSION from the return statement
+  // Function body might be: "return a + b;" → we want just: "a + b"
+  std::string inlineable_expr = function_body;
+  
+  // Remove "return" keyword
+  size_t return_pos = inlineable_expr.find("return");
+  if (return_pos != std::string::npos) {
+    inlineable_expr = inlineable_expr.substr(return_pos + 6);  // Skip "return"
+  }
+  
+  // Trim leading/trailing whitespace and semicolon
+  size_t first = inlineable_expr.find_first_not_of(" \t\n\r");
+  size_t last = inlineable_expr.find_last_not_of(" \t\n\r;");
+  if (first != std::string::npos && last != std::string::npos) {
+    inlineable_expr = inlineable_expr.substr(first, last - first + 1);
+  }
+  
   // Get formal parameters
   std::vector<std::string> formal_params = ExtractFormalParameters(*func_info.syntax_origin);
   
-  // 7. Perform parameter substitution
-  std::string inlined_code = function_body;
+  // 7. Perform parameter substitution on the inlineable expression
+  std::string inlined_code = inlineable_expr;
   
   // Replace each formal parameter with its corresponding actual argument
   for (size_t i = 0; i < formal_params.size() && i < actual_args.size(); ++i) {

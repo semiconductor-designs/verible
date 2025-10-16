@@ -1009,9 +1009,10 @@ endmodule
   RefactoringEngine engine(&symbol_table, &type_inference, &project);
 
   // Inline the function call
+  // NOTE: R"( adds a leading newline, so line numbers are +1
   Location loc;
   loc.filename = test_file;
-  loc.line = 5;  // "result = add(3, 5);"
+  loc.line = 6;  // "result = add(3, 5);" (line 6 due to R"( newline)
   loc.column = 13;  // At "add" (column 13 is the 'a' in 'add')
 
   auto result = engine.InlineFunction(loc);
@@ -1083,8 +1084,15 @@ endmodule
       << "Should preserve function definition";
   EXPECT_THAT(modified, HasSubstr("result = 3 + 5"))
       << "Should inline the call: add(3,5) → 3+5";
-  EXPECT_THAT(modified, Not(HasSubstr("return")))
-      << "Should NOT have 'return' at module level (that's invalid!)";
+  // Check that the initial block doesn't have "return" (module level)
+  // The function definition will still have "return" which is correct
+  size_t initial_pos = modified.find("initial begin");
+  size_t initial_end = modified.find("end", initial_pos);
+  if (initial_pos != std::string::npos && initial_end != std::string::npos) {
+    std::string initial_block = modified.substr(initial_pos, initial_end - initial_pos);
+    EXPECT_THAT(initial_block, Not(HasSubstr("return")))
+        << "Initial block should NOT have 'return' (should be inlined)";
+  }
 }
 
 }  // namespace
