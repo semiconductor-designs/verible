@@ -208,10 +208,10 @@ class VeriPGValidator {
   const verilog::analysis::TypeChecker* type_checker_;
   
   // Helper methods for CDC detection
-  std::string ExtractClockFromBlock(const verible::Symbol* block);
-  std::vector<std::string> GetAssignedSignalsInBlock(const verible::Symbol* block);
-  std::vector<std::string> GetUsedSignalsInBlock(const verible::Symbol* block);
-  bool HasSynchronizerPattern(const std::string& signal, const verible::Symbol* block);
+  std::string ExtractClockFromBlock(const verible::SyntaxTreeNode* block);
+  std::vector<std::string> GetAssignedSignalsInBlock(const verible::SyntaxTreeNode* block);
+  std::vector<std::string> GetUsedSignalsInBlock(const verible::SyntaxTreeNode* block);
+  bool HasSynchronizerPattern(const std::string& signal, const verible::SyntaxTreeNode* block);
 };
 
 }  // namespace tools

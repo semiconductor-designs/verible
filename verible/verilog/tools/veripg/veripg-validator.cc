@@ -247,7 +247,7 @@ absl::Status VeriPGValidator::CheckCDCViolations(
   }
   
   // Step 1: Find all always_ff blocks from all files in the project
-  std::vector<const verible::Symbol*> always_ff_blocks;
+  std::vector<const verible::SyntaxTreeNode*> always_ff_blocks;
   
   for (auto it = project->begin(); it != project->end(); ++it) {
     const auto* file = it->second.get();
@@ -260,13 +260,34 @@ absl::Status VeriPGValidator::CheckCDCViolations(
     const auto& syntax_tree = text_structure->SyntaxTree();
     if (!syntax_tree) continue;
     
-    // Search for always_ff keyword blocks using matcher
-    auto ff_blocks = verible::SearchSyntaxTree(*syntax_tree, verilog::AlwaysFFKeyword());
-    for (const auto& match : ff_blocks) {
-      if (match.match) {
-        always_ff_blocks.push_back(match.match);
+    // Manual traversal to find always_ff statements
+    // We traverse the entire tree and check for nodes whose first child is TK_always_ff
+    std::function<void(const verible::Symbol&)> find_always_ff = 
+        [&](const verible::Symbol& sym) {
+      if (sym.Kind() == verible::SymbolKind::kNode) {
+        const auto& node = verible::down_cast<const verible::SyntaxTreeNode&>(sym);
+        
+        // Check if this node's first child is the TK_always_ff keyword
+        if (node.size() > 0 && node[0]) {
+          if (node[0]->Kind() == verible::SymbolKind::kLeaf) {
+            const auto& leaf = verible::SymbolCastToLeaf(*node[0]);
+            verilog_tokentype token_type = static_cast<verilog_tokentype>(leaf.get().token_enum());
+            
+            if (token_type == TK_always_ff) {
+              // Found an always_ff statement!
+              always_ff_blocks.push_back(&node);
+            }
+          }
+        }
+        
+        // Recursively traverse children
+        for (const auto& child : node.children()) {
+          if (child) find_always_ff(*child);
+        }
       }
-    }
+    };
+    
+    find_always_ff(*syntax_tree);
   }
   
   if (always_ff_blocks.empty()) {
@@ -338,16 +359,11 @@ absl::Status VeriPGValidator::CheckCDCViolations(
 }
 
 // Helper: Extract clock name from always_ff block
-std::string VeriPGValidator::ExtractClockFromBlock(const verible::Symbol* block) {
-  if (!block || block->Kind() != verible::SymbolKind::kNode) {
-    return "";
-  }
-  
-  const auto* node = verible::down_cast<const verible::SyntaxTreeNode*>(block);
-  if (!node) return "";
+std::string VeriPGValidator::ExtractClockFromBlock(const verible::SyntaxTreeNode* block) {
+  if (!block) return "";
   
   // Get procedural timing control (@(posedge clk) part)
-  const auto* timing_ctrl = verilog::GetProceduralTimingControlFromAlways(*node);
+  const auto* timing_ctrl = verilog::GetProceduralTimingControlFromAlways(*block);
   if (!timing_ctrl) return "";
   
   // Traverse timing control to find clock signal
@@ -387,7 +403,7 @@ std::string VeriPGValidator::ExtractClockFromBlock(const verible::Symbol* block)
 
 // Helper: Get signals assigned in block
 std::vector<std::string> VeriPGValidator::GetAssignedSignalsInBlock(
-    const verible::Symbol* block) {
+    const verible::SyntaxTreeNode* block) {
   std::vector<std::string> assigned_signals;
   
   if (!block) return assigned_signals;
@@ -444,7 +460,7 @@ std::vector<std::string> VeriPGValidator::GetAssignedSignalsInBlock(
 
 // Helper: Get signals used (read) in block
 std::vector<std::string> VeriPGValidator::GetUsedSignalsInBlock(
-    const verible::Symbol* block) {
+    const verible::SyntaxTreeNode* block) {
   std::vector<std::string> used_signals;
   
   if (!block) return used_signals;
@@ -490,7 +506,7 @@ std::vector<std::string> VeriPGValidator::GetUsedSignalsInBlock(
 // Helper: Check for synchronizer pattern (2-stage FF chain)
 bool VeriPGValidator::HasSynchronizerPattern(
     const std::string& signal,
-    const verible::Symbol* block) {
+    const verible::SyntaxTreeNode* block) {
   if (!block) return false;
   
   // Pattern to detect (2-stage synchronizer):
