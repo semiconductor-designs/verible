@@ -31,8 +31,11 @@
 #include "verible/verilog/analysis/verilog-project.h"
 #include "verible/verilog/CST/verilog-matchers.h"
 #include "verible/verilog/CST/verilog-nonterminals.h"
+#include "verible/verilog/CST/statement.h"
 #include "verible/common/analysis/matcher/matcher.h"
 #include "verible/common/analysis/syntax-tree-search.h"
+#include "verible/verilog/parser/verilog-token-enum.h"
+#include "verible/verilog/parser/verilog-token-classifications.h"
 
 namespace verilog {
 namespace tools {
@@ -333,9 +336,50 @@ absl::Status VeriPGValidator::CheckCDCViolations(
 
 // Helper: Extract clock name from always_ff block
 std::string VeriPGValidator::ExtractClockFromBlock(const verible::Symbol* block) {
-  // TODO: Full implementation with CST traversal
-  // For now, return empty (will be implemented incrementally)
-  return "";
+  if (!block || block->Kind() != verible::SymbolKind::kNode) {
+    return "";
+  }
+  
+  const auto* node = verible::down_cast<const verible::SyntaxTreeNode*>(block);
+  if (!node) return "";
+  
+  // Get procedural timing control (@(posedge clk) part)
+  const auto* timing_ctrl = verilog::GetProceduralTimingControlFromAlways(*node);
+  if (!timing_ctrl) return "";
+  
+  // Traverse timing control to find clock signal
+  // Look for identifiers after posedge/negedge
+  std::string clock_name;
+  bool found_edge = false;
+  
+  std::function<void(const verible::Symbol&)> extract_clock = 
+      [&](const verible::Symbol& sym) {
+    if (sym.Kind() == verible::SymbolKind::kLeaf) {
+      const auto& leaf = verible::SymbolCastToLeaf(sym);
+      const auto token = leaf.get();
+      verilog_tokentype token_type = static_cast<verilog_tokentype>(token.token_enum());
+      
+      // Check if this is posedge/negedge
+      if (token_type == TK_posedge || token_type == TK_negedge) {
+        found_edge = true;
+      }
+      // If we just saw an edge keyword, this identifier is the clock
+      else if (found_edge && IsIdentifierLike(token_type)) {
+        if (clock_name.empty()) {  // Take the first clock signal
+          clock_name = std::string(token.text());
+        }
+        found_edge = false;  // Reset for next signal (e.g., reset)
+      }
+    } else if (sym.Kind() == verible::SymbolKind::kNode) {
+      const auto& n = verible::down_cast<const verible::SyntaxTreeNode&>(sym);
+      for (const auto& child : n.children()) {
+        if (child) extract_clock(*child);
+      }
+    }
+  };
+  
+  extract_clock(*timing_ctrl);
+  return clock_name;
 }
 
 // Helper: Get signals assigned in block
