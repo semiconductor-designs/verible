@@ -294,6 +294,83 @@ TEST_F(VeriPGValidatorTest, SummaryStringFormat) {
   EXPECT_THAT(result.summary, ::testing::HasSubstr("warnings"));
 }
 
+// ========================================
+// Week 1: CDC/Clock/Reset Validation Tests
+// ========================================
+
+// Test 26: CDC validation framework exists
+TEST_F(VeriPGValidatorTest, CheckCDCViolations_Framework) {
+  VeriPGValidator validator(type_checker_.get());
+  std::vector<Violation> violations;
+  
+  auto status = validator.CheckCDCViolations(*symbol_table_, violations);
+  EXPECT_TRUE(status.ok());
+}
+
+// Test 27: Clock rules framework exists
+TEST_F(VeriPGValidatorTest, CheckClockRules_Framework) {
+  VeriPGValidator validator(type_checker_.get());
+  std::vector<Violation> violations;
+  
+  auto status = validator.CheckClockRules(*symbol_table_, violations);
+  EXPECT_TRUE(status.ok());
+}
+
+// Test 28: Reset rules framework exists
+TEST_F(VeriPGValidatorTest, CheckResetRules_Framework) {
+  VeriPGValidator validator(type_checker_.get());
+  std::vector<Violation> violations;
+  
+  auto status = validator.CheckResetRules(*symbol_table_, violations);
+  EXPECT_TRUE(status.ok());
+}
+
+// Test 29: Timing rules framework exists
+TEST_F(VeriPGValidatorTest, CheckTimingRules_Framework) {
+  VeriPGValidator validator(type_checker_.get());
+  std::vector<Violation> violations;
+  
+  auto status = validator.CheckTimingRules(*symbol_table_, violations);
+  EXPECT_TRUE(status.ok());
+}
+
+// Test 30: Violation structure - CDC_001
+TEST_F(VeriPGValidatorTest, Violation_CDC_001_Structure) {
+  Violation v;
+  v.rule = RuleId::kCDC_001;
+  v.severity = Severity::kError;
+  v.message = "Clock domain crossing without synchronizer";
+  v.signal_name = "data_signal";
+  v.source_location = "test.sv:10:5";
+  v.fix_suggestion = "Add 2-stage synchronizer";
+  
+  EXPECT_EQ(v.rule, RuleId::kCDC_001);
+  EXPECT_EQ(v.severity, Severity::kError);
+  EXPECT_FALSE(v.message.empty());
+}
+
+// Test 31: Violation structure - CLK_001
+TEST_F(VeriPGValidatorTest, Violation_CLK_001_Structure) {
+  Violation v;
+  v.rule = RuleId::kCLK_001;
+  v.severity = Severity::kError;
+  v.message = "Missing clock signal in always_ff";
+  
+  EXPECT_EQ(v.rule, RuleId::kCLK_001);
+  EXPECT_EQ(v.severity, Severity::kError);
+}
+
+// Test 32: Violation structure - RST_001
+TEST_F(VeriPGValidatorTest, Violation_RST_001_Structure) {
+  Violation v;
+  v.rule = RuleId::kRST_001;
+  v.severity = Severity::kError;
+  v.message = "Missing reset in sequential logic";
+  
+  EXPECT_EQ(v.rule, RuleId::kRST_001);
+  EXPECT_EQ(v.severity, Severity::kError);
+}
+
 }  // namespace
 }  // namespace tools
 }  // namespace verilog

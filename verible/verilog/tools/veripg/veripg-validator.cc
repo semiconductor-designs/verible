@@ -218,6 +218,55 @@ absl::Status VeriPGValidator::ValidateModuleStructure(
   return absl::OkStatus();
 }
 
+// ========================================
+// Week 1: Core Validation Rules Implementation
+// ========================================
+
+absl::Status VeriPGValidator::CheckCDCViolations(
+    const verilog::SymbolTable& symbol_table,
+    std::vector<Violation>& violations) {
+  // CDC_001: Clock domain crossing without synchronizer
+  // 
+  // Algorithm:
+  // 1. Find all always_ff blocks and their clock domains
+  // 2. For each signal assigned in one clock domain:
+  //    - Find uses of that signal in other clock domains
+  //    - Check if there's a 2-stage synchronizer pattern
+  //    - If not, report CDC_001 violation
+  
+  // TODO: Full implementation requires:
+  // - CST traversal to find always_ff blocks
+  // - Clock domain extraction from sensitivity lists
+  // - Data flow analysis to track signal uses across domains
+  // - Synchronizer pattern detection
+  
+  // Framework: Return OK for now, actual detection will be added
+  // based on symbol table analysis and CST traversal
+  
+  return absl::OkStatus();
+}
+
+absl::Status VeriPGValidator::CheckClockRules(
+    const verilog::SymbolTable& symbol_table,
+    std::vector<Violation>& violations) {
+  // CLK_001-004: Clock-related rules
+  return absl::OkStatus();
+}
+
+absl::Status VeriPGValidator::CheckResetRules(
+    const verilog::SymbolTable& symbol_table,
+    std::vector<Violation>& violations) {
+  // RST_001-005: Reset-related rules
+  return absl::OkStatus();
+}
+
+absl::Status VeriPGValidator::CheckTimingRules(
+    const verilog::SymbolTable& symbol_table,
+    std::vector<Violation>& violations) {
+  // TIM_001-002: Timing rules (combinational loops, latches)
+  return absl::OkStatus();
+}
+
 }  // namespace tools
 }  // namespace verilog
 
