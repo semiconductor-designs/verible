@@ -130,6 +130,146 @@ std::string GenerateFunctionSignature(
   return sig.str();
 }
 
+// ACTUAL IMPLEMENTATION: Find function in symbol table
+const SymbolTableNode* FindFunctionInSymbolTable(
+    const SymbolTableNode& node, const std::string& name) {
+  // Check if this node's key matches
+  const auto* key = node.Key();
+  if (key && *key == name) {
+    // Verify it's a function
+    if (node.Value().metatype == SymbolMetaType::kFunction) {
+      return &node;
+    }
+  }
+  
+  // Recursively search children
+  for (const auto& child : node) {
+    const SymbolTableNode* found = FindFunctionInSymbolTable(
+        child.second, name);
+    if (found) return found;
+  }
+  
+  return nullptr;
+}
+
+// ACTUAL IMPLEMENTATION: Extract function body from CST
+std::string ExtractFunctionBody(const verible::Symbol& function_cst) {
+  // Navigate to function body in the CST
+  // Function structure: kFunctionDeclaration -> kFunctionHeader, kFunctionBody
+  
+  if (function_cst.Kind() != verible::SymbolKind::kNode) {
+    return "/* error: not a node */";
+  }
+  
+  const auto& func_node = verible::SymbolCastToNode(function_cst);
+  
+  // Look for function body
+  for (const auto& child : func_node.children()) {
+    if (!child) continue;
+    
+    if (child->Kind() == verible::SymbolKind::kNode) {
+      const auto& child_node = verible::SymbolCastToNode(*child);
+      const auto child_tag = static_cast<verilog::NodeEnum>(child_node.Tag().tag);
+      
+      // Found the function body or statement block
+      if (child_tag == verilog::NodeEnum::kBlockItemStatementList ||
+          child_tag == verilog::NodeEnum::kStatementList ||
+          child_tag == verilog::NodeEnum::kSeqBlock) {
+        // Extract the text of the body
+        std::string body(verible::StringSpanOfSymbol(*child));
+        // Trim "begin" and "end" if present
+        size_t begin_pos = body.find("begin");
+        size_t end_pos = body.rfind("end");
+        if (begin_pos != std::string::npos && end_pos != std::string::npos) {
+          body = body.substr(begin_pos + 5, end_pos - begin_pos - 5);
+        }
+        // Trim whitespace
+        size_t first = body.find_first_not_of(" \t\n\r");
+        size_t last = body.find_last_not_of(" \t\n\r");
+        if (first != std::string::npos) {
+          return body.substr(first, last - first + 1);
+        }
+        return body;
+      }
+    }
+  }
+  
+  // Fallback: return entire function text minus header
+  std::string full_text(verible::StringSpanOfSymbol(function_cst));
+  // Try to extract from ";" (end of header) to "endfunction"
+  size_t header_end = full_text.find(';');
+  size_t end_keyword = full_text.rfind("endfunction");
+  if (header_end != std::string::npos && end_keyword != std::string::npos) {
+    std::string body = full_text.substr(header_end + 1, end_keyword - header_end - 1);
+    // Trim
+    size_t first = body.find_first_not_of(" \t\n\r");
+    size_t last = body.find_last_not_of(" \t\n\r");
+    if (first != std::string::npos) {
+      return body.substr(first, last - first + 1);
+    }
+  }
+  
+  return "/* error: could not extract body */";
+}
+
+// ACTUAL IMPLEMENTATION: Extract formal parameters from function CST
+std::vector<std::string> ExtractFormalParameters(const verible::Symbol& function_cst) {
+  std::vector<std::string> params;
+  
+  // Simplified approach: parse from the function text
+  // Look for pattern: function ... (parameters) or task ... (parameters)
+  std::string full_text(verible::StringSpanOfSymbol(function_cst));
+  
+  // Find the opening '(' for parameters
+  size_t paren_start = full_text.find('(');
+  size_t paren_end = full_text.find(')');
+  
+  if (paren_start == std::string::npos || paren_end == std::string::npos) {
+    return params;  // No parameters
+  }
+  
+  std::string params_text = full_text.substr(paren_start + 1, paren_end - paren_start - 1);
+  
+  // Parse parameters: split by comma, extract identifier names
+  // Parameters can be: "logic [7:0] a, b" or "input a, input b" etc.
+  std::string current_param;
+  
+  for (size_t i = 0; i <= params_text.length(); ++i) {
+    char ch = (i < params_text.length()) ? params_text[i] : ',';  // Treat end as comma
+    
+    if (ch == ',' || i == params_text.length()) {
+      // Process current_param
+      if (!current_param.empty()) {
+        // Extract identifier (last word)
+        // Work backwards to find the last identifier
+        int end = current_param.length() - 1;
+        while (end >= 0 && std::isspace(current_param[end])) end--;
+        
+        int start = end;
+        while (start >= 0 && (std::isalnum(current_param[start]) || current_param[start] == '_')) {
+          start--;
+        }
+        start++;
+        
+        if (start <= end) {
+          std::string param_name = current_param.substr(start, end - start + 1);
+          // Filter out keywords
+          if (param_name != "logic" && param_name != "bit" && param_name != "int" &&
+              param_name != "byte" && param_name != "input" && param_name != "output" &&
+              param_name != "inout" && param_name != "ref") {
+            params.push_back(param_name);
+          }
+        }
+      }
+      current_param.clear();
+    } else {
+      current_param += ch;
+    }
+  }
+  
+  return params;
+}
+
 // Helper to convert line/column to byte offset
 struct OffsetRange {
   int start_offset;
@@ -534,23 +674,98 @@ absl::Status RefactoringEngine::InlineFunction(const Location& call_site) {
     return absl::NotFoundError("No CST nodes found at call site");
   }
   
-  // 3. Extract function call text (simplified)
+  // 3. Extract function call text
   auto call_span = verible::StringSpanOfSymbol(*nodes[0].node);
   std::string call_text(call_span);
   
-  // 4. Parse function name from call (simplified - just use the text)
-  // Production: would properly parse CST to extract function name and arguments
-  std::string function_name = call_text.substr(0, call_text.find('('));
+  // 4. Parse function name and arguments from call
+  // The call_text might contain the full assignment, so extract the actual call
+  // Look for pattern: identifier '('
+  size_t paren_pos = call_text.find('(');
+  if (paren_pos == std::string::npos) {
+    return absl::InvalidArgumentError("No function call found at location");
+  }
+  
+  // Extract the identifier before '('
+  // Work backwards from '(' to find the start of the identifier
+  int id_end = paren_pos - 1;
+  while (id_end >= 0 && std::isspace(call_text[id_end])) id_end--;
+  
+  int id_start = id_end;
+  while (id_start >= 0 && (std::isalnum(call_text[id_start]) || call_text[id_start] == '_')) {
+    id_start--;
+  }
+  id_start++;  // Move back to the first character
+  
+  std::string function_name = call_text.substr(id_start, id_end - id_start + 1);
+  
+  // Extract arguments
+  size_t arg_start = call_text.find('(');
+  size_t arg_end = call_text.find(')');
+  std::string args_str;
+  std::vector<std::string> actual_args;
+  
+  if (arg_start != std::string::npos && arg_end != std::string::npos) {
+    args_str = call_text.substr(arg_start + 1, arg_end - arg_start - 1);
+    // Split by comma (simplified - doesn't handle nested commas)
+    size_t pos = 0;
+    while (pos < args_str.length()) {
+      size_t comma = args_str.find(',', pos);
+      if (comma == std::string::npos) comma = args_str.length();
+      std::string arg = args_str.substr(pos, comma - pos);
+      // Trim whitespace
+      size_t first = arg.find_first_not_of(" \t\n\r");
+      size_t last = arg.find_last_not_of(" \t\n\r");
+      if (first != std::string::npos) {
+        actual_args.push_back(arg.substr(first, last - first + 1));
+      }
+      pos = comma + 1;
+    }
+  }
   
   // 5. Look up function in symbol table
-  // Simplified: For demonstration, we create a placeholder body
-  // Production: would traverse symbol_table_ to find function definition
-  std::string function_body = "/* inlined function body */";
+  const SymbolTableNode* func_node = FindFunctionInSymbolTable(
+      symbol_table_->Root(), function_name);
   
-  // 6. Perform parameter substitution (simplified)
-  // Production: would extract actual arguments and formal parameters,
-  // then replace all occurrences of formal params with actual args
-  std::string inlined_code = absl::StrCat("begin\n  ", function_body, "\nend");
+  if (!func_node) {
+    return absl::NotFoundError(
+        absl::StrCat("Function '", function_name, "' not found in symbol table"));
+  }
+  
+  // 6. Extract function body and parameters from CST
+  const auto& func_info = func_node->Value();
+  if (!func_info.syntax_origin) {
+    return absl::InternalError("Function has no syntax origin");
+  }
+  
+  // Get function body text
+  std::string function_body = ExtractFunctionBody(*func_info.syntax_origin);
+  
+  // Get formal parameters
+  std::vector<std::string> formal_params = ExtractFormalParameters(*func_info.syntax_origin);
+  
+  // 7. Perform parameter substitution
+  std::string inlined_code = function_body;
+  
+  // Replace each formal parameter with its corresponding actual argument
+  for (size_t i = 0; i < formal_params.size() && i < actual_args.size(); ++i) {
+    // Simple text replacement (production would need proper tokenization)
+    size_t pos = 0;
+    while ((pos = inlined_code.find(formal_params[i], pos)) != std::string::npos) {
+      // Check if it's a whole word (not part of another identifier)
+      bool is_word_boundary = 
+          (pos == 0 || !std::isalnum(inlined_code[pos-1])) &&
+          (pos + formal_params[i].length() >= inlined_code.length() ||
+           !std::isalnum(inlined_code[pos + formal_params[i].length()]));
+      
+      if (is_word_boundary) {
+        inlined_code.replace(pos, formal_params[i].length(), actual_args[i]);
+        pos += actual_args[i].length();
+      } else {
+        pos++;
+      }
+    }
+  }
   
   // 7. Calculate offsets
   const auto base_text = file_ctx.text_structure->Contents();

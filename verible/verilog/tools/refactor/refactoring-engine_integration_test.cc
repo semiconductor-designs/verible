@@ -242,6 +242,11 @@ TEST_F(RefactoringEngineIntegrationTest, InlineFunctionEndToEnd) {
   std::string test_code = R"(
 module test_module;
   logic result;
+  
+  function logic calculate();
+    return 1'b1;
+  endfunction
+  
   initial begin
     result = calculate();
   end
@@ -267,7 +272,7 @@ endmodule
   // Inline the function call
   Location call_loc;
   call_loc.filename = test_file;
-  call_loc.line = 4;       // "result = calculate();"
+  call_loc.line = 9;       // "result = calculate();"
   call_loc.column = 14;    // At "calculate"
 
   auto result = engine.InlineFunction(call_loc);
