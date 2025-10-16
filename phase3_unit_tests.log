@@ -1,0 +1,40 @@
+Starting local Bazel server and connecting to it...
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+Analyzing: 22 targets (1 packages loaded, 0 targets configured)
+Analyzing: 22 targets (1 packages loaded, 0 targets configured)
+
+Analyzing: 22 targets (166 packages loaded, 3156 targets configured)
+[5 / 5] no actions running
+INFO: Analyzed 22 targets (166 packages loaded, 3184 targets configured).
+FAIL: //verible/verilog/tools/veripg:veripg-validator_str_integration_test (see /private/var/tmp/_bazel_jonguksong/ff9dbe05cf9a039f46cbb13681d70da5/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/verible/verilog/tools/veripg/veripg-validator_str_integration_test/test.log)
+FAIL: //verible/verilog/tools/veripg:veripg-validator_pwr_integration_test (see /private/var/tmp/_bazel_jonguksong/ff9dbe05cf9a039f46cbb13681d70da5/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/verible/verilog/tools/veripg/veripg-validator_pwr_integration_test/test.log)
+FAIL: //verible/verilog/tools/veripg:veripg-validator_wid_integration_test (see /private/var/tmp/_bazel_jonguksong/ff9dbe05cf9a039f46cbb13681d70da5/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/verible/verilog/tools/veripg/veripg-validator_wid_integration_test/test.log)
+FAIL: //verible/verilog/tools/veripg:veripg-validator_nam_integration_test (see /private/var/tmp/_bazel_jonguksong/ff9dbe05cf9a039f46cbb13681d70da5/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/verible/verilog/tools/veripg/veripg-validator_nam_integration_test/test.log)
+INFO: Found 7 targets and 15 test targets...
+INFO: Elapsed time: 4.587s, Critical Path: 0.30s
+INFO: 33 processes: 25 internal, 8 darwin-sandbox.
+INFO: Build completed, 4 tests FAILED, 33 total actions
+//verible/verilog/tools/veripg:auto-fix-engine_test             (cached) PASSED in 0.7s
+//verible/verilog/tools/veripg:batch-processor_test             (cached) PASSED in 1.7s
+//verible/verilog/tools/veripg:output-formatter_test            (cached) PASSED in 0.4s
+//verible/verilog/tools/veripg:rule-config_test                 (cached) PASSED in 0.5s
+//verible/verilog/tools/veripg:validator-cache_test             (cached) PASSED in 0.5s
+//verible/verilog/tools/veripg:veripg-validator_cdc_unit_test   (cached) PASSED in 1.4s
+//verible/verilog/tools/veripg:veripg-validator_test            (cached) PASSED in 1.5s
+//verible/verilog/tools/veripg:veripg-validator_cdc_integration_test     PASSED in 0.1s
+//verible/verilog/tools/veripg:veripg-validator_clk_integration_test     PASSED in 0.1s
+//verible/verilog/tools/veripg:veripg-validator_rst_integration_test     PASSED in 0.1s
+//verible/verilog/tools/veripg:veripg-validator_tim_integration_test     PASSED in 0.1s
+//verible/verilog/tools/veripg:veripg-validator_nam_integration_test     FAILED in 0.1s
+  /private/var/tmp/_bazel_jonguksong/ff9dbe05cf9a039f46cbb13681d70da5/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/verible/verilog/tools/veripg/veripg-validator_nam_integration_test/test.log
+//verible/verilog/tools/veripg:veripg-validator_pwr_integration_test     FAILED in 0.1s
+  /private/var/tmp/_bazel_jonguksong/ff9dbe05cf9a039f46cbb13681d70da5/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/verible/verilog/tools/veripg/veripg-validator_pwr_integration_test/test.log
+//verible/verilog/tools/veripg:veripg-validator_str_integration_test     FAILED in 0.1s
+  /private/var/tmp/_bazel_jonguksong/ff9dbe05cf9a039f46cbb13681d70da5/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/verible/verilog/tools/veripg/veripg-validator_str_integration_test/test.log
+//verible/verilog/tools/veripg:veripg-validator_wid_integration_test     FAILED in 0.1s
+  /private/var/tmp/_bazel_jonguksong/ff9dbe05cf9a039f46cbb13681d70da5/execroot/_main/bazel-out/darwin_arm64-fastbuild/testlogs/verible/verilog/tools/veripg/veripg-validator_wid_integration_test/test.log
+
+Executed 8 out of 15 tests: 11 tests pass and 4 fail locally.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.
