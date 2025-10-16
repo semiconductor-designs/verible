@@ -255,6 +255,45 @@ TEST_F(VeriPGValidatorCDCIntegrationTest, DetectMultiBitCDCViolation) {
   EXPECT_TRUE(found_cdc_002) << "Should detect CDC_002 violation for multi-bit signal";
 }
 
+// Test: CDC_003 - Clock muxing (clock used in data path)
+TEST_F(VeriPGValidatorCDCIntegrationTest, DetectClockMuxViolation) {
+  const std::string testdata_dir = "verible/verilog/tools/veripg/testdata/cdc/";
+  
+  VerilogProject project(".", std::vector<std::string>{});
+  auto file_or = project.OpenTranslationUnit(testdata_dir + "cdc_clock_mux_violation.sv");
+  ASSERT_TRUE(file_or.ok()) << file_or.status().message();
+  
+  auto* file = file_or.value();
+  ASSERT_NE(file, nullptr);
+  ASSERT_TRUE(file->Status().ok()) << "Parse failed: " << file->Status().message();
+  
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> diagnostics;
+  symbol_table.Build(&diagnostics);
+  ASSERT_TRUE(diagnostics.empty()) << "Symbol table build had errors";
+  
+  analysis::TypeInference type_inference(&symbol_table);
+  analysis::TypeChecker type_checker(&symbol_table, &type_inference);
+  
+  VeriPGValidator validator(&type_checker);
+  std::vector<Violation> violations;
+  auto status = validator.CheckCDCViolations(symbol_table, violations, &project);
+  EXPECT_TRUE(status.ok());
+  
+  // Should detect CDC_003: Clock muxing (clock in data path)
+  bool found_cdc_003 = false;
+  for (const auto& v : violations) {
+    if (v.rule == RuleId::kCDC_003) {
+      found_cdc_003 = true;
+      EXPECT_EQ(v.severity, Severity::kError);
+      EXPECT_THAT(v.message, HasSubstr("clock"));
+      EXPECT_THAT(v.message, HasSubstr("mux"));
+    }
+  }
+  
+  EXPECT_TRUE(found_cdc_003) << "Should detect CDC_003 violation for clock muxing";
+}
+
 }  // namespace
 }  // namespace tools
 }  // namespace verilog
