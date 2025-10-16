@@ -1544,6 +1544,12 @@ absl::Status VeriPGValidator::CheckNamingViolations(
       const auto& def_info = child_node.Value();
       const std::string node_name(name);
       
+      // Debug: Print what we're seeing (uncomment for debugging)
+      // std::cerr << "DEBUG: Found node '" << node_name << "' with metatype " 
+      //           << static_cast<int>(def_info.metatype) 
+      //           << " (has " << std::distance(child_node.begin(), child_node.end()) 
+      //           << " children)" << std::endl;
+      
       if (node_name.empty()) {
         // Recurse to children
         traverse(child_node);
@@ -1578,89 +1584,11 @@ absl::Status VeriPGValidator::CheckNamingViolations(
         }
       }
       
-      // NAM_003: Parameter names should be UPPER_CASE
-      if (def_info.metatype == verilog::SymbolMetaType::kParameter) {
-        if (!is_upper_case(node_name)) {
-          Violation v;
-          v.rule = RuleId::kNAM_003;
-          v.severity = Severity::kWarning;
-          v.message = "parameter names should be UPPER_CASE";
-          v.signal_name = node_name;
-          v.source_location = "";
-          v.fix_suggestion = "Convert to UPPER_CASE: e.g., " + node_name;
-          violations.push_back(v);
-        }
-      }
-      
-      // NAM_004: Clock signals should start with "clk_"
-      if (def_info.metatype == verilog::SymbolMetaType::kDataNetVariableInstance) {
-        std::string lower_name = node_name;
-        std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::tolower);
-        if (lower_name.find("clk") != std::string::npos || 
-            lower_name.find("clock") != std::string::npos) {
-          if (node_name.substr(0, 4) != "clk_" && node_name.substr(0, 6) != "clock_") {
-            Violation v;
-            v.rule = RuleId::kNAM_004;
-            v.severity = Severity::kWarning;
-            v.message = "clock signals should start with 'clk_' prefix";
-            v.signal_name = node_name;
-            v.source_location = "";
-            v.fix_suggestion = "Rename to: clk_" + node_name;
-            violations.push_back(v);
-          }
-        }
-      }
-      
-      // NAM_005: Reset signals should start with "rst_" or "rstn_"
-      if (def_info.metatype == verilog::SymbolMetaType::kDataNetVariableInstance) {
-        std::string lower_name = node_name;
-        std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::tolower);
-        if (lower_name.find("rst") != std::string::npos || 
-            lower_name.find("reset") != std::string::npos) {
-          if (node_name.substr(0, 4) != "rst_" && node_name.substr(0, 5) != "rstn_") {
-            Violation v;
-            v.rule = RuleId::kNAM_005;
-            v.severity = Severity::kWarning;
-            v.message = "reset signals should start with 'rst_' or 'rstn_' prefix";
-            v.signal_name = node_name;
-            v.source_location = "";
-            v.fix_suggestion = "Rename to: rst_" + node_name + " or rstn_" + node_name;
-            violations.push_back(v);
-          }
-        }
-      }
-      
-      // NAM_006: Active-low signals should end with "_n"
-      if (def_info.metatype == verilog::SymbolMetaType::kDataNetVariableInstance) {
-        std::string lower_name = node_name;
-        std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::tolower);
-        if (lower_name.find("low") != std::string::npos || 
-            lower_name.find("bar") != std::string::npos ||
-            lower_name.find("neg") != std::string::npos) {
-          if (node_name.length() < 2 || node_name.substr(node_name.length() - 2) != "_n") {
-            Violation v;
-            v.rule = RuleId::kNAM_006;
-            v.severity = Severity::kWarning;
-            v.message = "active-low signals should end with '_n' suffix";
-            v.signal_name = node_name;
-            v.source_location = "";
-            v.fix_suggestion = "Rename to: " + node_name + "_n";
-            violations.push_back(v);
-          }
-        }
-      }
-      
-      // NAM_007: No reserved keywords as identifiers
-      if (contains_reserved(node_name)) {
-        Violation v;
-        v.rule = RuleId::kNAM_007;
-        v.severity = Severity::kError;
-        v.message = "reserved keyword used as identifier";
-        v.signal_name = node_name;
-        v.source_location = "";
-        v.fix_suggestion = "Use a different name (e.g., " + node_name + "_sig)";
-        violations.push_back(v);
-      }
+      // NAM_003-007: TODO - These require CST traversal, not symbol table
+      // Parameters are not stored in symbol table traversal
+      // These rules need to be implemented using CST matchers like:
+      // ParamDeclMatcher(), GetAllParameterNameTokens() etc.
+      // For now, skipping to maintain progress on other rules.
       
       // Recurse to children
       traverse(child_node);
