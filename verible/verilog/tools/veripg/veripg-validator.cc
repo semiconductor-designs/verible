@@ -1257,24 +1257,172 @@ absl::Status VeriPGValidator::CheckTimingRules(
     const verilog::SymbolTable& symbol_table,
     std::vector<Violation>& violations,
     const verilog::VerilogProject* project) {
-  // TIM_001-002: Timing rules (combinational loops, latches)
-  //
-  // TIM_001: Combinational loop detected
-  //   - Build data dependency graph
-  //   - Detect cycles in combinational logic
-  //   - Report loop with signal path
-  //   - Example: assign a = b; assign b = a;
-  //
-  // TIM_002: Latch inferred (incomplete case/if)
-  //   - Detect always_comb or always @* blocks
-  //   - Check for incomplete if statements (no else)
-  //   - Check for incomplete case statements (no default)
-  //   - Flag any signal that retains value (latch behavior)
-  //   - Suggest: Add else clause or default case
-  //
-  // Implementation strategy:
-  // - TIM_001: Use CallGraph or custom dependency graph
-  // - TIM_002: Analyze all code paths in combinational blocks
+  if (!project) {
+    return absl::OkStatus(); // Framework mode
+  }
+  
+  // TIM_001: Combinational loop detection
+  // Simplified heuristic: Detect continuous assignments with circular dependencies
+  // Build dependency map: LHS -> RHS identifiers
+  std::map<std::string, std::set<std::string>> assign_deps;
+  
+  for (auto it = project->begin(); it != project->end(); ++it) {
+    const auto* file = it->second.get();
+    if (!file) continue;
+    const auto* text_structure = file->GetTextStructure();
+    if (!text_structure) continue;
+    const auto& syntax_tree = text_structure->SyntaxTree();
+    if (!syntax_tree) continue;
+
+    std::function<void(const verible::Symbol*)> find_assigns = 
+        [&](const verible::Symbol* sym) {
+      if (!sym || sym->Kind() != verible::SymbolKind::kNode) return;
+      const auto* node = verible::down_cast<const verible::SyntaxTreeNode*>(sym);
+      
+      if (node->size() > 0 && (*node)[0]) {
+        if ((*node)[0]->Kind() == verible::SymbolKind::kLeaf) {
+          const auto& leaf = verible::SymbolCastToLeaf(*(*node)[0]);
+          verilog_tokentype token_type = static_cast<verilog_tokentype>(leaf.get().token_enum());
+          if (token_type == TK_assign) {
+            // Parse LHS and RHS
+            std::string lhs_signal;
+            std::set<std::string> rhs_signals;
+            bool is_lhs = true;
+            
+            std::function<void(const verible::Symbol&)> extract_signals = 
+                [&](const verible::Symbol& s) {
+              if (s.Kind() == verible::SymbolKind::kLeaf) {
+                const auto& l = verible::SymbolCastToLeaf(s);
+                const auto tok = l.get();
+                verilog_tokentype tt = static_cast<verilog_tokentype>(tok.token_enum());
+                
+                if (tt == '=') {
+                  is_lhs = false;
+                } else if (IsIdentifierLike(tt)) {
+                  std::string sig(tok.text());
+                  if (is_lhs && lhs_signal.empty()) {
+                    lhs_signal = sig;
+                  } else if (!is_lhs) {
+                    rhs_signals.insert(sig);
+                  }
+                }
+              } else if (s.Kind() == verible::SymbolKind::kNode) {
+                const auto& n = verible::down_cast<const verible::SyntaxTreeNode&>(s);
+                for (const auto& child : n.children()) {
+                  if (child) extract_signals(*child);
+                }
+              }
+            };
+            
+            extract_signals(*node);
+            
+            if (!lhs_signal.empty() && !rhs_signals.empty()) {
+              assign_deps[lhs_signal] = rhs_signals;
+            }
+          }
+        }
+      }
+      for (const auto& child : node->children()) {
+        if (child) find_assigns(child.get());
+      }
+    };
+    find_assigns(syntax_tree.get());
+  }
+  
+  // Detect cycles using DFS
+  std::set<std::string> checked_signals;
+  for (const auto& [lhs, rhs_set] : assign_deps) {
+    if (checked_signals.count(lhs) > 0) continue;
+    
+    std::set<std::string> visiting;
+    std::function<bool(const std::string&)> has_cycle = 
+        [&](const std::string& sig) -> bool {
+      if (visiting.count(sig) > 0) return true;
+      if (checked_signals.count(sig) > 0) return false;
+      
+      visiting.insert(sig);
+      if (assign_deps.count(sig) > 0) {
+        for (const auto& dep : assign_deps.at(sig)) {
+          if (has_cycle(dep)) return true;
+        }
+      }
+      visiting.erase(sig);
+      checked_signals.insert(sig);
+      return false;
+    };
+    
+    if (has_cycle(lhs)) {
+      Violation v;
+      v.rule = RuleId::kTIM_001;
+      v.severity = Severity::kError;
+      v.message = "combinational loop detected";
+      v.signal_name = lhs;
+      v.source_location = "";
+      v.fix_suggestion = "Break the combinational loop by adding a register";
+      violations.push_back(v);
+      break; // Report only first loop
+    }
+  }
+  
+  // TIM_002: Latch inference detection
+  // Simplified heuristic: Detect always_comb/always @* with incomplete if statements
+  for (auto it = project->begin(); it != project->end(); ++it) {
+    const auto* file = it->second.get();
+    if (!file) continue;
+    const auto* text_structure = file->GetTextStructure();
+    if (!text_structure) continue;
+    const auto& syntax_tree = text_structure->SyntaxTree();
+    if (!syntax_tree) continue;
+
+    std::function<void(const verible::Symbol*)> find_always_comb = 
+        [&](const verible::Symbol* sym) {
+      if (!sym || sym->Kind() != verible::SymbolKind::kNode) return;
+      const auto* node = verible::down_cast<const verible::SyntaxTreeNode*>(sym);
+      
+      if (node->size() > 0 && (*node)[0]) {
+        if ((*node)[0]->Kind() == verible::SymbolKind::kLeaf) {
+          const auto& leaf = verible::SymbolCastToLeaf(*(*node)[0]);
+          verilog_tokentype token_type = static_cast<verilog_tokentype>(leaf.get().token_enum());
+          if (token_type == TK_always_comb) {
+            // Check for incomplete if statements (no else)
+            bool has_if = false;
+            bool has_else = false;
+            
+            std::function<void(const verible::Symbol&)> check_if_else = 
+                [&](const verible::Symbol& s) {
+              if (s.Kind() == verible::SymbolKind::kLeaf) {
+                const auto& l = verible::SymbolCastToLeaf(s);
+                verilog_tokentype tt = static_cast<verilog_tokentype>(l.get().token_enum());
+                if (tt == TK_if) has_if = true;
+                if (tt == TK_else) has_else = true;
+              } else if (s.Kind() == verible::SymbolKind::kNode) {
+                const auto& n = verible::down_cast<const verible::SyntaxTreeNode&>(s);
+                for (const auto& child : n.children()) {
+                  if (child) check_if_else(*child);
+                }
+              }
+            };
+            check_if_else(*node);
+            
+            if (has_if && !has_else) {
+              Violation v;
+              v.rule = RuleId::kTIM_002;
+              v.severity = Severity::kWarning;
+              v.message = "latch inferred (incomplete if statement in always_comb)";
+              v.signal_name = "";
+              v.source_location = "";
+              v.fix_suggestion = "Add else clause to avoid latch inference";
+              violations.push_back(v);
+            }
+          }
+        }
+      }
+      for (const auto& child : node->children()) {
+        if (child) find_always_comb(child.get());
+      }
+    };
+    find_always_comb(syntax_tree.get());
+  }
   
   return absl::OkStatus();
 }
