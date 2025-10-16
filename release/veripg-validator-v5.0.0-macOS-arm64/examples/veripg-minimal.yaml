@@ -1,0 +1,30 @@
+# Minimal VeriPG Configuration
+# Only override what you need - all other rules use defaults
+
+rules:
+  # Disable experimental power rules
+  PWR_001: { enabled: false }
+  PWR_002: { enabled: false }
+  PWR_003: { enabled: false }
+  PWR_004: { enabled: false }
+  PWR_005: { enabled: false }
+  
+  # Make CDC violations errors (not warnings)
+  CDC_001: { severity: error }
+  CDC_002: { severity: error }
+  CDC_003: { severity: error }
+  CDC_004: { severity: error }
+  
+  # Relax naming rules to info
+  NAM_001: { severity: info }
+  NAM_002: { severity: info }
+  NAM_003: { severity: info }
+  NAM_004: { severity: info }
+  NAM_005: { severity: info }
+  NAM_006: { severity: info }
+
+# Exclude testbenches from all rules
+exclude_files:
+  - "*_tb.sv"
+  - "test_*.sv"
+

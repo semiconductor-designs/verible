@@ -1,0 +1,191 @@
+{
+  "global": {
+    "default_severity": "warning",
+    "default_enabled": true
+  },
+  "rules": {
+    "CDC_001": {
+      "enabled": true,
+      "severity": "error",
+      "exclude_files": ["*_tb.sv", "test_*.sv"],
+      "exclude_modules": ["test_*"]
+    },
+    "CDC_002": {
+      "enabled": true,
+      "severity": "error"
+    },
+    "CDC_003": {
+      "enabled": true,
+      "severity": "warning"
+    },
+    "CDC_004": {
+      "enabled": true,
+      "severity": "error"
+    },
+    "CLK_001": {
+      "enabled": true,
+      "severity": "error"
+    },
+    "CLK_002": {
+      "enabled": true,
+      "severity": "error"
+    },
+    "CLK_003": {
+      "enabled": true,
+      "severity": "warning"
+    },
+    "CLK_004": {
+      "enabled": true,
+      "severity": "warning"
+    },
+    "RST_001": {
+      "enabled": true,
+      "severity": "warning"
+    },
+    "RST_002": {
+      "enabled": true,
+      "severity": "error"
+    },
+    "RST_003": {
+      "enabled": true,
+      "severity": "warning"
+    },
+    "RST_004": {
+      "enabled": true,
+      "severity": "warning"
+    },
+    "TIM_001": {
+      "enabled": true,
+      "severity": "error"
+    },
+    "TIM_002": {
+      "enabled": true,
+      "severity": "warning"
+    },
+    "NAM_001": {
+      "enabled": true,
+      "severity": "info",
+      "exclude_modules": ["legacy_*"]
+    },
+    "NAM_002": {
+      "enabled": true,
+      "severity": "info",
+      "parameters": {
+        "min_length": "3"
+      }
+    },
+    "NAM_003": {
+      "enabled": true,
+      "severity": "info"
+    },
+    "NAM_004": {
+      "enabled": true,
+      "severity": "info"
+    },
+    "NAM_005": {
+      "enabled": true,
+      "severity": "info"
+    },
+    "NAM_006": {
+      "enabled": true,
+      "severity": "info"
+    },
+    "NAM_007": {
+      "enabled": true,
+      "severity": "warning"
+    },
+    "WID_001": {
+      "enabled": true,
+      "severity": "warning"
+    },
+    "WID_002": {
+      "enabled": true,
+      "severity": "warning"
+    },
+    "WID_003": {
+      "enabled": true,
+      "severity": "warning"
+    },
+    "WID_004": {
+      "enabled": true,
+      "severity": "info"
+    },
+    "WID_005": {
+      "enabled": true,
+      "severity": "warning"
+    },
+    "PWR_001": {
+      "enabled": false,
+      "severity": "info"
+    },
+    "PWR_002": {
+      "enabled": false,
+      "severity": "info"
+    },
+    "PWR_003": {
+      "enabled": false,
+      "severity": "info"
+    },
+    "PWR_004": {
+      "enabled": false,
+      "severity": "info"
+    },
+    "PWR_005": {
+      "enabled": false,
+      "severity": "info"
+    },
+    "STR_001": {
+      "enabled": true,
+      "severity": "info",
+      "exclude_files": ["*_tb.sv"]
+    },
+    "STR_002": {
+      "enabled": true,
+      "severity": "info",
+      "parameters": {
+        "max_statements": "50"
+      },
+      "exclude_files": ["*_tb.sv"]
+    },
+    "STR_003": {
+      "enabled": true,
+      "severity": "info",
+      "parameters": {
+        "max_depth": "5"
+      }
+    },
+    "STR_004": {
+      "enabled": true,
+      "severity": "info",
+      "exclude_modules": ["generated_*"]
+    },
+    "STR_005": {
+      "enabled": true,
+      "severity": "info"
+    },
+    "STR_006": {
+      "enabled": true,
+      "severity": "info",
+      "exclude_files": ["primitives/*.sv"]
+    },
+    "STR_007": {
+      "enabled": true,
+      "severity": "info"
+    },
+    "STR_008": {
+      "enabled": true,
+      "severity": "warning"
+    }
+  },
+  "exclude_files": [
+    "vendor/**/*.sv",
+    "generated/**/*.sv",
+    "legacy/**/*.sv"
+  ],
+  "exclude_modules": [
+    "tb_*",
+    "test_*",
+    "*_wrapper"
+  ]
+}
+
