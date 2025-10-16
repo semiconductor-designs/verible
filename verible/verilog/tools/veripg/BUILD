@@ -37,6 +37,27 @@ cc_library(
     ],
 )
 
+cc_binary(
+    name = "veripg-validator-bin",
+    srcs = ["veripg-main.cc"],
+    deps = [
+        ":veripg-validator",
+        ":output-formatter",
+        ":batch-processor",
+        ":rule-config",
+        "//verible/common/util:init-command-line",
+        "//verible/verilog/analysis:symbol-table",
+        "//verible/verilog/analysis:type-checker",
+        "//verible/verilog/analysis:type-inference",
+        "//verible/verilog/analysis:verilog-project",
+        "@abseil-cpp//absl/flags:flag",
+        "@abseil-cpp//absl/flags:parse",
+        "@abseil-cpp//absl/flags:usage",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
 cc_test(
     name = "rule-config_test",
     srcs = ["rule-config_test.cc"],
