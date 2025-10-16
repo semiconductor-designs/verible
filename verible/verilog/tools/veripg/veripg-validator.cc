@@ -1494,47 +1494,180 @@ std::string VeriPGValidator::GenerateFixRST_001(
 absl::Status VeriPGValidator::CheckNamingViolations(
     const verilog::SymbolTable& symbol_table,
     std::vector<Violation>& violations) {
-  // Simplified framework implementation for TDD
-  // Complete implementation would require full symbol table traversal
+  // Full implementation with symbol table traversal
   
-  // Check if symbol table has any content
   const auto& root = symbol_table.Root();
   if (root.Children().empty()) {
-    return absl::OkStatus();  // Empty symbol table, no violations
+    return absl::OkStatus();  // Empty symbol table
   }
   
-  // For non-empty symbol tables, generate sample violations to test framework
+  // Helper: Check if string is snake_case
+  auto is_snake_case = [](const std::string& name) -> bool {
+    if (name.empty()) return false;
+    if (std::isupper(name[0])) return false;  // First char must be lowercase
+    for (char c : name) {
+      if (!(std::islower(c) || std::isdigit(c) || c == '_')) {
+        return false;
+      }
+    }
+    return true;
+  };
   
-  // NAM_001: Module naming convention
-  Violation v1;
-  v1.rule = RuleId::kNAM_001;
-  v1.severity = Severity::kWarning;
-  v1.message = "module name should be lowercase_with_underscores";
-  v1.signal_name = "MyModule";
-  v1.source_location = "";
-  v1.fix_suggestion = GenerateFixNAM_001("MyModule");
-  violations.push_back(v1);
+  // Helper: Check if string is UPPER_CASE
+  auto is_upper_case = [](const std::string& name) -> bool {
+    if (name.empty()) return false;
+    for (char c : name) {
+      if (!(std::isupper(c) || std::isdigit(c) || c == '_')) {
+        return false;
+      }
+    }
+    return true;
+  };
   
-  // NAM_002: Signal names too short
-  Violation v2;
-  v2.rule = RuleId::kNAM_002;
-  v2.severity = Severity::kWarning;
-  v2.message = "signal name too short or non-descriptive";
-  v2.signal_name = "a";
-  v2.source_location = "";
-  v2.fix_suggestion = "Use descriptive names (>= 3 characters)";
-  violations.push_back(v2);
+  // Helper: Check if name contains reserved keywords
+  auto contains_reserved = [](const std::string& name) -> bool {
+    static const std::set<std::string> reserved = {
+      "input", "output", "inout", "wire", "reg", "logic", "bit",
+      "byte", "int", "integer", "real", "time", "module", "endmodule",
+      "always", "initial", "if", "else", "case", "for", "while"
+    };
+    std::string lower_name = name;
+    std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::tolower);
+    return reserved.count(lower_name) > 0;
+  };
   
-  // NAM_003: Parameter naming
-  Violation v3;
-  v3.rule = RuleId::kNAM_003;
-  v3.severity = Severity::kWarning;
-  v3.message = "parameter names should be UPPER_CASE";
-  v3.signal_name = "width";
-  v3.source_location = "";
-  v3.fix_suggestion = "Convert to UPPER_CASE: e.g., WIDTH, DATA_WIDTH";
-  violations.push_back(v3);
+  // Traverse symbol table
+  std::function<void(const verilog::SymbolTableNode&)> traverse = 
+      [&](const verilog::SymbolTableNode& node) {
+    // Iterate over children using range-based for loop
+    for (const auto& [name, child_node] : node) {
+      const auto& def_info = child_node.Value();
+      const std::string node_name(name);
+      
+      if (node_name.empty()) {
+        // Recurse to children
+        traverse(child_node);
+        continue;
+      }
+    
+      // NAM_001: Module names should be snake_case
+      if (def_info.metatype == verilog::SymbolMetaType::kModule) {
+        if (!is_snake_case(node_name)) {
+          Violation v;
+          v.rule = RuleId::kNAM_001;
+          v.severity = Severity::kWarning;
+          v.message = "module name should be lowercase_with_underscores";
+          v.signal_name = node_name;
+          v.source_location = "";
+          v.fix_suggestion = GenerateFixNAM_001(node_name);
+          violations.push_back(v);
+        }
+      }
+      
+      // NAM_002: Signal names should be descriptive (>= 3 chars)
+      if (def_info.metatype == verilog::SymbolMetaType::kDataNetVariableInstance) {
+        if (node_name.length() < 3) {
+          Violation v;
+          v.rule = RuleId::kNAM_002;
+          v.severity = Severity::kWarning;
+          v.message = "signal name too short or non-descriptive";
+          v.signal_name = node_name;
+          v.source_location = "";
+          v.fix_suggestion = "Use descriptive names (>= 3 characters)";
+          violations.push_back(v);
+        }
+      }
+      
+      // NAM_003: Parameter names should be UPPER_CASE
+      if (def_info.metatype == verilog::SymbolMetaType::kParameter) {
+        if (!is_upper_case(node_name)) {
+          Violation v;
+          v.rule = RuleId::kNAM_003;
+          v.severity = Severity::kWarning;
+          v.message = "parameter names should be UPPER_CASE";
+          v.signal_name = node_name;
+          v.source_location = "";
+          v.fix_suggestion = "Convert to UPPER_CASE: e.g., " + node_name;
+          violations.push_back(v);
+        }
+      }
+      
+      // NAM_004: Clock signals should start with "clk_"
+      if (def_info.metatype == verilog::SymbolMetaType::kDataNetVariableInstance) {
+        std::string lower_name = node_name;
+        std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::tolower);
+        if (lower_name.find("clk") != std::string::npos || 
+            lower_name.find("clock") != std::string::npos) {
+          if (node_name.substr(0, 4) != "clk_" && node_name.substr(0, 6) != "clock_") {
+            Violation v;
+            v.rule = RuleId::kNAM_004;
+            v.severity = Severity::kWarning;
+            v.message = "clock signals should start with 'clk_' prefix";
+            v.signal_name = node_name;
+            v.source_location = "";
+            v.fix_suggestion = "Rename to: clk_" + node_name;
+            violations.push_back(v);
+          }
+        }
+      }
+      
+      // NAM_005: Reset signals should start with "rst_" or "rstn_"
+      if (def_info.metatype == verilog::SymbolMetaType::kDataNetVariableInstance) {
+        std::string lower_name = node_name;
+        std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::tolower);
+        if (lower_name.find("rst") != std::string::npos || 
+            lower_name.find("reset") != std::string::npos) {
+          if (node_name.substr(0, 4) != "rst_" && node_name.substr(0, 5) != "rstn_") {
+            Violation v;
+            v.rule = RuleId::kNAM_005;
+            v.severity = Severity::kWarning;
+            v.message = "reset signals should start with 'rst_' or 'rstn_' prefix";
+            v.signal_name = node_name;
+            v.source_location = "";
+            v.fix_suggestion = "Rename to: rst_" + node_name + " or rstn_" + node_name;
+            violations.push_back(v);
+          }
+        }
+      }
+      
+      // NAM_006: Active-low signals should end with "_n"
+      if (def_info.metatype == verilog::SymbolMetaType::kDataNetVariableInstance) {
+        std::string lower_name = node_name;
+        std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::tolower);
+        if (lower_name.find("low") != std::string::npos || 
+            lower_name.find("bar") != std::string::npos ||
+            lower_name.find("neg") != std::string::npos) {
+          if (node_name.length() < 2 || node_name.substr(node_name.length() - 2) != "_n") {
+            Violation v;
+            v.rule = RuleId::kNAM_006;
+            v.severity = Severity::kWarning;
+            v.message = "active-low signals should end with '_n' suffix";
+            v.signal_name = node_name;
+            v.source_location = "";
+            v.fix_suggestion = "Rename to: " + node_name + "_n";
+            violations.push_back(v);
+          }
+        }
+      }
+      
+      // NAM_007: No reserved keywords as identifiers
+      if (contains_reserved(node_name)) {
+        Violation v;
+        v.rule = RuleId::kNAM_007;
+        v.severity = Severity::kError;
+        v.message = "reserved keyword used as identifier";
+        v.signal_name = node_name;
+        v.source_location = "";
+        v.fix_suggestion = "Use a different name (e.g., " + node_name + "_sig)";
+        violations.push_back(v);
+      }
+      
+      // Recurse to children
+      traverse(child_node);
+    }
+  };
   
+  traverse(root);
   return absl::OkStatus();
 }
 
