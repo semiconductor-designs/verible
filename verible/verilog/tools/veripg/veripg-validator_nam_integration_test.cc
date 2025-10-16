@@ -146,6 +146,117 @@ TEST_F(VeriPGValidatorNAMIntegrationTest, DetectParameterNamingViolation) {
   EXPECT_TRUE(found_nam_003) << "Should detect NAM_003 for parameter naming";
 }
 
+// Test NAM_004: Clock signals should start with "clk_"
+TEST_F(VeriPGValidatorNAMIntegrationTest, DetectClockNamingViolation) {
+  const std::string test_file = 
+      "verible/verilog/tools/veripg/testdata/nam_clock_naming_violation.sv";
+  
+  VerilogProject project(".", {});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  if (!file_or.ok()) GTEST_SKIP() << "Test file not found";
+  
+  auto* file = file_or.value();
+  ASSERT_NE(file, nullptr);
+  ASSERT_TRUE(file->Status().ok()) << file->Status().message();
+  
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> diagnostics;
+  symbol_table.Build(&diagnostics);
+  ASSERT_TRUE(diagnostics.empty());
+  
+  analysis::TypeInference type_inference(&symbol_table);
+  analysis::TypeChecker type_checker(&symbol_table, &type_inference);
+  VeriPGValidator validator(&type_checker);
+  std::vector<Violation> violations;
+  
+  auto check_status = validator.CheckNamingViolations(symbol_table, violations, &project);
+  ASSERT_TRUE(check_status.ok()) << check_status.message();
+  
+  bool found_nam_004 = false;
+  for (const auto& v : violations) {
+    if (v.rule == RuleId::kNAM_004) {
+      found_nam_004 = true;
+      EXPECT_EQ(v.severity, Severity::kWarning);
+      EXPECT_THAT(v.message, HasSubstr("clk_"));
+    }
+  }
+  EXPECT_TRUE(found_nam_004) << "Should detect NAM_004 for clock naming";
+}
+
+// Test NAM_005: Reset signals should start with "rst_" or "rstn_"
+TEST_F(VeriPGValidatorNAMIntegrationTest, DetectResetNamingViolation) {
+  const std::string test_file = 
+      "verible/verilog/tools/veripg/testdata/nam_reset_naming_violation.sv";
+  
+  VerilogProject project(".", {});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  if (!file_or.ok()) GTEST_SKIP() << "Test file not found";
+  
+  auto* file = file_or.value();
+  ASSERT_NE(file, nullptr);
+  ASSERT_TRUE(file->Status().ok()) << file->Status().message();
+  
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> diagnostics;
+  symbol_table.Build(&diagnostics);
+  ASSERT_TRUE(diagnostics.empty());
+  
+  analysis::TypeInference type_inference(&symbol_table);
+  analysis::TypeChecker type_checker(&symbol_table, &type_inference);
+  VeriPGValidator validator(&type_checker);
+  std::vector<Violation> violations;
+  
+  auto check_status = validator.CheckNamingViolations(symbol_table, violations, &project);
+  ASSERT_TRUE(check_status.ok()) << check_status.message();
+  
+  bool found_nam_005 = false;
+  for (const auto& v : violations) {
+    if (v.rule == RuleId::kNAM_005) {
+      found_nam_005 = true;
+      EXPECT_EQ(v.severity, Severity::kWarning);
+      EXPECT_THAT(v.message, HasSubstr("rst_"));
+    }
+  }
+  EXPECT_TRUE(found_nam_005) << "Should detect NAM_005 for reset naming";
+}
+
+// Test NAM_006: Active-low signals should end with "_n"
+TEST_F(VeriPGValidatorNAMIntegrationTest, DetectActiveLowNamingViolation) {
+  const std::string test_file = 
+      "verible/verilog/tools/veripg/testdata/nam_active_low_naming_violation.sv";
+  
+  VerilogProject project(".", {});
+  auto file_or = project.OpenTranslationUnit(test_file);
+  if (!file_or.ok()) GTEST_SKIP() << "Test file not found";
+  
+  auto* file = file_or.value();
+  ASSERT_NE(file, nullptr);
+  ASSERT_TRUE(file->Status().ok()) << file->Status().message();
+  
+  SymbolTable symbol_table(&project);
+  std::vector<absl::Status> diagnostics;
+  symbol_table.Build(&diagnostics);
+  ASSERT_TRUE(diagnostics.empty());
+  
+  analysis::TypeInference type_inference(&symbol_table);
+  analysis::TypeChecker type_checker(&symbol_table, &type_inference);
+  VeriPGValidator validator(&type_checker);
+  std::vector<Violation> violations;
+  
+  auto check_status = validator.CheckNamingViolations(symbol_table, violations, &project);
+  ASSERT_TRUE(check_status.ok()) << check_status.message();
+  
+  bool found_nam_006 = false;
+  for (const auto& v : violations) {
+    if (v.rule == RuleId::kNAM_006) {
+      found_nam_006 = true;
+      EXPECT_EQ(v.severity, Severity::kWarning);
+      EXPECT_THAT(v.message, HasSubstr("_n"));
+    }
+  }
+  EXPECT_TRUE(found_nam_006) << "Should detect NAM_006 for active-low naming";
+}
+
 }  // namespace
 }  // namespace tools
 }  // namespace verilog

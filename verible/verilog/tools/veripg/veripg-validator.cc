@@ -33,6 +33,8 @@
 #include "verible/verilog/CST/verilog-nonterminals.h"
 #include "verible/verilog/CST/statement.h"
 #include "verible/verilog/CST/parameters.h"
+#include "verible/verilog/CST/port.h"
+#include "verible/verilog/CST/net.h"
 #include "verible/common/analysis/matcher/matcher.h"
 #include "verible/common/analysis/syntax-tree-search.h"
 #include "verible/verilog/parser/verilog-token-enum.h"
@@ -1598,7 +1600,7 @@ absl::Status VeriPGValidator::CheckNamingViolations(
     traverse_st(root);
   }
   
-  // PART 2: Traverse CST for parameters (NAM_003)
+  // PART 2: Traverse CST for parameters and signals (NAM_003-006)
   if (project) {
     // Iterate through all files in the project
     for (auto it = project->begin(); it != project->end(); ++it) {
@@ -1611,13 +1613,12 @@ absl::Status VeriPGValidator::CheckNamingViolations(
       const auto& syntax_tree = text_structure->SyntaxTree();
       if (!syntax_tree) continue;
       
-      // Find all parameter declarations using CST matcher
+      // NAM_003: Find all parameter declarations
       auto param_matchers = verilog::FindAllParamDeclarations(*syntax_tree);
       
       for (const auto& match : param_matchers) {
         if (!match.match) continue;
         
-        // Get all parameter name tokens
         auto param_tokens = verilog::GetAllParameterNameTokens(*match.match);
         
         for (const auto* token : param_tokens) {
@@ -1625,7 +1626,6 @@ absl::Status VeriPGValidator::CheckNamingViolations(
           
           const std::string param_name(token->text());
           
-          // NAM_003: Parameter names should be UPPER_CASE
           if (!is_upper_case(param_name)) {
             Violation v;
             v.rule = RuleId::kNAM_003;
@@ -1636,25 +1636,133 @@ absl::Status VeriPGValidator::CheckNamingViolations(
             v.fix_suggestion = "Convert to UPPER_CASE";
             violations.push_back(v);
           }
-          
-          // NAM_007: No reserved keywords as identifiers (also check parameters)
-          if (contains_reserved(param_name)) {
+        }
+      }
+      
+      // NAM_004-006: Find all port declarations
+      auto port_decls = verilog::FindAllModulePortDeclarations(*syntax_tree);
+      
+      for (const auto& match : port_decls) {
+        if (!match.match) continue;
+        
+        const auto* id_leaf = verilog::GetIdentifierFromModulePortDeclaration(*match.match);
+        if (!id_leaf) continue;
+        
+        const std::string signal_name(id_leaf->get().text());
+        std::string lower_name = signal_name;
+        std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::tolower);
+        
+        // NAM_004: Clock signals should start with "clk_"
+        if (lower_name.find("clk") != std::string::npos || 
+            lower_name.find("clock") != std::string::npos) {
+          if (signal_name.substr(0, 4) != "clk_") {
             Violation v;
-            v.rule = RuleId::kNAM_007;
-            v.severity = Severity::kError;
-            v.message = "reserved keyword used as parameter identifier";
-            v.signal_name = param_name;
+            v.rule = RuleId::kNAM_004;
+            v.severity = Severity::kWarning;
+            v.message = "clock signals should start with 'clk_' prefix";
+            v.signal_name = signal_name;
             v.source_location = "";
-            v.fix_suggestion = "Use a different name (e.g., " + param_name + "_param)";
+            v.fix_suggestion = "Rename to: clk_" + lower_name;
             violations.push_back(v);
+          }
+        }
+        
+        // NAM_005: Reset signals should start with "rst_" or "rstn_"
+        if (lower_name.find("rst") != std::string::npos || 
+            lower_name.find("reset") != std::string::npos) {
+          if (signal_name.substr(0, 4) != "rst_" && signal_name.substr(0, 5) != "rstn_") {
+            Violation v;
+            v.rule = RuleId::kNAM_005;
+            v.severity = Severity::kWarning;
+            v.message = "reset signals should start with 'rst_' or 'rstn_' prefix";
+            v.signal_name = signal_name;
+            v.source_location = "";
+            v.fix_suggestion = "Rename to: rst_" + lower_name;
+            violations.push_back(v);
+          }
+        }
+        
+        // NAM_006: Active-low signals should end with "_n"
+        if (lower_name.find("low") != std::string::npos || 
+            lower_name.find("bar") != std::string::npos ||
+            lower_name.find("neg") != std::string::npos) {
+          if (signal_name.length() < 2 || signal_name.substr(signal_name.length() - 2) != "_n") {
+            Violation v;
+            v.rule = RuleId::kNAM_006;
+            v.severity = Severity::kWarning;
+            v.message = "active-low signals should end with '_n' suffix";
+            v.signal_name = signal_name;
+            v.source_location = "";
+            v.fix_suggestion = "Rename to: " + signal_name + "_n";
+            violations.push_back(v);
+          }
+        }
+      }
+      
+      // NAM_004-006: Also check internal net declarations
+      auto net_decls = verilog::FindAllNetDeclarations(*syntax_tree);
+      
+      for (const auto& match : net_decls) {
+        if (!match.match) continue;
+        
+        auto net_tokens = verilog::GetIdentifiersFromNetDeclaration(*match.match);
+        
+        for (const auto* token : net_tokens) {
+          if (!token) continue;
+          
+          const std::string signal_name(token->text());
+          std::string lower_name = signal_name;
+          std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::tolower);
+          
+          // NAM_004: Clock signals
+          if (lower_name.find("clk") != std::string::npos || 
+              lower_name.find("clock") != std::string::npos) {
+            if (signal_name.substr(0, 4) != "clk_") {
+              Violation v;
+              v.rule = RuleId::kNAM_004;
+              v.severity = Severity::kWarning;
+              v.message = "clock signals should start with 'clk_' prefix";
+              v.signal_name = signal_name;
+              v.source_location = "";
+              v.fix_suggestion = "Rename to: clk_" + lower_name;
+              violations.push_back(v);
+            }
+          }
+          
+          // NAM_005: Reset signals
+          if (lower_name.find("rst") != std::string::npos || 
+              lower_name.find("reset") != std::string::npos) {
+            if (signal_name.substr(0, 4) != "rst_" && signal_name.substr(0, 5) != "rstn_") {
+              Violation v;
+              v.rule = RuleId::kNAM_005;
+              v.severity = Severity::kWarning;
+              v.message = "reset signals should start with 'rst_' or 'rstn_' prefix";
+              v.signal_name = signal_name;
+              v.source_location = "";
+              v.fix_suggestion = "Rename to: rst_" + lower_name;
+              violations.push_back(v);
+            }
+          }
+          
+          // NAM_006: Active-low signals
+          if (lower_name.find("low") != std::string::npos || 
+              lower_name.find("bar") != std::string::npos ||
+              lower_name.find("neg") != std::string::npos) {
+            if (signal_name.length() < 2 || signal_name.substr(signal_name.length() - 2) != "_n") {
+              Violation v;
+              v.rule = RuleId::kNAM_006;
+              v.severity = Severity::kWarning;
+              v.message = "active-low signals should end with '_n' suffix";
+              v.signal_name = signal_name;
+              v.source_location = "";
+              v.fix_suggestion = "Rename to: " + signal_name + "_n";
+              violations.push_back(v);
+            }
           }
         }
       }
     }
   }
-  
-  // TODO: NAM_004-006 require more complex CST analysis (clock/reset pattern matching)
-  // These will be implemented in next iteration with signal usage analysis
   
   return absl::OkStatus();
 }
