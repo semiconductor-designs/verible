@@ -197,11 +197,13 @@ class VeriPGValidator {
   
   // Check power intent violations (PWR_001-005)
   absl::Status CheckPowerViolations(const verilog::SymbolTable& symbol_table,
-                                    std::vector<Violation>& violations);
+                                    std::vector<Violation>& violations,
+                                    const verilog::VerilogProject* project = nullptr);
   
   // Check structural violations (STR_001-008)
   absl::Status CheckStructureViolations(const verilog::SymbolTable& symbol_table,
-                                        std::vector<Violation>& violations);
+                                        std::vector<Violation>& violations,
+                                        const verilog::VerilogProject* project = nullptr);
   
   // Week 3: Auto-fix generators (2 generators for STR_005, STR_006)
   

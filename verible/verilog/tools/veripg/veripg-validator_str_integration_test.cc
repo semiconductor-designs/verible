@@ -32,50 +32,95 @@ using ::testing::HasSubstr;
 
 class VeriPGValidatorSTRIntegrationTest : public ::testing::Test {
  protected:
-  // Framework tests for Structure rules
+  // Structure validation tests
 };
 
-// Test: STR rules framework
-TEST_F(VeriPGValidatorSTRIntegrationTest, DetectStructureViolationsFramework) {
-  const std::string testdata_dir = "verible/verilog/tools/veripg/testdata/str/";
-  const std::string test_file = testdata_dir + "str_no_ports_violation.sv";
-  
-  VerilogProject project(".", std::vector<std::string>{});
-  auto file_or = project.OpenTranslationUnit(test_file);
-  if (!file_or.ok()) GTEST_SKIP() << "Test file not found";
-  
-  auto* file = file_or.value();
-  ASSERT_NE(file, nullptr);
-  ASSERT_TRUE(file->Status().ok()) << file->Status().message();
-  
-  SymbolTable symbol_table(&project);
-  std::vector<absl::Status> diagnostics;
-  symbol_table.Build(&diagnostics);
-  ASSERT_TRUE(diagnostics.empty());
-  
-  analysis::TypeInference type_inference(&symbol_table);
-  analysis::TypeChecker type_checker(&symbol_table, &type_inference);
-  VeriPGValidator validator(&type_checker);
-  std::vector<Violation> violations;
-  
-  auto status = validator.CheckStructureViolations(symbol_table, violations);
-  ASSERT_TRUE(status.ok()) << status.message();
-  
-  // Framework test: verify violations are generated
-  EXPECT_GE(violations.size(), 1) << "Should generate sample violations";
-  
-  // Check for STR rule violations
-  bool found_str = false;
-  for (const auto& v : violations) {
-    if (v.rule == RuleId::kSTR_001 || v.rule == RuleId::kSTR_005 || v.rule == RuleId::kSTR_008) {
-      found_str = true;
-      EXPECT_EQ(v.severity, Severity::kWarning);
-    }
-  }
-  EXPECT_TRUE(found_str) << "Should detect STR violations";
+// Helper macro for STR tests
+#define STR_TEST(test_name, file_name, rule_id, keyword) \
+TEST_F(VeriPGValidatorSTRIntegrationTest, test_name) { \
+  const std::string test_file = \
+      "verible/verilog/tools/veripg/testdata/" file_name; \
+  \
+  VerilogProject project(".", {}); \
+  auto file_or = project.OpenTranslationUnit(test_file); \
+  if (!file_or.ok()) GTEST_SKIP() << "Test file not found"; \
+  \
+  auto* file = file_or.value(); \
+  ASSERT_NE(file, nullptr); \
+  ASSERT_TRUE(file->Status().ok()) << file->Status().message(); \
+  \
+  SymbolTable symbol_table(&project); \
+  std::vector<absl::Status> diagnostics; \
+  symbol_table.Build(&diagnostics); \
+  ASSERT_TRUE(diagnostics.empty()); \
+  \
+  analysis::TypeInference type_inference(&symbol_table); \
+  analysis::TypeChecker type_checker(&symbol_table, &type_inference); \
+  VeriPGValidator validator(&type_checker); \
+  std::vector<Violation> violations; \
+  \
+  auto status = validator.CheckStructureViolations(symbol_table, violations, &project); \
+  ASSERT_TRUE(status.ok()) << status.message(); \
+  \
+  bool found = false; \
+  for (const auto& v : violations) { \
+    if (v.rule == rule_id) { \
+      found = true; \
+      EXPECT_EQ(v.severity, Severity::kWarning); \
+      EXPECT_THAT(v.message, HasSubstr(keyword)); \
+    } \
+  } \
+  EXPECT_TRUE(found) << "Should detect " #rule_id; \
 }
+
+// STR_001: Module has no ports (should be testbench)
+STR_TEST(DetectModuleNoPorts,
+         "str_module_no_ports.sv",
+         RuleId::kSTR_001,
+         "ports")
+
+// STR_002: Module exceeds complexity threshold
+STR_TEST(DetectHighComplexity,
+         "str_high_complexity.sv",
+         RuleId::kSTR_002,
+         "complexity")
+
+// STR_003: Deep hierarchy (>5 levels)
+STR_TEST(DetectDeepHierarchy,
+         "str_deep_hierarchy.sv",
+         RuleId::kSTR_003,
+         "hierarchy")
+
+// STR_004: Missing module header comment
+STR_TEST(DetectMissingHeader,
+         "str_missing_header.sv",
+         RuleId::kSTR_004,
+         "header")
+
+// STR_005: Wrong port ordering
+STR_TEST(DetectWrongPortOrder,
+         "str_wrong_port_order.sv",
+         RuleId::kSTR_005,
+         "order")
+
+// STR_006: Instantiation without named ports
+STR_TEST(DetectUnnamedPorts,
+         "str_unnamed_ports.sv",
+         RuleId::kSTR_006,
+         "named")
+
+// STR_007: Generate block without label
+STR_TEST(DetectUnlabeledGenerate,
+         "str_unlabeled_generate.sv",
+         RuleId::kSTR_007,
+         "label")
+
+// STR_008: Case statement without default clause
+STR_TEST(DetectMissingDefault,
+         "str_missing_default.sv",
+         RuleId::kSTR_008,
+         "default")
 
 }  // namespace
 }  // namespace tools
 }  // namespace verilog
-
