@@ -1,0 +1,69 @@
+Computing main repo mapping: 
+Loading: 
+Loading: 0 packages loaded
+WARNING: Build option --compilation_mode has changed, discarding analysis cache (this can be expensive, see https://bazel.build/advanced/performance/iteration-speed).
+Analyzing: target //verible/verilog/tools/veripg:veripg-validator-bin (0 packages loaded, 0 targets configured)
+Analyzing: target //verible/verilog/tools/veripg:veripg-validator-bin (0 packages loaded, 0 targets configured)
+
+INFO: Analyzed target //verible/verilog/tools/veripg:veripg-validator-bin (0 packages loaded, 2831 targets configured).
+INFO: From Executing genrule //verible/verilog/parser:verilog-lex:
+verible/verilog/parser/verilog.lex:309: warning, rule cannot be matched
+verible/verilog/parser/verilog.lex:724: warning, rule cannot be matched
+verible/verilog/parser/verilog.lex:965: warning, rule cannot be matched
+[525 / 738] Compiling absl/log/initialize.cc; 1s darwin-sandbox ... (10 actions running)
+[526 / 738] Compiling verible/verilog/analysis/type-representation.cc; 2s darwin-sandbox ... (10 actions, 9 running)
+[563 / 769] Compiling verible/verilog/analysis/verilog-filelist.cc; 3s darwin-sandbox ... (10 actions, 9 running)
+[600 / 790] Compiling absl/numeric/int128.cc; 1s darwin-sandbox ... (10 actions, 9 running)
+[636 / 804] Compiling absl/random/internal/randen.cc; 0s darwin-sandbox ... (10 actions, 9 running)
+[651 / 814] Compiling verible/common/text/text-structure.cc; 1s darwin-sandbox ... (10 actions, 9 running)
+[674 / 829] Compiling verible/common/text/text-structure.cc; 3s darwin-sandbox ... (10 actions, 9 running)
+[724 / 867] Compiling verible/common/util/file-util.cc; 1s darwin-sandbox ... (10 actions, 9 running)
+INFO: From Linking verible/verilog/CST/libverilog-matchers.a:
+warning: /Library/Developer/CommandLineTools/usr/bin/libtool: archive library: bazel-out/darwin_arm64-opt/bin/verible/verilog/CST/libverilog-matchers.a the table of contents is empty (no object file members in the library define global symbols)
+[778 / 913] Compiling absl/log/internal/log_sink_set.cc; 0s darwin-sandbox ... (11 actions, 10 running)
+[803 / 928] Compiling absl/flags/parse.cc; 1s darwin-sandbox ... (11 actions, 10 running)
+[815 / 932] Compiling absl/flags/parse.cc; 2s darwin-sandbox ... (10 actions running)
+[857 / 976] Compiling verible/verilog/CST/module.cc; 1s darwin-sandbox ... (10 actions running)
+[901 / 1,024] Compiling verible/verilog/CST/package.cc; 0s darwin-sandbox ... (10 actions, 9 running)
+[930 / 1,037] Compiling absl/status/status.cc; 1s darwin-sandbox ... (11 actions, 10 running)
+[953 / 1,050] Compiling absl/synchronization/mutex.cc; 0s darwin-sandbox ... (11 actions, 10 running)
+[981 / 1,094] Compiling absl/strings/cord.cc; 1s darwin-sandbox ... (11 actions, 10 running)
+[1,005 / 1,118] Compiling absl/strings/internal/cord_rep_btree_navigator.cc; 0s darwin-sandbox ... (10 actions running)
+[1,022 / 1,121] Compiling absl/time/internal/cctz/src/time_zone_format.cc; 1s darwin-sandbox ... (10 actions running)
+[1,034 / 1,121] Compiling absl/crc/internal/crc_x86_arm_combined.cc; 1s darwin-sandbox ... (11 actions, 10 running)
+[1,037 / 1,121] Compiling absl/crc/internal/crc_x86_arm_combined.cc; 2s darwin-sandbox ... (11 actions, 10 running)
+[1,046 / 1,121] Compiling absl/time/internal/cctz/src/time_zone_impl.cc; 1s darwin-sandbox ... (11 actions, 10 running)
+[1,053 / 1,121] Compiling absl/strings/internal/str_format/float_conversion.cc; 1s darwin-sandbox ... (11 actions, 10 running)
+[1,067 / 1,121] Compiling absl/time/internal/cctz/src/time_zone_info.cc; 1s darwin-sandbox ... (11 actions, 10 running)
+[1,069 / 1,121] Compiling absl/time/internal/cctz/src/time_zone_info.cc; 2s darwin-sandbox ... (11 actions, 10 running)
+[1,074 / 1,121] Compiling absl/time/internal/cctz/src/time_zone_info.cc; 3s darwin-sandbox ... (11 actions, 10 running)
+[1,086 / 1,121] Compiling verible/verilog/parser/verilog-final.tab.cc; 1s darwin-sandbox ... (11 actions, 10 running)
+[1,094 / 1,121] Compiling verible/verilog/parser/verilog-final.tab.cc; 2s darwin-sandbox ... (11 actions, 9 running)
+[1,100 / 1,121] Compiling verible/verilog/parser/verilog-final.tab.cc; 3s darwin-sandbox ... (10 actions running)
+INFO: From Compiling verible/verilog/analysis/type-checker.cc:
+In file included from verible/verilog/analysis/type-checker.cc:15:
+./verible/verilog/analysis/type-checker.h:183:22: warning: private field 'symbol_table_' is not used [-Wunused-private-field]
+  183 |   const SymbolTable* symbol_table_;
+      |                      ^
+1 warning generated.
+[1,107 / 1,121] Compiling verible/verilog/parser/verilog-final.tab.cc; 4s darwin-sandbox ... (7 actions running)
+INFO: From Compiling verible/verilog/tools/veripg/veripg-main.cc:
+verible/verilog/tools/veripg/veripg-main.cc:190:8: warning: unused variable 'generate_fixes' [-Wunused-variable]
+  190 |   bool generate_fixes = absl::GetFlag(FLAGS_fix);
+      |        ^~~~~~~~~~~~~~
+verible/verilog/tools/veripg/veripg-main.cc:195:8: warning: unused variable 'use_parallel' [-Wunused-variable]
+  195 |   bool use_parallel = absl::GetFlag(FLAGS_parallel);
+      |        ^~~~~~~~~~~~
+2 warnings generated.
+[1,116 / 1,121] Compiling verible/verilog/analysis/symbol-table.cc; 3s darwin-sandbox ... (2 actions running)
+INFO: From Compiling verible/verilog/tools/veripg/veripg-validator.cc:
+verible/verilog/tools/veripg/veripg-validator.cc:1784:8: warning: unused variable 'extract_width' [-Wunused-variable]
+ 1784 |   auto extract_width = [](const std::string& dim_text) -> int {
+      |        ^~~~~~~~~~~~~
+1 warning generated.
+INFO: Found 1 target...
+Target //verible/verilog/tools/veripg:veripg-validator-bin up-to-date:
+  bazel-bin/verible/verilog/tools/veripg/veripg-validator-bin
+INFO: Elapsed time: 32.914s, Critical Path: 9.83s
+INFO: 777 processes: 401 internal, 376 darwin-sandbox.
+INFO: Build completed successfully, 777 total actions
