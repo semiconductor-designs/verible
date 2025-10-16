@@ -115,6 +115,18 @@ class VeriPGValidator {
   absl::Status CheckTimingRules(const verilog::SymbolTable& symbol_table,
                                 std::vector<Violation>& violations);
 
+  // Week 1: Auto-fix generators (3 generators for CDC_001, CLK_001, RST_001)
+  
+  // Generate fix for CDC_001 (add 2-stage synchronizer)
+  std::string GenerateFixCDC_001(const std::string& signal_name,
+                                 const std::string& dest_clock) const;
+  
+  // Generate fix for CLK_001 (add missing clock in sensitivity list)
+  std::string GenerateFixCLK_001(const std::string& suggested_clock) const;
+  
+  // Generate fix for RST_001 (add missing reset logic)
+  std::string GenerateFixRST_001(const std::string& suggested_reset) const;
+
  private:
   const verilog::analysis::TypeChecker* type_checker_;
 };

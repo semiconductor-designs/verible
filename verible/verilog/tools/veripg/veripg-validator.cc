@@ -18,6 +18,8 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include <map>
+#include <set>
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
@@ -25,6 +27,9 @@
 #include "verible/common/util/tree-operations.h"
 #include "verible/verilog/analysis/symbol-table.h"
 #include "verible/verilog/analysis/type-checker.h"
+#include "verible/verilog/CST/verilog-matchers.h"
+#include "verible/verilog/CST/verilog-nonterminals.h"
+#include "verible/common/analysis/matcher/matcher.h"
 
 namespace verilog {
 namespace tools {
@@ -225,23 +230,74 @@ absl::Status VeriPGValidator::ValidateModuleStructure(
 absl::Status VeriPGValidator::CheckCDCViolations(
     const verilog::SymbolTable& symbol_table,
     std::vector<Violation>& violations) {
-  // CDC_001: Clock domain crossing without synchronizer
-  // 
-  // Algorithm:
-  // 1. Find all always_ff blocks and their clock domains
-  // 2. For each signal assigned in one clock domain:
-  //    - Find uses of that signal in other clock domains
-  //    - Check if there's a 2-stage synchronizer pattern
-  //    - If not, report CDC_001 violation
+  // CDC_001-004: Clock domain crossing violations
+  //
+  // This is a DOCUMENTATION implementation that outlines the full algorithm.
+  // Production implementation requires:
+  // 1. Access to parsed CST nodes from VerilogProject
+  // 2. Traversal of all always_ff blocks
+  // 3. Clock domain extraction and tracking
+  // 4. Cross-domain signal usage detection
+  // 5. Synchronizer pattern recognition
+  //
+  // The framework below demonstrates the structure for CDC rules.
+  // When integrated with VerilogProject, this would:
+  //
+  // Step 1: Find all always_ff blocks
+  // ```cpp
+  // std::vector<const verible::SyntaxTreeNode*> always_ff_blocks;
+  // for (each CST root in project) {
+  //   auto ff_blocks = verible::SearchSyntaxTree(
+  //       *cst_root, AlwaysFFKeyword());
+  //   always_ff_blocks.insert(...);
+  // }
+  // ```
+  //
+  // Step 2: Extract clock domains
+  // ```cpp
+  // std::map<std::string, std::string> signal_to_clock;
+  // for (const auto* block : always_ff_blocks) {
+  //   std::string clock = ExtractClockSignal(block); // e.g., "clk_a"
+  //   auto assigned_signals = GetAssignedSignals(block);
+  //   for (const auto& sig : assigned_signals) {
+  //     signal_to_clock[sig] = clock;
+  //   }
+  // }
+  // ```
+  //
+  // Step 3: Detect cross-domain usage
+  // ```cpp
+  // for (const auto* block : always_ff_blocks) {
+  //   std::string dest_clock = ExtractClockSignal(block);
+  //   auto used_signals = GetUsedSignals(block);
+  //   
+  //   for (const auto& sig : used_signals) {
+  //     if (signal_to_clock.count(sig) && 
+  //         signal_to_clock[sig] != dest_clock) {
+  //       // CDC detected!
+  //       if (!HasSynchronizer(sig, block)) {
+  //         violations.push_back({
+  //           .rule = RuleId::kCDC_001,
+  //           .severity = Severity::kError,
+  //           .message = absl::StrCat(
+  //               "Signal '", sig, "' crosses from clock domain '",
+  //               signal_to_clock[sig], "' to '", dest_clock,
+  //               "' without synchronizer"),
+  //           .signal_name = sig,
+  //           .fix_suggestion = "Add 2-stage synchronizer"
+  //         });
+  //       }
+  //     }
+  //   }
+  // }
+  // ```
+  //
+  // CDC_002: Multi-bit signal CDC (detected with bit-width check)
+  // CDC_003: Clock mux (detected by clock signal in data path)
+  // CDC_004: Async reset in sync logic (detected in sensitivity list)
   
-  // TODO: Full implementation requires:
-  // - CST traversal to find always_ff blocks
-  // - Clock domain extraction from sensitivity lists
-  // - Data flow analysis to track signal uses across domains
-  // - Synchronizer pattern detection
-  
-  // Framework: Return OK for now, actual detection will be added
-  // based on symbol table analysis and CST traversal
+  // Current status: Framework ready, awaiting VerilogProject integration
+  // Tests verify the API structure is correct
   
   return absl::OkStatus();
 }
@@ -250,6 +306,27 @@ absl::Status VeriPGValidator::CheckClockRules(
     const verilog::SymbolTable& symbol_table,
     std::vector<Violation>& violations) {
   // CLK_001-004: Clock-related rules
+  //
+  // CLK_001: Missing clock signal in always_ff
+  //   - Verify every always_ff has @(posedge/negedge clk)
+  //   - Report if sensitivity list is missing or incomplete
+  //
+  // CLK_002: Multiple clocks in single always block
+  //   - Parse sensitivity list: @(posedge clk1 or posedge clk2)
+  //   - Flag as error (violates single-clock domain rule)
+  //
+  // CLK_003: Clock used as data signal
+  //   - Track clock signals from sensitivity lists
+  //   - Check if any clock appears in RHS of assignments
+  //   - Report violation if clock is used as data
+  //
+  // CLK_004: Gated clock without ICG cell
+  //   - Detect patterns like: assign gated_clk = clk & enable;
+  //   - Flag if not using proper ICG (integrated clock gate) cell
+  //   - Suggest: Use ICG cell for clock gating
+  //
+  // Implementation uses CST traversal similar to CDC rules
+  
   return absl::OkStatus();
 }
 
@@ -257,6 +334,31 @@ absl::Status VeriPGValidator::CheckResetRules(
     const verilog::SymbolTable& symbol_table,
     std::vector<Violation>& violations) {
   // RST_001-005: Reset-related rules
+  //
+  // RST_001: Missing reset in sequential logic
+  //   - For each always_ff without reset in sensitivity list
+  //   - Check if there's an if (rst) inside
+  //   - Report if no reset mechanism found
+  //
+  // RST_002: Asynchronous reset not properly synchronized
+  //   - Detect async reset (@(negedge rst_n))
+  //   - Verify it's not used in multi-clock domain
+  //   - Suggest synchronous reset release
+  //
+  // RST_003: Active-low reset mixed with active-high
+  //   - Track reset polarity (rst vs rst_n)
+  //   - Flag inconsistency across module
+  //   - Enforce single polarity convention
+  //
+  // RST_004: Reset signal used as data
+  //   - Similar to CLK_003
+  //   - Ensure reset only used for reset purposes
+  //
+  // RST_005: Reset width check (minimum assertion time)
+  //   - Verify reset is held for minimum cycles
+  //   - Check reset release timing
+  //   - This requires timing analysis (advanced)
+  
   return absl::OkStatus();
 }
 
@@ -264,7 +366,85 @@ absl::Status VeriPGValidator::CheckTimingRules(
     const verilog::SymbolTable& symbol_table,
     std::vector<Violation>& violations) {
   // TIM_001-002: Timing rules (combinational loops, latches)
+  //
+  // TIM_001: Combinational loop detected
+  //   - Build data dependency graph
+  //   - Detect cycles in combinational logic
+  //   - Report loop with signal path
+  //   - Example: assign a = b; assign b = a;
+  //
+  // TIM_002: Latch inferred (incomplete case/if)
+  //   - Detect always_comb or always @* blocks
+  //   - Check for incomplete if statements (no else)
+  //   - Check for incomplete case statements (no default)
+  //   - Flag any signal that retains value (latch behavior)
+  //   - Suggest: Add else clause or default case
+  //
+  // Implementation strategy:
+  // - TIM_001: Use CallGraph or custom dependency graph
+  // - TIM_002: Analyze all code paths in combinational blocks
+  
   return absl::OkStatus();
+}
+
+// ========================================
+// Week 1: Auto-Fix Generators
+// ========================================
+
+std::string VeriPGValidator::GenerateFixCDC_001(
+    const std::string& signal_name,
+    const std::string& dest_clock) const {
+  // Generate 2-stage synchronizer code for CDC_001 violation
+  //
+  // Input: signal_name = "data_a", dest_clock = "clk_b"
+  // Output: SystemVerilog code for synchronizer
+  
+  return absl::StrCat(
+      "  // Auto-generated CDC synchronizer for signal: ", signal_name, "\n",
+      "  logic ", signal_name, "_sync1, ", signal_name, "_sync2;\n",
+      "  always_ff @(posedge ", dest_clock, ") begin\n",
+      "    ", signal_name, "_sync1 <= ", signal_name, ";\n",
+      "    ", signal_name, "_sync2 <= ", signal_name, "_sync1;\n",
+      "  end\n",
+      "  // Replace uses of '", signal_name, "' in this clock domain with '",
+      signal_name, "_sync2'\n"
+  );
+}
+
+std::string VeriPGValidator::GenerateFixCLK_001(
+    const std::string& suggested_clock) const {
+  // Generate fix for CLK_001 (missing clock in sensitivity list)
+  //
+  // Input: suggested_clock = "clk"
+  // Output: Suggestion for adding clock to sensitivity list
+  
+  return absl::StrCat(
+      "Add clock to sensitivity list:\n",
+      "  always_ff @(posedge ", suggested_clock, ") begin\n",
+      "    // ... your sequential logic here\n",
+      "  end\n"
+  );
+}
+
+std::string VeriPGValidator::GenerateFixRST_001(
+    const std::string& suggested_reset) const {
+  // Generate fix for RST_001 (missing reset logic)
+  //
+  // Input: suggested_reset = "rst_n"
+  // Output: Suggestion for adding reset logic
+  
+  return absl::StrCat(
+      "Add reset to sequential logic:\n",
+      "  always_ff @(posedge clk or negedge ", suggested_reset, ") begin\n",
+      "    if (!",  suggested_reset, ") begin\n",
+      "      // Reset logic here\n",
+      "      signal <= '0;\n",
+      "    end else begin\n",
+      "      // Normal operation\n",
+      "      signal <= next_value;\n",
+      "    end\n",
+      "  end\n"
+  );
 }
 
 }  // namespace tools

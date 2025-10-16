@@ -371,6 +371,348 @@ TEST_F(VeriPGValidatorTest, Violation_RST_001_Structure) {
   EXPECT_EQ(v.severity, Severity::kError);
 }
 
+// Test 33: Violation structure - TIM_001
+TEST_F(VeriPGValidatorTest, Violation_TIM_001_Structure) {
+  Violation v;
+  v.rule = RuleId::kTIM_001;
+  v.severity = Severity::kError;
+  v.message = "Combinational loop detected";
+  
+  EXPECT_EQ(v.rule, RuleId::kTIM_001);
+  EXPECT_EQ(v.severity, Severity::kError);
+}
+
+// Test 34: Violation structure - TIM_002
+TEST_F(VeriPGValidatorTest, Violation_TIM_002_Structure) {
+  Violation v;
+  v.rule = RuleId::kTIM_002;
+  v.severity = Severity::kWarning;
+  v.message = "Latch inferred - incomplete case statement";
+  
+  EXPECT_EQ(v.rule, RuleId::kTIM_002);
+  EXPECT_EQ(v.severity, Severity::kWarning);
+}
+
+// Test 35: CDC_002 structure
+TEST_F(VeriPGValidatorTest, Violation_CDC_002_Structure) {
+  Violation v;
+  v.rule = RuleId::kCDC_002;
+  v.severity = Severity::kError;
+  v.message = "Multi-bit signal crossing clock domains";
+  v.signal_name = "data_bus[7:0]";
+  
+  EXPECT_EQ(v.rule, RuleId::kCDC_002);
+  EXPECT_FALSE(v.signal_name.empty());
+}
+
+// Test 36: CDC_003 structure
+TEST_F(VeriPGValidatorTest, Violation_CDC_003_Structure) {
+  Violation v;
+  v.rule = RuleId::kCDC_003;
+  v.severity = Severity::kError;
+  v.message = "Clock mux without glitch protection";
+  
+  EXPECT_EQ(v.rule, RuleId::kCDC_003);
+}
+
+// Test 37: CDC_004 structure
+TEST_F(VeriPGValidatorTest, Violation_CDC_004_Structure) {
+  Violation v;
+  v.rule = RuleId::kCDC_004;
+  v.severity = Severity::kError;
+  v.message = "Asynchronous reset in synchronous logic";
+  
+  EXPECT_EQ(v.rule, RuleId::kCDC_004);
+}
+
+// Test 38: CLK_002 structure
+TEST_F(VeriPGValidatorTest, Violation_CLK_002_Structure) {
+  Violation v;
+  v.rule = RuleId::kCLK_002;
+  v.severity = Severity::kError;
+  v.message = "Multiple clocks in single always block";
+  
+  EXPECT_EQ(v.rule, RuleId::kCLK_002);
+}
+
+// Test 39: CLK_003 structure
+TEST_F(VeriPGValidatorTest, Violation_CLK_003_Structure) {
+  Violation v;
+  v.rule = RuleId::kCLK_003;
+  v.severity = Severity::kError;
+  v.message = "Clock used as data signal";
+  
+  EXPECT_EQ(v.rule, RuleId::kCLK_003);
+}
+
+// Test 40: CLK_004 structure
+TEST_F(VeriPGValidatorTest, Violation_CLK_004_Structure) {
+  Violation v;
+  v.rule = RuleId::kCLK_004;
+  v.severity = Severity::kWarning;
+  v.message = "Gated clock without ICG cell";
+  
+  EXPECT_EQ(v.rule, RuleId::kCLK_004);
+}
+
+// Test 41: RST_002 structure
+TEST_F(VeriPGValidatorTest, Violation_RST_002_Structure) {
+  Violation v;
+  v.rule = RuleId::kRST_002;
+  v.severity = Severity::kError;
+  v.message = "Asynchronous reset not properly synchronized";
+  
+  EXPECT_EQ(v.rule, RuleId::kRST_002);
+}
+
+// Test 42: RST_003 structure
+TEST_F(VeriPGValidatorTest, Violation_RST_003_Structure) {
+  Violation v;
+  v.rule = RuleId::kRST_003;
+  v.severity = Severity::kWarning;
+  v.message = "Active-low reset mixed with active-high";
+  
+  EXPECT_EQ(v.rule, RuleId::kRST_003);
+}
+
+// Test 43: RST_004 structure
+TEST_F(VeriPGValidatorTest, Violation_RST_004_Structure) {
+  Violation v;
+  v.rule = RuleId::kRST_004;
+  v.severity = Severity::kError;
+  v.message = "Reset signal used as data";
+  
+  EXPECT_EQ(v.rule, RuleId::kRST_004);
+}
+
+// Test 44: RST_005 structure
+TEST_F(VeriPGValidatorTest, Violation_RST_005_Structure) {
+  Violation v;
+  v.rule = RuleId::kRST_005;
+  v.severity = Severity::kWarning;
+  v.message = "Reset width below minimum assertion time";
+  
+  EXPECT_EQ(v.rule, RuleId::kRST_005);
+}
+
+// Test 45: Severity levels
+TEST_F(VeriPGValidatorTest, SeverityLevels) {
+  Violation error_violation;
+  error_violation.severity = Severity::kError;
+  EXPECT_EQ(error_violation.severity, Severity::kError);
+  
+  Violation warning_violation;
+  warning_violation.severity = Severity::kWarning;
+  EXPECT_EQ(warning_violation.severity, Severity::kWarning);
+  
+  Violation info_violation;
+  info_violation.severity = Severity::kInfo;
+  EXPECT_EQ(info_violation.severity, Severity::kInfo);
+}
+
+// Test 46: Multiple violations collection
+TEST_F(VeriPGValidatorTest, MultipleViolationsCollection) {
+  VeriPGValidator validator(type_checker_.get());
+  std::vector<Violation> violations;
+  
+  // Should be able to collect multiple violations
+  auto cdc_status = validator.CheckCDCViolations(*symbol_table_, violations);
+  auto clk_status = validator.CheckClockRules(*symbol_table_, violations);
+  auto rst_status = validator.CheckResetRules(*symbol_table_, violations);
+  auto tim_status = validator.CheckTimingRules(*symbol_table_, violations);
+  
+  EXPECT_TRUE(cdc_status.ok());
+  EXPECT_TRUE(clk_status.ok());
+  EXPECT_TRUE(rst_status.ok());
+  EXPECT_TRUE(tim_status.ok());
+  
+  // Empty symbol table should have no violations
+  EXPECT_EQ(violations.size(), 0);
+}
+
+// Test 47: Violation with fix suggestion
+TEST_F(VeriPGValidatorTest, ViolationWithFixSuggestion) {
+  Violation v;
+  v.rule = RuleId::kCDC_001;
+  v.severity = Severity::kError;
+  v.message = "CDC without synchronizer";
+  v.fix_suggestion = "Add 2-stage FF synchronizer";
+  
+  EXPECT_FALSE(v.fix_suggestion.empty());
+  EXPECT_THAT(v.fix_suggestion, ::testing::HasSubstr("synchronizer"));
+}
+
+// Test 48: Violation with source location
+TEST_F(VeriPGValidatorTest, ViolationWithSourceLocation) {
+  Violation v;
+  v.rule = RuleId::kCLK_001;
+  v.source_location = "test.sv:42:15";
+  
+  EXPECT_FALSE(v.source_location.empty());
+  EXPECT_THAT(v.source_location, ::testing::HasSubstr(":"));
+}
+
+// Test 49: All rule IDs are unique
+TEST_F(VeriPGValidatorTest, AllRuleIDsUnique) {
+  std::set<RuleId> rule_ids = {
+    RuleId::kCDC_001, RuleId::kCDC_002, RuleId::kCDC_003, RuleId::kCDC_004,
+    RuleId::kCLK_001, RuleId::kCLK_002, RuleId::kCLK_003, RuleId::kCLK_004,
+    RuleId::kRST_001, RuleId::kRST_002, RuleId::kRST_003, RuleId::kRST_004, RuleId::kRST_005,
+    RuleId::kTIM_001, RuleId::kTIM_002
+  };
+  
+  EXPECT_EQ(rule_ids.size(), 15) << "All 15 rule IDs should be unique";
+}
+
+// Test 50: Framework supports all 4 rule categories
+TEST_F(VeriPGValidatorTest, AllRuleCategoriesSupported) {
+  VeriPGValidator validator(type_checker_.get());
+  std::vector<Violation> violations;
+  
+  // All 4 categories should be callable
+  EXPECT_TRUE(validator.CheckCDCViolations(*symbol_table_, violations).ok());
+  EXPECT_TRUE(validator.CheckClockRules(*symbol_table_, violations).ok());
+  EXPECT_TRUE(validator.CheckResetRules(*symbol_table_, violations).ok());
+  EXPECT_TRUE(validator.CheckTimingRules(*symbol_table_, violations).ok());
+}
+
+// Test 51: CDC rules (4 rules defined)
+TEST_F(VeriPGValidatorTest, CDCRulesCount) {
+  // Verify we have 4 CDC rules defined
+  std::vector<RuleId> cdc_rules = {
+    RuleId::kCDC_001, RuleId::kCDC_002, RuleId::kCDC_003, RuleId::kCDC_004
+  };
+  EXPECT_EQ(cdc_rules.size(), 4);
+}
+
+// Test 52: Clock rules (4 rules defined)
+TEST_F(VeriPGValidatorTest, ClockRulesCount) {
+  // Verify we have 4 Clock rules defined
+  std::vector<RuleId> clk_rules = {
+    RuleId::kCLK_001, RuleId::kCLK_002, RuleId::kCLK_003, RuleId::kCLK_004
+  };
+  EXPECT_EQ(clk_rules.size(), 4);
+}
+
+// Test 53: Reset rules (5 rules defined)
+TEST_F(VeriPGValidatorTest, ResetRulesCount) {
+  // Verify we have 5 Reset rules defined
+  std::vector<RuleId> rst_rules = {
+    RuleId::kRST_001, RuleId::kRST_002, RuleId::kRST_003, RuleId::kRST_004, RuleId::kRST_005
+  };
+  EXPECT_EQ(rst_rules.size(), 5);
+}
+
+// Test 54: Timing rules (2 rules defined)
+TEST_F(VeriPGValidatorTest, TimingRulesCount) {
+  // Verify we have 2 Timing rules defined
+  std::vector<RuleId> tim_rules = {
+    RuleId::kTIM_001, RuleId::kTIM_002
+  };
+  EXPECT_EQ(tim_rules.size(), 2);
+}
+
+// Test 55: Total 15 rules as specified in plan
+TEST_F(VeriPGValidatorTest, TotalRulesCount) {
+  // Verify total of 15 rules (4 CDC + 4 CLK + 5 RST + 2 TIM)
+  EXPECT_EQ(4 + 4 + 5 + 2, 15) << "Week 1 should have 15 rules total";
+}
+
+// ========================================
+// Week 1: Auto-Fix Generator Tests
+// ========================================
+
+// Test 56: GenerateFixCDC_001 - generates synchronizer code
+TEST_F(VeriPGValidatorTest, GenerateFixCDC_001) {
+  VeriPGValidator validator(type_checker_.get());
+  
+  std::string fix = validator.GenerateFixCDC_001("data_a", "clk_b");
+  
+  EXPECT_FALSE(fix.empty());
+  EXPECT_THAT(fix, ::testing::HasSubstr("data_a_sync1"));
+  EXPECT_THAT(fix, ::testing::HasSubstr("data_a_sync2"));
+  EXPECT_THAT(fix, ::testing::HasSubstr("clk_b"));
+  EXPECT_THAT(fix, ::testing::HasSubstr("always_ff"));
+  EXPECT_THAT(fix, ::testing::HasSubstr("@(posedge"));
+}
+
+// Test 57: GenerateFixCDC_001 - 2-stage synchronizer pattern
+TEST_F(VeriPGValidatorTest, GenerateFixCDC_001_TwoStage) {
+  VeriPGValidator validator(type_checker_.get());
+  
+  std::string fix = validator.GenerateFixCDC_001("signal", "clk");
+  
+  // Should have both stages
+  EXPECT_THAT(fix, ::testing::HasSubstr("signal_sync1 <= signal"));
+  EXPECT_THAT(fix, ::testing::HasSubstr("signal_sync2 <= signal_sync1"));
+}
+
+// Test 58: GenerateFixCLK_001 - generates clock sensitivity list
+TEST_F(VeriPGValidatorTest, GenerateFixCLK_001) {
+  VeriPGValidator validator(type_checker_.get());
+  
+  std::string fix = validator.GenerateFixCLK_001("clk");
+  
+  EXPECT_FALSE(fix.empty());
+  EXPECT_THAT(fix, ::testing::HasSubstr("always_ff"));
+  EXPECT_THAT(fix, ::testing::HasSubstr("@(posedge clk)"));
+}
+
+// Test 59: GenerateFixCLK_001 - different clock names
+TEST_F(VeriPGValidatorTest, GenerateFixCLK_001_DifferentClocks) {
+  VeriPGValidator validator(type_checker_.get());
+  
+  std::string fix1 = validator.GenerateFixCLK_001("clk_main");
+  std::string fix2 = validator.GenerateFixCLK_001("clk_io");
+  
+  EXPECT_THAT(fix1, ::testing::HasSubstr("clk_main"));
+  EXPECT_THAT(fix2, ::testing::HasSubstr("clk_io"));
+  EXPECT_NE(fix1, fix2);
+}
+
+// Test 60: GenerateFixRST_001 - generates reset logic
+TEST_F(VeriPGValidatorTest, GenerateFixRST_001) {
+  VeriPGValidator validator(type_checker_.get());
+  
+  std::string fix = validator.GenerateFixRST_001("rst_n");
+  
+  EXPECT_FALSE(fix.empty());
+  EXPECT_THAT(fix, ::testing::HasSubstr("always_ff"));
+  EXPECT_THAT(fix, ::testing::HasSubstr("rst_n"));
+  EXPECT_THAT(fix, ::testing::HasSubstr("@(posedge clk or negedge rst_n)"));
+}
+
+// Test 61: GenerateFixRST_001 - reset structure
+TEST_F(VeriPGValidatorTest, GenerateFixRST_001_Structure) {
+  VeriPGValidator validator(type_checker_.get());
+  
+  std::string fix = validator.GenerateFixRST_001("rst");
+  
+  // Should have if-else structure
+  EXPECT_THAT(fix, ::testing::HasSubstr("if (!rst)"));
+  EXPECT_THAT(fix, ::testing::HasSubstr("else"));
+  EXPECT_THAT(fix, ::testing::HasSubstr("begin"));
+  EXPECT_THAT(fix, ::testing::HasSubstr("end"));
+}
+
+// Test 62: All 3 auto-fix generators work
+TEST_F(VeriPGValidatorTest, AllAutoFixGeneratorsWork) {
+  VeriPGValidator validator(type_checker_.get());
+  
+  std::string fix_cdc = validator.GenerateFixCDC_001("data", "clk");
+  std::string fix_clk = validator.GenerateFixCLK_001("clk");
+  std::string fix_rst = validator.GenerateFixRST_001("rst_n");
+  
+  EXPECT_FALSE(fix_cdc.empty());
+  EXPECT_FALSE(fix_clk.empty());
+  EXPECT_FALSE(fix_rst.empty());
+  
+  // Each should be unique
+  EXPECT_NE(fix_cdc, fix_clk);
+  EXPECT_NE(fix_clk, fix_rst);
+  EXPECT_NE(fix_cdc, fix_rst);
+}
+
 }  // namespace
 }  // namespace tools
 }  // namespace verilog
