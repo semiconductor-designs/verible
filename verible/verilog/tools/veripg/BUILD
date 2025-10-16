@@ -45,6 +45,21 @@ cc_test(
     ],
 )
 
+cc_test(
+    name = "veripg-validator_cdc_unit_test",
+    srcs = ["veripg-validator_cdc_unit_test.cc"],
+    deps = [
+        ":veripg-validator",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "//verible/verilog/analysis:type-checker",
+        "//verible/verilog/analysis:type-inference",
+        "//verible/verilog/parser:verilog-token-enum",
+        "//verible/common/text:tree-utils",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
 cc_library(
     name = "rule-config",
     srcs = ["rule-config.cc"],
