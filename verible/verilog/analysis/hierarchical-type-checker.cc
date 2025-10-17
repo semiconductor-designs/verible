@@ -89,9 +89,8 @@ void HierarchicalTypeChecker::TraverseSymbolTable(const SymbolTableNode& node) {
   // Get the node's metatype
   const auto metatype = node.Value().metatype;
   
-  // Check if this is a class, interface, or module
+  // Check if this is a class or module (interfaces are represented as modules)
   if (metatype == SymbolMetaType::kClass ||
-      metatype == SymbolMetaType::kInterface ||
       metatype == SymbolMetaType::kModule) {
     
     // Get the type name
@@ -100,13 +99,25 @@ void HierarchicalTypeChecker::TraverseSymbolTable(const SymbolTableNode& node) {
     
     std::string type_name(*key);
     
+    // Determine if this is actually an interface by checking the syntax
+    bool is_class = (metatype == SymbolMetaType::kClass);
+    bool is_interface = false;
+    bool is_module = false;
+    
+    if (metatype == SymbolMetaType::kModule) {
+      // Check if this is an interface or a module using CST
+      const auto* syntax = node.Value().syntax_origin;
+      if (syntax && syntax->Kind() == verible::SymbolKind::kNode) {
+        const auto& syntax_node = verible::SymbolCastToNode(*syntax);
+        is_interface = syntax_node.MatchesTag(NodeEnum::kInterfaceDeclaration);
+        is_module = !is_interface;
+      } else {
+        is_module = true;  // Default to module if we can't determine
+      }
+    }
+    
     // Create a hierarchy node
-    TypeHierarchyNode type_node(
-        type_name,
-        metatype == SymbolMetaType::kClass,
-        metatype == SymbolMetaType::kInterface,
-        metatype == SymbolMetaType::kModule
-    );
+    TypeHierarchyNode type_node(type_name, is_class, is_interface, is_module);
     
     // Get syntax origin for this type
     type_node.syntax_origin = node.Value().syntax_origin;
@@ -125,23 +136,44 @@ void HierarchicalTypeChecker::TraverseSymbolTable(const SymbolTableNode& node) {
 }
 
 void HierarchicalTypeChecker::ExtractClassHierarchy() {
-  // Iterate through all types in hierarchy
-  for (auto& [type_name, type_node] : type_hierarchy_) {
-    if (!type_node.is_class) continue;
+  // Iterate through all types in hierarchy and check symbol table for base types
+  for (const auto& [type_name, child_node] : symbol_table_.Root()) {
+    // Find this type in our hierarchy
+    auto type_it = type_hierarchy_.find(std::string(*child_node.Key()));
+    if (type_it == type_hierarchy_.end()) continue;
     
-    // Get the class's syntax origin
-    const auto* syntax = type_node.syntax_origin;
-    if (!syntax) continue;
+    auto& type_node = type_it->second;
+    if (!type_node.is_class && !type_node.is_interface) continue;
     
-    // Search for extends clause in the CST
-    // TODO: Use CST utilities to find "extends BaseClass" pattern
-    // For now, this is a stub
+    // Check if this type has a parent type (base class/interface)
+    const auto& parent_type = child_node.Value().parent_type;
+    if (!parent_type.user_defined_type) continue;
+    
+    // Extract the base type name from the user_defined_type
+    const auto& ref_comp = parent_type.user_defined_type->Value();
+    if (ref_comp.identifier.empty()) continue;
+    
+    std::string base_type_name(ref_comp.identifier);
+    
+    // Set the base type in our hierarchy node
+    type_node.base_type = base_type_name;
+    
+    // Record this inheritance relationship
+    InheritanceInfo info(std::string(type_name), base_type_name, type_node.syntax_origin);
+    inheritance_info_.push_back(info);
+    
+    // If base type exists, add this type as a derived type
+    auto base_it = type_hierarchy_.find(base_type_name);
+    if (base_it != type_hierarchy_.end()) {
+      base_it->second.derived_types.push_back(&type_node);
+    }
   }
 }
 
 void HierarchicalTypeChecker::ExtractInterfaceHierarchy() {
-  // Similar to ExtractClassHierarchy but for interfaces
-  // TODO: Implement interface extends extraction
+  // Interface extends is now handled in ExtractClassHierarchy()
+  // Both classes and interfaces use the same parent_type mechanism in the symbol table
+  // No additional work needed here
 }
 
 void HierarchicalTypeChecker::ExtractModuleHierarchy() {
