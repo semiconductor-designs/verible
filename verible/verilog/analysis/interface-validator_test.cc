@@ -401,10 +401,31 @@ endmodule
   ParseCode(code);
   
   absl::Status status = validator_->ValidateAllInterfaces();
+  
+  // Debug: Print what was found
+  const auto& interfaces = validator_->GetInterfaces();
+  std::cout << "Found " << interfaces.size() << " interfaces:" << std::endl;
+  for (const auto& [name, info] : interfaces) {
+    std::cout << "  Interface: " << name << " with " << info.modports.size() << " modports" << std::endl;
+    for (const auto& mp : info.modports) {
+      std::cout << "    Modport: " << mp.name << std::endl;
+    }
+  }
+  
+  const auto& errors = validator_->GetErrors();
+  std::cout << "Found " << errors.size() << " errors:" << std::endl;
+  for (const auto& error : errors) {
+    std::cout << "  " << error << std::endl;
+  }
+  
   // Should detect error - nonexistent modport
-  // For now, just ensure it doesn't crash
-  // TODO: Uncomment when implemented
-  // EXPECT_FALSE(validator_->GetErrors().empty());
+  EXPECT_FALSE(validator_->GetErrors().empty());
+  if (!validator_->GetErrors().empty()) {
+    // Verify the error message mentions the missing modport
+    const std::string& error = validator_->GetErrors()[0];
+    EXPECT_NE(error.find("nonexistent"), std::string::npos);
+    EXPECT_NE(error.find("Modport"), std::string::npos);
+  }
 }
 
 }  // namespace

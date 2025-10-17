@@ -109,7 +109,17 @@ std::vector<ModportInfo> InterfaceValidator::ExtractModports(
   // Get the CST syntax origin for this interface
   const SymbolInfo& info = node.Value();
   if (!info.syntax_origin) {
-    return modports;  // No CST available
+    // No CST available - this might happen if symbol table wasn't built from CST
+    // Try extracting from symbol table children as fallback
+    for (const auto& [child_name, child_node] : node) {
+      const SymbolInfo& child_info = child_node.Value();
+      if (child_info.metatype == SymbolMetaType::kModport) {
+        ModportInfo mp_info(child_name);
+        mp_info.syntax_origin = child_info.syntax_origin;
+        modports.push_back(mp_info);
+      }
+    }
+    return modports;
   }
   
   // Search for modport declarations in the CST
