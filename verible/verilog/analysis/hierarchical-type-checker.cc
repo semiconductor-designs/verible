@@ -89,8 +89,9 @@ void HierarchicalTypeChecker::TraverseSymbolTable(const SymbolTableNode& node) {
   // Get the node's metatype
   const auto metatype = node.Value().metatype;
   
-  // Check if this is a class or module (interfaces are represented as modules)
+  // Check if this is a class, interface, or module
   if (metatype == SymbolMetaType::kClass ||
+      metatype == SymbolMetaType::kInterface ||
       metatype == SymbolMetaType::kModule) {
     
     // Get the type name
@@ -99,22 +100,10 @@ void HierarchicalTypeChecker::TraverseSymbolTable(const SymbolTableNode& node) {
     
     std::string type_name(*key);
     
-    // Determine if this is actually an interface by checking the syntax
+    // Determine the type flags
     bool is_class = (metatype == SymbolMetaType::kClass);
-    bool is_interface = false;
-    bool is_module = false;
-    
-    if (metatype == SymbolMetaType::kModule) {
-      // Check if this is an interface or a module using CST
-      const auto* syntax = node.Value().syntax_origin;
-      if (syntax && syntax->Kind() == verible::SymbolKind::kNode) {
-        const auto& syntax_node = verible::SymbolCastToNode(*syntax);
-        is_interface = syntax_node.MatchesTag(NodeEnum::kInterfaceDeclaration);
-        is_module = !is_interface;
-      } else {
-        is_module = true;  // Default to module if we can't determine
-      }
-    }
+    bool is_interface = (metatype == SymbolMetaType::kInterface);
+    bool is_module = (metatype == SymbolMetaType::kModule);
     
     // Create a hierarchy node
     TypeHierarchyNode type_node(type_name, is_class, is_interface, is_module);

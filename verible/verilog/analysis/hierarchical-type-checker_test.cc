@@ -43,26 +43,22 @@ class HierarchicalTypeCheckerTest : public ::testing::Test {
   
   // Helper to parse code and build symbol table
   void ParseCode(std::string_view code, std::string_view filename = "test.sv") {
-    // Create and parse analyzer
-    auto analyzer = std::make_unique<VerilogAnalyzer>(code, filename);
-    absl::Status parse_status = analyzer->Analyze();
+    // Create an in-memory source file
+    auto source_file = std::make_unique<InMemoryVerilogSourceFile>(filename, code);
+    const auto parse_status = source_file->Parse();
     // Ignore parse errors for now
     
-    // Add to project - this keeps ownership
-    project_->UpdateFileContents(std::string(filename), analyzer.get());
-    
-    // Keep analyzer alive by storing it
-    analyzers_.push_back(std::move(analyzer));
-    
-    // Build symbol table from this file
-    std::vector<absl::Status> diagnostics;
-    symbol_table_->BuildSingleTranslationUnit(filename, &diagnostics);
+    // Build symbol table directly from the source file
+    const auto build_diagnostics = BuildSymbolTable(*source_file, symbol_table_.get(), project_.get());
     // Ignore diagnostics for now - we just need the symbol table populated
+    
+    // Keep source file alive
+    source_files_.push_back(std::move(source_file));
   }
   
   std::unique_ptr<VerilogProject> project_;
   std::unique_ptr<SymbolTable> symbol_table_;
-  std::vector<std::unique_ptr<VerilogAnalyzer>> analyzers_;
+  std::vector<std::unique_ptr<InMemoryVerilogSourceFile>> source_files_;
 };
 
 //------------------------------------------------------------------------------
