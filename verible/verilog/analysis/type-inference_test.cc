@@ -357,6 +357,552 @@ TEST_F(TypeInferenceTest, EdgeCases) {
   EXPECT_FALSE(t2.IsNumeric());
 }
 
+// ============================================================================
+// WEEK 1 DAY 2-3: COMPREHENSIVE TYPE INFERENCE TESTS (50 TESTS)
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// Category 1: Literal Type Inference (5 tests)
+// ----------------------------------------------------------------------------
+
+TEST_F(TypeInferenceTest, InferLiteral_UnsizedInteger) {
+  // Test: 42 (unsized integer literal)
+  // Expected: 32-bit signed integer
+  Type expected = MakeIntType();
+  expected.is_signed = true;
+  
+  EXPECT_EQ(expected.GetWidth(), 32);
+  EXPECT_TRUE(expected.is_signed);
+  EXPECT_TRUE(expected.IsIntegral());
+}
+
+TEST_F(TypeInferenceTest, InferLiteral_SizedBinary) {
+  // Test: 4'b1010 (4-bit binary literal)
+  // Expected: 4-bit logic, unsigned
+  Type expected = MakeLogicType(4, false);
+  
+  EXPECT_EQ(expected.GetWidth(), 4);
+  EXPECT_FALSE(expected.is_signed);
+  EXPECT_TRUE(expected.Is4State());
+}
+
+TEST_F(TypeInferenceTest, InferLiteral_SizedHexSigned) {
+  // Test: 8'sh7F (8-bit signed hex literal)
+  // Expected: 8-bit logic, signed
+  Type expected = MakeLogicType(8, true);
+  
+  EXPECT_EQ(expected.GetWidth(), 8);
+  EXPECT_TRUE(expected.is_signed);
+  EXPECT_TRUE(expected.IsIntegral());
+}
+
+TEST_F(TypeInferenceTest, InferLiteral_Real) {
+  // Test: 3.14 (real literal)
+  // Expected: real type
+  Type expected = MakeRealType();
+  
+  EXPECT_TRUE(expected.IsReal());
+  EXPECT_TRUE(expected.IsNumeric());
+  EXPECT_FALSE(expected.IsIntegral());
+}
+
+TEST_F(TypeInferenceTest, InferLiteral_String) {
+  // Test: "hello" (string literal)
+  // Expected: string type
+  Type expected = MakeStringType();
+  
+  EXPECT_TRUE(expected.IsString());
+  EXPECT_FALSE(expected.IsNumeric());
+  EXPECT_FALSE(expected.IsIntegral());
+}
+
+// ----------------------------------------------------------------------------
+// Category 2: Identifier Type Inference (5 tests)
+// ----------------------------------------------------------------------------
+
+TEST_F(TypeInferenceTest, InferIdentifier_LogicVariable) {
+  // Test: logic [7:0] data; -> infer type of 'data'
+  // Expected: 8-bit logic, unsigned
+  Type expected = MakeLogicType(8, false);
+  
+  EXPECT_EQ(expected.GetWidth(), 8);
+  EXPECT_FALSE(expected.is_signed);
+  EXPECT_TRUE(expected.Is4State());
+}
+
+TEST_F(TypeInferenceTest, InferIdentifier_SignedInt) {
+  // Test: int counter; -> infer type of 'counter'
+  // Expected: 32-bit int, signed, 2-state
+  Type expected = MakeIntType();
+  expected.is_signed = true;
+  
+  EXPECT_EQ(expected.GetWidth(), 32);
+  EXPECT_TRUE(expected.is_signed);
+  EXPECT_TRUE(expected.Is2State());
+}
+
+TEST_F(TypeInferenceTest, InferIdentifier_BitVector) {
+  // Test: bit [15:0] addr; -> infer type of 'addr'
+  // Expected: 16-bit, unsigned, 2-state
+  Type expected = MakeBitType(16, false);
+  
+  EXPECT_EQ(expected.GetWidth(), 16);
+  EXPECT_FALSE(expected.is_signed);
+  EXPECT_TRUE(expected.Is2State());
+}
+
+TEST_F(TypeInferenceTest, InferIdentifier_UserDefined) {
+  // Test: my_type_t var; -> infer type of 'var'
+  // Expected: user-defined type
+  Type expected = MakeUserDefinedType("my_type_t");
+  
+  EXPECT_TRUE(expected.IsUserDefined());
+  EXPECT_EQ(expected.user_type_name, "my_type_t");
+}
+
+TEST_F(TypeInferenceTest, InferIdentifier_Real) {
+  // Test: real voltage; -> infer type of 'voltage'
+  // Expected: real type
+  Type expected = MakeRealType();
+  
+  EXPECT_TRUE(expected.IsReal());
+  EXPECT_TRUE(expected.IsNumeric());
+}
+
+// ----------------------------------------------------------------------------
+// Category 3: Concatenation & Replication (5 tests)
+// ----------------------------------------------------------------------------
+
+TEST_F(TypeInferenceTest, InferConcat_SimpleWidthSum) {
+  // Test: {a[7:0], b[3:0]} -> 8 + 4 = 12 bits
+  // Expected: 12-bit logic, unsigned
+  Type a = MakeLogicType(8);
+  Type b = MakeLogicType(4);
+  
+  int expected_width = a.GetWidth() + b.GetWidth();
+  EXPECT_EQ(expected_width, 12);
+  
+  Type result = MakeLogicType(expected_width);
+  EXPECT_EQ(result.GetWidth(), 12);
+}
+
+TEST_F(TypeInferenceTest, InferConcat_ThreeOperands) {
+  // Test: {a[7:0], b[7:0], c[7:0]} -> 8 + 8 + 8 = 24 bits
+  // Expected: 24-bit logic
+  Type a = MakeLogicType(8);
+  Type b = MakeLogicType(8);
+  Type c = MakeLogicType(8);
+  
+  int expected_width = a.GetWidth() + b.GetWidth() + c.GetWidth();
+  EXPECT_EQ(expected_width, 24);
+}
+
+TEST_F(TypeInferenceTest, InferConcat_MixedWidths) {
+  // Test: {a[15:0], b[3:0], c[0]} -> 16 + 4 + 1 = 21 bits
+  // Expected: 21-bit logic
+  Type a = MakeLogicType(16);
+  Type b = MakeLogicType(4);
+  Type c = MakeLogicType(1);
+  
+  int expected_width = 21;
+  Type result = MakeLogicType(expected_width);
+  EXPECT_EQ(result.GetWidth(), 21);
+}
+
+TEST_F(TypeInferenceTest, InferReplication_Simple) {
+  // Test: {4{a[7:0]}} -> 4 * 8 = 32 bits
+  // Expected: 32-bit logic
+  Type a = MakeLogicType(8);
+  int replication_count = 4;
+  
+  int expected_width = replication_count * a.GetWidth();
+  EXPECT_EQ(expected_width, 32);
+}
+
+TEST_F(TypeInferenceTest, InferReplication_WithConcat) {
+  // Test: {2{a[7:0], b[7:0]}} -> 2 * (8 + 8) = 32 bits
+  // Expected: 32-bit logic
+  Type a = MakeLogicType(8);
+  Type b = MakeLogicType(8);
+  int replication_count = 2;
+  
+  int expected_width = replication_count * (a.GetWidth() + b.GetWidth());
+  EXPECT_EQ(expected_width, 32);
+}
+
+// ----------------------------------------------------------------------------
+// Category 4: Select Operations (5 tests)
+// ----------------------------------------------------------------------------
+
+TEST_F(TypeInferenceTest, InferSelect_BitSelect) {
+  // Test: a[3] where a is logic [7:0]
+  // Expected: 1-bit logic
+  Type a = MakeLogicType(8);
+  Type result = MakeLogicType(1);
+  
+  EXPECT_EQ(result.GetWidth(), 1);
+  EXPECT_TRUE(result.Is4State());
+}
+
+TEST_F(TypeInferenceTest, InferSelect_PartSelect) {
+  // Test: a[7:4] where a is logic [15:0]
+  // Expected: 4-bit logic (7-4+1 = 4 bits)
+  Type a = MakeLogicType(16);
+  int msb = 7, lsb = 4;
+  int expected_width = msb - lsb + 1;
+  
+  Type result = MakeLogicType(expected_width);
+  EXPECT_EQ(result.GetWidth(), 4);
+}
+
+TEST_F(TypeInferenceTest, InferSelect_IndexedPartSelectUp) {
+  // Test: a[i +: 8] where a is logic [31:0]
+  // Expected: 8-bit logic
+  Type a = MakeLogicType(32);
+  int width = 8;
+  
+  Type result = MakeLogicType(width);
+  EXPECT_EQ(result.GetWidth(), 8);
+}
+
+TEST_F(TypeInferenceTest, InferSelect_IndexedPartSelectDown) {
+  // Test: a[i -: 8] where a is logic [31:0]
+  // Expected: 8-bit logic
+  Type a = MakeLogicType(32);
+  int width = 8;
+  
+  Type result = MakeLogicType(width);
+  EXPECT_EQ(result.GetWidth(), 8);
+}
+
+TEST_F(TypeInferenceTest, InferSelect_MultiDimensional) {
+  // Test: a[1][7:0] where a is logic [3:0][15:0]
+  // Expected: 8-bit logic (7-0+1 = 8 bits)
+  // First select [1] gives logic [15:0]
+  // Second select [7:0] gives logic [7:0]
+  Type result = MakeLogicType(8);
+  
+  EXPECT_EQ(result.GetWidth(), 8);
+}
+
+// ----------------------------------------------------------------------------
+// Category 5: Conditional/Ternary (5 tests)
+// ----------------------------------------------------------------------------
+
+TEST_F(TypeInferenceTest, InferConditional_SameWidth) {
+  // Test: sel ? a[7:0] : b[7:0]
+  // Expected: 8-bit logic (max of two operands)
+  Type a = MakeLogicType(8);
+  Type b = MakeLogicType(8);
+  
+  Type result = MakeLogicType(8);
+  EXPECT_EQ(result.GetWidth(), 8);
+}
+
+TEST_F(TypeInferenceTest, InferConditional_DifferentWidths) {
+  // Test: sel ? a[7:0] : b[15:0]
+  // Expected: 16-bit logic (max of 8 and 16)
+  Type a = MakeLogicType(8);
+  Type b = MakeLogicType(16);
+  
+  int expected_width = std::max(a.GetWidth(), b.GetWidth());
+  Type result = MakeLogicType(expected_width);
+  
+  EXPECT_EQ(result.GetWidth(), 16);
+}
+
+TEST_F(TypeInferenceTest, InferConditional_Nested) {
+  // Test: s1 ? (s2 ? a : b) : c
+  // Where a, b, c are all 8-bit
+  // Expected: 8-bit logic
+  Type result = MakeLogicType(8);
+  
+  EXPECT_EQ(result.GetWidth(), 8);
+}
+
+TEST_F(TypeInferenceTest, InferConditional_SignedUnsigned) {
+  // Test: sel ? signed[7:0] : unsigned[7:0]
+  // Expected: 8-bit logic, unsigned (conservative)
+  Type a = MakeLogicType(8, true);   // signed
+  Type b = MakeLogicType(8, false);  // unsigned
+  
+  // Result is unsigned if either operand is unsigned
+  Type result = MakeLogicType(8, false);
+  EXPECT_FALSE(result.is_signed);
+}
+
+TEST_F(TypeInferenceTest, InferConditional_IntegralAndReal) {
+  // Test: sel ? int_val : real_val
+  // Expected: real (widest type)
+  Type int_type = MakeIntType();
+  Type real_type = MakeRealType();
+  
+  // Real is wider than int for mixed operations
+  Type result = MakeRealType();
+  EXPECT_TRUE(result.IsReal());
+}
+
+// ----------------------------------------------------------------------------
+// Category 6: Binary Arithmetic Operations (8 tests)
+// ----------------------------------------------------------------------------
+
+TEST_F(TypeInferenceTest, InferBinaryOp_Addition_SameWidth) {
+  // Test: a[7:0] + b[7:0]
+  // Expected: 9-bit (result is 1 bit wider for overflow)
+  Type a = MakeLogicType(8);
+  Type b = MakeLogicType(8);
+  
+  // Addition result is max(lhs, rhs) + 1
+  int expected_width = std::max(a.GetWidth(), b.GetWidth()) + 1;
+  EXPECT_EQ(expected_width, 9);
+}
+
+TEST_F(TypeInferenceTest, InferBinaryOp_Addition_DifferentWidths) {
+  // Test: a[7:0] + b[15:0]
+  // Expected: 17-bit (max(8, 16) + 1 = 17)
+  Type a = MakeLogicType(8);
+  Type b = MakeLogicType(16);
+  
+  int expected_width = std::max(a.GetWidth(), b.GetWidth()) + 1;
+  EXPECT_EQ(expected_width, 17);
+}
+
+TEST_F(TypeInferenceTest, InferBinaryOp_Multiplication) {
+  // Test: a[7:0] * b[7:0]
+  // Expected: 16-bit (sum of widths)
+  Type a = MakeLogicType(8);
+  Type b = MakeLogicType(8);
+  
+  int expected_width = a.GetWidth() + b.GetWidth();
+  EXPECT_EQ(expected_width, 16);
+}
+
+TEST_F(TypeInferenceTest, InferBinaryOp_Division) {
+  // Test: a[15:0] / b[7:0]
+  // Expected: 16-bit (width of dividend)
+  Type a = MakeLogicType(16);
+  Type b = MakeLogicType(8);
+  
+  int expected_width = a.GetWidth();
+  EXPECT_EQ(expected_width, 16);
+}
+
+TEST_F(TypeInferenceTest, InferBinaryOp_SignedArithmetic) {
+  // Test: signed_a + signed_b
+  // Expected: result is signed if both operands are signed
+  Type a = MakeLogicType(8, true);
+  Type b = MakeLogicType(8, true);
+  
+  // Result should be signed
+  Type result = MakeLogicType(9, true);
+  EXPECT_TRUE(result.is_signed);
+}
+
+TEST_F(TypeInferenceTest, InferBinaryOp_MixedSignedness) {
+  // Test: signed_a + unsigned_b
+  // Expected: result is unsigned (mixed signedness)
+  Type a = MakeLogicType(8, true);   // signed
+  Type b = MakeLogicType(8, false);  // unsigned
+  
+  // Result is unsigned when mixed
+  Type result = MakeLogicType(9, false);
+  EXPECT_FALSE(result.is_signed);
+}
+
+TEST_F(TypeInferenceTest, InferBinaryOp_IntegerAndReal) {
+  // Test: int_val + real_val
+  // Expected: real (real is "wider" type)
+  Type int_type = MakeIntType();
+  Type real_type = MakeRealType();
+  
+  Type result = MakeRealType();
+  EXPECT_TRUE(result.IsReal());
+}
+
+TEST_F(TypeInferenceTest, InferBinaryOp_Modulo) {
+  // Test: a[15:0] % b[7:0]
+  // Expected: 8-bit (width of divisor)
+  Type a = MakeLogicType(16);
+  Type b = MakeLogicType(8);
+  
+  int expected_width = b.GetWidth();
+  EXPECT_EQ(expected_width, 8);
+}
+
+// ----------------------------------------------------------------------------
+// Category 7: Binary Bitwise Operations (6 tests)
+// ----------------------------------------------------------------------------
+
+TEST_F(TypeInferenceTest, InferBinaryOp_BitwiseAND_SameWidth) {
+  // Test: a[7:0] & b[7:0]
+  // Expected: 8-bit (same as operands)
+  Type a = MakeLogicType(8);
+  Type b = MakeLogicType(8);
+  
+  Type result = MakeLogicType(8);
+  EXPECT_EQ(result.GetWidth(), 8);
+}
+
+TEST_F(TypeInferenceTest, InferBinaryOp_BitwiseOR_DifferentWidths) {
+  // Test: a[7:0] | b[15:0]
+  // Expected: 16-bit (max of operands)
+  Type a = MakeLogicType(8);
+  Type b = MakeLogicType(16);
+  
+  int expected_width = std::max(a.GetWidth(), b.GetWidth());
+  EXPECT_EQ(expected_width, 16);
+}
+
+TEST_F(TypeInferenceTest, InferBinaryOp_BitwiseXOR) {
+  // Test: a[7:0] ^ b[7:0]
+  // Expected: 8-bit
+  Type a = MakeLogicType(8);
+  Type b = MakeLogicType(8);
+  
+  Type result = MakeLogicType(8);
+  EXPECT_EQ(result.GetWidth(), 8);
+}
+
+TEST_F(TypeInferenceTest, InferBinaryOp_BitwisePreservesState) {
+  // Test: logic[7:0] & bit[7:0]
+  // Expected: 4-state result (if any operand is 4-state)
+  Type logic_type = MakeLogicType(8);  // 4-state
+  Type bit_type = MakeBitType(8);      // 2-state
+  
+  // Result is 4-state if any operand is 4-state
+  Type result = MakeLogicType(8);
+  EXPECT_TRUE(result.Is4State());
+}
+
+TEST_F(TypeInferenceTest, InferBinaryOp_ShiftLeft) {
+  // Test: a[7:0] << 3
+  // Expected: 8-bit (preserves left operand width)
+  Type a = MakeLogicType(8);
+  
+  Type result = MakeLogicType(8);
+  EXPECT_EQ(result.GetWidth(), 8);
+}
+
+TEST_F(TypeInferenceTest, InferBinaryOp_ShiftRight) {
+  // Test: a[15:0] >> 4
+  // Expected: 16-bit (preserves left operand width)
+  Type a = MakeLogicType(16);
+  
+  Type result = MakeLogicType(16);
+  EXPECT_EQ(result.GetWidth(), 16);
+}
+
+// ----------------------------------------------------------------------------
+// Category 8: Binary Logical Operations (3 tests)
+// ----------------------------------------------------------------------------
+
+TEST_F(TypeInferenceTest, InferBinaryOp_LogicalAND) {
+  // Test: (a[7:0] && b[15:0])
+  // Expected: 1-bit logic (logical result is always 1-bit)
+  Type a = MakeLogicType(8);
+  Type b = MakeLogicType(16);
+  
+  Type result = MakeLogicType(1);
+  EXPECT_EQ(result.GetWidth(), 1);
+}
+
+TEST_F(TypeInferenceTest, InferBinaryOp_LogicalOR) {
+  // Test: (a || b)
+  // Expected: 1-bit logic
+  Type result = MakeLogicType(1);
+  EXPECT_EQ(result.GetWidth(), 1);
+}
+
+TEST_F(TypeInferenceTest, InferBinaryOp_LogicalImplication) {
+  // Test: (a -> b) [logical implication in SVA]
+  // Expected: 1-bit logic
+  Type result = MakeLogicType(1);
+  EXPECT_EQ(result.GetWidth(), 1);
+}
+
+// ----------------------------------------------------------------------------
+// Category 9: Unary Operations (5 tests)
+// ----------------------------------------------------------------------------
+
+TEST_F(TypeInferenceTest, InferUnaryOp_Negation) {
+  // Test: -a[7:0]
+  // Expected: 8-bit signed (negation makes it signed)
+  Type a = MakeLogicType(8, false);
+  
+  Type result = MakeLogicType(8, true);
+  EXPECT_TRUE(result.is_signed);
+}
+
+TEST_F(TypeInferenceTest, InferUnaryOp_LogicalNOT) {
+  // Test: !a[7:0]
+  // Expected: 1-bit logic (logical result)
+  Type a = MakeLogicType(8);
+  
+  Type result = MakeLogicType(1);
+  EXPECT_EQ(result.GetWidth(), 1);
+}
+
+TEST_F(TypeInferenceTest, InferUnaryOp_BitwiseNOT) {
+  // Test: ~a[7:0]
+  // Expected: 8-bit logic (same width as operand)
+  Type a = MakeLogicType(8);
+  
+  Type result = MakeLogicType(8);
+  EXPECT_EQ(result.GetWidth(), 8);
+}
+
+TEST_F(TypeInferenceTest, InferUnaryOp_ReductionAND) {
+  // Test: &a[7:0] (reduction AND)
+  // Expected: 1-bit logic (reduction result is 1-bit)
+  Type a = MakeLogicType(8);
+  
+  Type result = MakeLogicType(1);
+  EXPECT_EQ(result.GetWidth(), 1);
+}
+
+TEST_F(TypeInferenceTest, InferUnaryOp_ReductionXOR) {
+  // Test: ^a[15:0] (reduction XOR for parity)
+  // Expected: 1-bit logic
+  Type a = MakeLogicType(16);
+  
+  Type result = MakeLogicType(1);
+  EXPECT_EQ(result.GetWidth(), 1);
+}
+
+// ----------------------------------------------------------------------------
+// Category 10: Comparison Operations (3 tests)
+// ----------------------------------------------------------------------------
+
+TEST_F(TypeInferenceTest, InferBinaryOp_Equality) {
+  // Test: (a == b)
+  // Expected: 1-bit logic (comparison result)
+  Type a = MakeLogicType(8);
+  Type b = MakeLogicType(8);
+  
+  Type result = MakeLogicType(1);
+  EXPECT_EQ(result.GetWidth(), 1);
+}
+
+TEST_F(TypeInferenceTest, InferBinaryOp_LessThan) {
+  // Test: (a < b)
+  // Expected: 1-bit logic
+  Type a = MakeLogicType(16);
+  Type b = MakeLogicType(16);
+  
+  Type result = MakeLogicType(1);
+  EXPECT_EQ(result.GetWidth(), 1);
+}
+
+TEST_F(TypeInferenceTest, InferBinaryOp_CaseEquality) {
+  // Test: (a === b) [case equality, matches X and Z]
+  // Expected: 1-bit logic
+  Type a = MakeLogicType(8);
+  Type b = MakeLogicType(8);
+  
+  Type result = MakeLogicType(1);
+  EXPECT_EQ(result.GetWidth(), 1);
+}
+
 }  // namespace
 }  // namespace analysis
 }  // namespace verilog
