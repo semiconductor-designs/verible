@@ -258,6 +258,43 @@ cc_test(
 )
 
 cc_library(
+    name = "hierarchical-type-checker",
+    srcs = ["hierarchical-type-checker.cc"],
+    hdrs = ["hierarchical-type-checker.h"],
+    deps = [
+        ":symbol-table",
+        ":verilog-project",
+        "//verible/common/analysis:syntax-tree-search",
+        "//verible/common/text:concrete-syntax-leaf",
+        "//verible/common/text:concrete-syntax-tree",
+        "//verible/common/text:symbol",
+        "//verible/common/text:token-info",
+        "//verible/common/text:tree-utils",
+        "//verible/verilog/CST:class",
+        "//verible/verilog/CST:module",
+        "//verible/verilog/CST:verilog-matchers",
+        "//verible/verilog/CST:verilog-nonterminals",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "hierarchical-type-checker_test",
+    srcs = ["hierarchical-type-checker_test.cc"],
+    deps = [
+        ":hierarchical-type-checker",
+        ":symbol-table",
+        ":verilog-analyzer",
+        ":verilog-project",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "call-graph",
     srcs = ["call-graph.cc"],
     hdrs = ["call-graph.h"],
