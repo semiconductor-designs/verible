@@ -15,6 +15,7 @@
 #ifndef VERIBLE_VERILOG_ANALYSIS_ENHANCED_UNUSED_DETECTOR_H_
 #define VERIBLE_VERILOG_ANALYSIS_ENHANCED_UNUSED_DETECTOR_H_
 
+#include <regex>
 #include <string>
 #include <vector>
 
@@ -155,6 +156,7 @@ class EnhancedUnusedDetector {
   void SetIgnorePorts(bool ignore) { ignore_ports_ = ignore; }
   void SetIgnoreOutputs(bool ignore) { ignore_outputs_ = ignore; }
   void SetIgnoreInputs(bool ignore) { ignore_inputs_ = ignore; }
+  void SetUseRegex(bool use) { use_regex_ = use; }
   void AddIgnorePattern(const std::string& pattern);
   
   // Error/warning reporting
@@ -195,7 +197,9 @@ class EnhancedUnusedDetector {
   bool ignore_ports_;
   bool ignore_outputs_;
   bool ignore_inputs_;
+  bool use_regex_;
   std::vector<std::string> ignore_patterns_;
+  mutable std::vector<std::regex> compiled_regex_;
 };
 
 }  // namespace verilog

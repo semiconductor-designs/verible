@@ -38,7 +38,8 @@ EnhancedUnusedDetector::EnhancedUnusedDetector(
       symbol_table_(symbol_table),
       ignore_ports_(false),
       ignore_outputs_(false),
-      ignore_inputs_(false) {
+      ignore_inputs_(false),
+      use_regex_(false) {
   // symbol_table_ will be used for function/module analysis in future iterations
   (void)symbol_table_;
   
@@ -297,6 +298,16 @@ std::vector<UnusedEntity> EnhancedUnusedDetector::GetReadOnlySignals() const {
 
 void EnhancedUnusedDetector::AddIgnorePattern(const std::string& pattern) {
   ignore_patterns_.push_back(pattern);
+  
+  // If regex mode enabled, compile the pattern
+  if (use_regex_) {
+    try {
+      compiled_regex_.emplace_back(pattern);
+    } catch (const std::regex_error& e) {
+      // Log warning if regex is invalid
+      AddWarning(absl::StrCat("Invalid regex pattern: ", pattern, " - ", e.what()), nullptr);
+    }
+  }
 }
 
 // Helper methods
@@ -361,11 +372,19 @@ bool EnhancedUnusedDetector::ShouldIgnore(const UnusedEntity& entity) {
 }
 
 bool EnhancedUnusedDetector::MatchesIgnorePattern(const std::string& name) {
-  for (const auto& pattern : ignore_patterns_) {
-    // Simple substring matching
-    // TODO: Could enhance with regex support
-    if (name.find(pattern) != std::string::npos) {
-      return true;
+  if (use_regex_) {
+    // Use compiled regex patterns
+    for (const auto& regex : compiled_regex_) {
+      if (std::regex_search(name, regex)) {
+        return true;
+      }
+    }
+  } else {
+    // Use simple substring matching (backward compatible)
+    for (const auto& pattern : ignore_patterns_) {
+      if (name.find(pattern) != std::string::npos) {
+        return true;
+      }
     }
   }
   return false;

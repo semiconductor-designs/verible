@@ -502,6 +502,184 @@ TEST_F(EnhancedUnusedDetectorTest, NoUnusedEntities) {
   EXPECT_GE(stats.total_signals, 0);
 }
 
+// =============================================================================
+// REGEX PATTERN SUPPORT TESTS
+// =============================================================================
+
+TEST_F(EnhancedUnusedDetectorTest, RegexPatternSimple) {
+  const char* code = R"(
+    module test;
+      logic test_signal1;
+      logic test_signal2;
+      logic used_signal;
+      
+      always_comb used_signal = 1'b0;
+    endmodule
+  )";
+
+  ASSERT_TRUE(ParseCode(code));
+  DataFlowAnalyzer dataflow(*symbol_table_, *project_);
+  auto status = dataflow.BuildDataFlowGraph();
+  EXPECT_TRUE(status.ok());
+  
+  EnhancedUnusedDetector detector(dataflow, *symbol_table_);
+  detector.SetUseRegex(true);
+  detector.AddIgnorePattern("^test_.*");  // Match signals starting with "test_"
+  
+  status = detector.AnalyzeUnusedEntities();
+  EXPECT_TRUE(status.ok());
+  
+  // test_signal1 and test_signal2 should be ignored
+  auto unused = detector.GetUnusedEntities();
+  bool has_test_signal = false;
+  for (const auto& entity : unused) {
+    if (entity.name.find("test_signal") != std::string::npos) {
+      has_test_signal = true;
+      break;
+    }
+  }
+  EXPECT_FALSE(has_test_signal);  // Should be filtered out
+}
+
+TEST_F(EnhancedUnusedDetectorTest, RegexPatternComplex) {
+  const char* code = R"(
+    module test;
+      logic debug_signal;
+      logic temp_signal;
+      logic normal_signal;
+      logic used_signal;
+      
+      always_comb used_signal = 1'b0;
+    endmodule
+  )";
+
+  ASSERT_TRUE(ParseCode(code));
+  DataFlowAnalyzer dataflow(*symbol_table_, *project_);
+  auto status = dataflow.BuildDataFlowGraph();
+  EXPECT_TRUE(status.ok());
+  
+  EnhancedUnusedDetector detector(dataflow, *symbol_table_);
+  detector.SetUseRegex(true);
+  detector.AddIgnorePattern("(debug|temp)_.*");  // Match debug_ or temp_ prefix
+  
+  status = detector.AnalyzeUnusedEntities();
+  EXPECT_TRUE(status.ok());
+  
+  // debug_signal and temp_signal should be ignored
+  auto unused = detector.GetUnusedEntities();
+  bool has_debug_or_temp = false;
+  for (const auto& entity : unused) {
+    if (entity.name.find("debug_signal") != std::string::npos || 
+        entity.name.find("temp_signal") != std::string::npos) {
+      has_debug_or_temp = true;
+      break;
+    }
+  }
+  EXPECT_FALSE(has_debug_or_temp);
+}
+
+TEST_F(EnhancedUnusedDetectorTest, RegexPatternEndsWith) {
+  const char* code = R"(
+    module test;
+      logic signal_tmp;
+      logic variable_tmp;
+      logic normal_signal;
+      logic used_signal;
+      
+      always_comb used_signal = 1'b0;
+    endmodule
+  )";
+
+  ASSERT_TRUE(ParseCode(code));
+  DataFlowAnalyzer dataflow(*symbol_table_, *project_);
+  auto status = dataflow.BuildDataFlowGraph();
+  EXPECT_TRUE(status.ok());
+  
+  EnhancedUnusedDetector detector(dataflow, *symbol_table_);
+  detector.SetUseRegex(true);
+  detector.AddIgnorePattern(".*_tmp$");  // Match signals ending with "_tmp"
+  
+  status = detector.AnalyzeUnusedEntities();
+  EXPECT_TRUE(status.ok());
+  
+  // signal_tmp and variable_tmp should be ignored
+  auto unused = detector.GetUnusedEntities();
+  bool has_tmp = false;
+  for (const auto& entity : unused) {
+    if (entity.name.find("_tmp") != std::string::npos) {
+      has_tmp = true;
+      break;
+    }
+  }
+  EXPECT_FALSE(has_tmp);
+}
+
+TEST_F(EnhancedUnusedDetectorTest, RegexPatternInvalid) {
+  const char* code = R"(
+    module test;
+      logic unused_signal;
+    endmodule
+  )";
+
+  ASSERT_TRUE(ParseCode(code));
+  DataFlowAnalyzer dataflow(*symbol_table_, *project_);
+  auto status = dataflow.BuildDataFlowGraph();
+  EXPECT_TRUE(status.ok());
+  
+  EnhancedUnusedDetector detector(dataflow, *symbol_table_);
+  detector.SetUseRegex(true);
+  
+  // Check warnings before AnalyzeUnusedEntities
+  detector.AddIgnorePattern("[invalid(regex");  // Invalid regex
+  auto warnings_before = detector.GetWarnings();
+  bool has_regex_warning = false;
+  for (const auto& warning : warnings_before) {
+    if (warning.find("Invalid regex") != std::string::npos) {
+      has_regex_warning = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(has_regex_warning);
+  
+  // Analyze should still work despite invalid pattern
+  status = detector.AnalyzeUnusedEntities();
+  EXPECT_TRUE(status.ok());
+}
+
+TEST_F(EnhancedUnusedDetectorTest, RegexBackwardCompatible) {
+  const char* code = R"(
+    module test;
+      logic unused_signal;
+      logic test_signal;
+      
+      always_comb test_signal = 1'b0;
+    endmodule
+  )";
+
+  ASSERT_TRUE(ParseCode(code));
+  DataFlowAnalyzer dataflow(*symbol_table_, *project_);
+  auto status = dataflow.BuildDataFlowGraph();
+  EXPECT_TRUE(status.ok());
+  
+  EnhancedUnusedDetector detector(dataflow, *symbol_table_);
+  // Don't enable regex - use default substring matching
+  detector.AddIgnorePattern("unused");
+  
+  status = detector.AnalyzeUnusedEntities();
+  EXPECT_TRUE(status.ok());
+  
+  // unused_signal should be filtered by substring matching
+  auto unused = detector.GetUnusedEntities();
+  bool has_unused_signal = false;
+  for (const auto& entity : unused) {
+    if (entity.name.find("unused_signal") != std::string::npos) {
+      has_unused_signal = true;
+      break;
+    }
+  }
+  EXPECT_FALSE(has_unused_signal);
+}
+
 }  // namespace
 }  // namespace verilog
 
