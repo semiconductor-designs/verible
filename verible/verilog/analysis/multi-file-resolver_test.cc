@@ -21,6 +21,7 @@
 #include "gtest/gtest.h"
 #include "verible/verilog/analysis/symbol-table.h"
 #include "verible/verilog/analysis/verilog-project.h"
+#include "verible/verilog/analysis/verilog-analyzer.h"
 
 namespace verilog {
 namespace analysis {
@@ -34,8 +35,29 @@ class MultiFileResolverTest : public ::testing::Test {
     symbol_table_ = std::make_unique<SymbolTable>(project_.get());
   }
   
+  // Helper: Parse SystemVerilog code from memory
+  void ParseCode(std::string_view code, std::string_view filename = "test.sv") {
+    // Create and parse analyzer
+    // IMPORTANT: Must keep analyzer alive! SymbolTable stores string_views into it
+    auto analyzer = std::make_unique<VerilogAnalyzer>(code, filename);
+    absl::Status parse_status = analyzer->Analyze();
+    // Ignore parse errors for now
+    
+    // Add to project - this keeps ownership
+    project_->UpdateFileContents(std::string(filename), analyzer.get());
+    
+    // Keep analyzer alive by storing it
+    analyzers_.push_back(std::move(analyzer));
+    
+    // Build symbol table from this file
+    std::vector<absl::Status> diagnostics;
+    symbol_table_->BuildSingleTranslationUnit(filename, &diagnostics);
+    // Ignore diagnostics for now - we just need the symbol table populated
+  }
+  
   std::unique_ptr<VerilogProject> project_;
   std::unique_ptr<SymbolTable> symbol_table_;
+  std::vector<std::unique_ptr<VerilogAnalyzer>> analyzers_;  // Keep alive!
 };
 
 // Test fixture for DependencyGraph tests
@@ -279,40 +301,58 @@ TEST_F(MultiFileResolverTest, NoCircularDependenciesEmpty) {
 
 // Test 21: Single module definition
 TEST_F(MultiFileResolverTest, SingleModuleDefinition) {
-  // TODO: Parse "module test_module; endmodule"
-  // Add to symbol table
+  // Parse a simple module
+  ParseCode("module test_module; endmodule", "test.sv");
   
   MultiFileResolver resolver(symbol_table_.get());
-  // absl::Status status = resolver.ResolveReferences();
-  // EXPECT_TRUE(status.ok());
+  absl::Status status = resolver.ResolveReferences();
+  EXPECT_TRUE(status.ok());
   
-  // EXPECT_TRUE(resolver.HasModuleDefinition("test_module"));
-  // const auto* node = resolver.GetModuleDefinition("test_module");
-  // EXPECT_NE(node, nullptr);
+  // Should find the module
+  EXPECT_TRUE(resolver.HasModuleDefinition("test_module"));
+  
+  const auto* node = resolver.GetModuleDefinition("test_module");
+  EXPECT_NE(node, nullptr);
+  
+  auto modules = resolver.GetAllModuleNames();
+  EXPECT_EQ(modules.size(), 1);
+  EXPECT_EQ(modules[0], "test_module");
 }
 
 // Test 22: Multiple module definitions
 TEST_F(MultiFileResolverTest, MultipleModuleDefinitions) {
-  // TODO: Parse multiple modules
+  // Parse multiple modules
+  ParseCode("module mod_a; endmodule\nmodule mod_b; endmodule", "test.sv");
   
   MultiFileResolver resolver(symbol_table_.get());
-  // absl::Status status = resolver.ResolveReferences();
-  // EXPECT_TRUE(status.ok());
+  absl::Status status = resolver.ResolveReferences();
+  EXPECT_TRUE(status.ok());
   
-  // auto modules = resolver.GetAllModuleNames();
-  // EXPECT_GE(modules.size(), 2);
+  auto modules = resolver.GetAllModuleNames();
+  EXPECT_EQ(modules.size(), 2);
+  
+  EXPECT_TRUE(resolver.HasModuleDefinition("mod_a"));
+  EXPECT_TRUE(resolver.HasModuleDefinition("mod_b"));
 }
 
 // Test 23: Get all module names
 TEST_F(MultiFileResolverTest, GetAllModuleNames) {
-  // TODO: Parse modules: module_a, module_b, module_c
+  // Parse three modules
+  ParseCode("module module_a; endmodule", "a.sv");
+  ParseCode("module module_b; endmodule", "b.sv");  
+  ParseCode("module module_c; endmodule", "c.sv");
   
   MultiFileResolver resolver(symbol_table_.get());
-  // absl::Status status = resolver.ResolveReferences();
-  // EXPECT_TRUE(status.ok());
+  absl::Status status = resolver.ResolveReferences();
+  EXPECT_TRUE(status.ok());
   
-  // auto modules = resolver.GetAllModuleNames();
-  // EXPECT_EQ(modules.size(), 3);
+  auto modules = resolver.GetAllModuleNames();
+  EXPECT_EQ(modules.size(), 3);
+  
+  // Verify all three are present
+  EXPECT_TRUE(resolver.HasModuleDefinition("module_a"));
+  EXPECT_TRUE(resolver.HasModuleDefinition("module_b"));
+  EXPECT_TRUE(resolver.HasModuleDefinition("module_c"));
 }
 
 // Test 24: Module definition lookup

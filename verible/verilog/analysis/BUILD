@@ -147,6 +147,7 @@ cc_test(
     deps = [
         ":multi-file-resolver",
         ":symbol-table",
+        ":verilog-analyzer",
         ":verilog-project",
         "@googletest//:gtest",
         "@googletest//:gtest_main",
