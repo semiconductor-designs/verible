@@ -19,7 +19,14 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
+#include "verible/common/text/concrete-syntax-leaf.h"
+#include "verible/common/text/concrete-syntax-tree.h"
+#include "verible/common/text/symbol.h"
+#include "verible/common/text/token-info.h"
+#include "verible/common/text/tree-utils.h"
+#include "verible/verilog/CST/parameters.h"
 #include "verible/verilog/analysis/symbol-table.h"
+#include "verible/verilog/parser/verilog-token-enum.h"
 
 namespace verilog {
 namespace analysis {
@@ -94,15 +101,29 @@ ParameterInfo ParameterTracker::ExtractParameterDefinition(
   info.node = &node;
   info.syntax_origin = sym_info.syntax_origin;
   
-  // Determine if this is a localparam
-  // TODO: Extract from CST or symbol table metadata
-  info.is_localparam = false;  // Default to parameter
+  // Extract from CST if available
+  if (sym_info.syntax_origin) {
+    // Determine if this is a localparam by checking the keyword
+    verilog_tokentype keyword = GetParamKeyword(*sym_info.syntax_origin);
+    info.is_localparam = (keyword == TK_localparam);
+    
+    // Extract default value from CST
+    const verible::Symbol* expr = GetParamAssignExpression(*sym_info.syntax_origin);
+    if (expr) {
+      info.default_value = verible::StringSpanOfSymbol(*expr);
+    }
+    
+    // Extract type information
+    const verible::Symbol* type_info = GetParamTypeInfoSymbol(*sym_info.syntax_origin);
+    if (type_info && !IsTypeInfoEmpty(*type_info)) {
+      info.type = verible::StringSpanOfSymbol(*type_info);
+    }
+  }
   
-  // Extract type
-  info.type = ParseParameterType(node);
-  
-  // Extract default value
-  info.default_value = ParseParameterValue(node);
+  // Fallback to symbol table if CST extraction didn't work
+  if (info.type.empty()) {
+    info.type = ParseParameterType(node);
+  }
   
   return info;
 }

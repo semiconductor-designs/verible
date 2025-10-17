@@ -226,7 +226,13 @@ cc_library(
     hdrs = ["parameter-tracker.h"],
     deps = [
         ":symbol-table",
+        "//verible/common/text:concrete-syntax-leaf",
+        "//verible/common/text:concrete-syntax-tree",
         "//verible/common/text:symbol",
+        "//verible/common/text:token-info",
+        "//verible/common/text:tree-utils",
+        "//verible/verilog/CST:parameters",
+        "//verible/verilog/parser:verilog-token-enum",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/strings",
     ],
