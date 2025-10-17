@@ -196,8 +196,8 @@ class CallGraphEnhancer {
   std::vector<CallGraphEdge*> GetAllEdges() const;
   std::vector<CallGraphNode*> GetEntryPoints() const;
   std::vector<CallGraphNode*> GetUnreachableFunctions() const;
-  std::vector<RecursionCycle> GetRecursionCycles() const { return recursion_cycles_; }
-  CallGraphStatistics GetStatistics() const { return statistics_; }
+  const std::vector<RecursionCycle>& GetRecursionCycles() const { return recursion_cycles_; }
+  const CallGraphStatistics& GetStatistics() const { return statistics_; }
   
   // Specific queries
   CallGraphNode* GetNode(const std::string& function_name) const;

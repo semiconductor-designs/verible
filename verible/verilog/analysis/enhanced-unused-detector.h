@@ -144,12 +144,12 @@ class EnhancedUnusedDetector {
   absl::Status AnalyzeDeadCode();
   
   // Query methods
-  std::vector<UnusedEntity> GetUnusedEntities() const { return unused_entities_; }
+  const std::vector<UnusedEntity>& GetUnusedEntities() const { return unused_entities_; }
   std::vector<UnusedEntity> GetUnusedSignals() const;
   std::vector<UnusedEntity> GetUnusedFunctions() const;
   std::vector<UnusedEntity> GetWriteOnlySignals() const;
   std::vector<UnusedEntity> GetReadOnlySignals() const;
-  UsageStatistics GetStatistics() const { return statistics_; }
+  const UsageStatistics& GetStatistics() const { return statistics_; }
   
   // Filtering and configuration
   void SetIgnorePorts(bool ignore) { ignore_ports_ = ignore; }
