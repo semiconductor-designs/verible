@@ -198,6 +198,8 @@ cc_library(
         "//verible/common/text:symbol",
         "//verible/common/text:tree-utils",
         "//verible/verilog/CST:module",
+        "//verible/verilog/CST:verilog-matchers",
+        "//verible/verilog/CST:verilog-nonterminals",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/strings",
     ],

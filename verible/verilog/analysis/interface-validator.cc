@@ -23,6 +23,8 @@
 #include "verible/common/text/concrete-syntax-leaf.h"
 #include "verible/common/text/tree-utils.h"
 #include "verible/verilog/CST/module.h"
+#include "verible/verilog/CST/verilog-matchers.h"
+#include "verible/verilog/CST/verilog-nonterminals.h"
 #include "verible/verilog/analysis/symbol-table.h"
 
 namespace verilog {
@@ -116,11 +118,40 @@ std::vector<ModportInfo> InterfaceValidator::ExtractModports(
     const SymbolTableNode& node) {
   std::vector<ModportInfo> modports;
   
-  // TODO: Traverse node children to find modport declarations
-  // For each modport:
-  // 1. Extract modport name
-  // 2. Extract signal directions
-  // 3. Create ModportInfo and add to vector
+  // Get the CST syntax origin for this interface
+  const SymbolInfo& info = node.Value();
+  if (!info.syntax_origin) {
+    return modports;  // No CST available
+  }
+  
+  // Search for modport declarations in the CST
+  auto modport_matches = verible::SearchSyntaxTree(
+      *info.syntax_origin, 
+      NodekModportDeclaration());
+  
+  for (const auto& match : modport_matches) {
+    if (!match.match) continue;
+    
+    // kModportDeclaration structure: position 1 contains a node with the name
+    // Get the node at position 1 first
+    const verible::SyntaxTreeNode* modport_item = 
+        verible::GetSubtreeAsNode(*match.match, NodeEnum::kModportDeclaration, 1);
+    
+    if (modport_item && !modport_item->empty()) {
+      // The name is typically the first child (position 0) of that node
+      const verible::Symbol* first_child = (*modport_item)[0].get();
+      if (first_child && first_child->Kind() == verible::SymbolKind::kLeaf) {
+        const auto* name_leaf = verible::down_cast<const verible::SyntaxTreeLeaf*>(first_child);
+        ModportInfo modport_info(name_leaf->get().text());
+        modport_info.syntax_origin = match.match;
+        
+        // TODO: Extract signal directions from modport ports list
+        // This requires parsing kModportSimplePortsDeclaration
+        
+        modports.push_back(modport_info);
+      }
+    }
+  }
   
   return modports;
 }
