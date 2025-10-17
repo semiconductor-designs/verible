@@ -81,11 +81,32 @@ cc_test(
 )
 
 cc_library(
+    name = "type-compatibility-rules",
+    srcs = ["type-compatibility-rules.cc"],
+    hdrs = ["type-compatibility-rules.h"],
+    deps = [
+        ":type-representation",
+    ],
+)
+
+cc_test(
+    name = "type-compatibility-rules_test",
+    srcs = ["type-compatibility-rules_test.cc"],
+    deps = [
+        ":type-compatibility-rules",
+        ":type-representation",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "type-checker",
     srcs = ["type-checker.cc"],
     hdrs = ["type-checker.h"],
     deps = [
         ":symbol-table",
+        ":type-compatibility-rules",
         ":type-inference",
         ":type-representation",
         "//verible/common/text:symbol",
