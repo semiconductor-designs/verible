@@ -111,9 +111,11 @@ std::vector<ModportInfo> InterfaceValidator::ExtractModports(
   for (const auto& [child_name, child_node] : node) {
     const SymbolInfo& child_info = child_node.Value();
     
-    // Debug: print what we're seeing
-    // std::cerr << "  Child: " << child_name << " metatype=" << static_cast<int>(child_info.metatype) 
-    //           << " is_port=" << child_info.is_port_identifier << std::endl;
+    // Symbol table investigation revealed:
+    // - Modports are NOT stored as symbol table children
+    // - Only signals appear as children (metatype=kDataNetVariableInstance)
+    // - Modport info exists ONLY in CST
+    // Therefore, CST-based extraction is the only correct approach
     
     // Check if this child looks like a modport (heuristic: has port info)
     // Since there's no kModport metatype, we detect by structure
