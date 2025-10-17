@@ -188,6 +188,33 @@ cc_test(
 )
 
 cc_library(
+    name = "interface-validator",
+    srcs = ["interface-validator.cc"],
+    hdrs = ["interface-validator.h"],
+    deps = [
+        ":symbol-table",
+        "//verible/common/text:symbol",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "interface-validator_test",
+    srcs = ["interface-validator_test.cc"],
+    deps = [
+        ":interface-validator",
+        ":symbol-table",
+        ":verilog-analyzer",
+        ":verilog-project",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "call-graph",
     srcs = ["call-graph.cc"],
     hdrs = ["call-graph.h"],
