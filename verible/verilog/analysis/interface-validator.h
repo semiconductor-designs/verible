@@ -214,6 +214,14 @@ class InterfaceValidator {
   // Extracts all interface connections from the symbol table
   void ExtractConnections();
 
+  // Finds an interface definition by name
+  // Args:
+  //   interface_name: Name of the interface to find
+  // Returns:
+  //   Pointer to InterfaceInfo if found, nullptr otherwise
+  const InterfaceInfo* FindInterfaceDefinition(
+      std::string_view interface_name) const;
+
   // Validates that a modport exists in an interface
   // Args:
   //   interface_info: The interface to check

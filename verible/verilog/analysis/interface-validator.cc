@@ -67,18 +67,6 @@ absl::Status InterfaceValidator::ValidateInterfaceConnection(
   return absl::OkStatus();
 }
 
-bool InterfaceValidator::ValidateModportUsage(
-    std::string_view interface_name,
-    std::string_view modport_name,
-    std::string_view module_name) {
-  // TODO: Implement modport usage validation
-  // 1. Find the interface
-  // 2. Find the modport
-  // 3. Check if modport is used correctly in the module
-  
-  return true;
-}
-
 void InterfaceValidator::ExtractInterfaces() {
   // TODO: Traverse symbol table to find all interface definitions
   // For each interface found:
@@ -289,6 +277,41 @@ void InterfaceValidator::TraverseForInterfaces(const SymbolTableNode& node) {
   }
 }
 
+const InterfaceInfo* InterfaceValidator::FindInterfaceDefinition(
+    std::string_view interface_name) const {
+  auto it = interfaces_.find(std::string(interface_name));
+  if (it != interfaces_.end()) {
+    return &it->second;
+  }
+  return nullptr;
+}
+
+bool InterfaceValidator::ValidateModportUsage(
+    std::string_view interface_name,
+    std::string_view modport_name,
+    std::string_view module_name) {
+  
+  // Find the interface definition
+  const InterfaceInfo* intf_info = FindInterfaceDefinition(interface_name);
+  
+  if (!intf_info) {
+    AddError(absl::StrCat("Interface '", interface_name, "' not found in module '", 
+                          module_name, "'"));
+    return false;
+  }
+  
+  // Check if the modport exists
+  if (!ModportExists(*intf_info, modport_name)) {
+    AddError(absl::StrCat("Modport '", modport_name, 
+                          "' not found in interface '", interface_name, 
+                          "' (used in module '", module_name, "')"));
+    return false;
+  }
+  
+  // Modport exists - validation successful
+  return true;
+}
+
 void InterfaceValidator::TraverseForConnections(
     const SymbolTableNode& node,
     std::string_view current_module) {
@@ -297,14 +320,35 @@ void InterfaceValidator::TraverseForConnections(
   // Track current module context
   std::string module_context(current_module);
   
-  // TODO: Check if this node is a module definition
-  // If it is, update module_context
+  // Update module context if this is a module definition
+  if (info.metatype == SymbolMetaType::kModule) {
+    module_context = std::string(*node.Key());
+  }
   
-  // TODO: Check if this node is an interface port or instance
-  // If it is:
-  // 1. Extract connection details
-  // 2. Create InterfaceConnection
-  // 3. Add to connections_ vector
+  // Check if this is a port with an interface type
+  if (info.is_port_identifier && 
+      info.declared_type.user_defined_type != nullptr) {
+    
+    // Get the type identifier
+    const auto& type_ref = info.declared_type.user_defined_type->Value();
+    if (type_ref.identifier.empty()) {
+      return;  // Skip if no identifier
+    }
+    
+    // Parse the type to see if it has a modport specification
+    // Format: "interface_name.modport_name"
+    std::string_view type_name = type_ref.identifier;
+    size_t dot_pos = type_name.find('.');
+    
+    if (dot_pos != std::string_view::npos) {
+      // Has modport specification
+      std::string_view intf_name = type_name.substr(0, dot_pos);
+      std::string_view modport_name = type_name.substr(dot_pos + 1);
+      
+      // Validate the modport usage
+      ValidateModportUsage(intf_name, modport_name, module_context);
+    }
+  }
   
   // Recurse into children with current module context
   for (const auto& [name, child] : node) {
