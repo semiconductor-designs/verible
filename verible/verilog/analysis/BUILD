@@ -330,6 +330,36 @@ cc_test(
 )
 
 cc_library(
+    name = "enhanced-unused-detector",
+    srcs = ["enhanced-unused-detector.cc"],
+    hdrs = ["enhanced-unused-detector.h"],
+    deps = [
+        ":data-flow-analyzer",
+        ":symbol-table",
+        ":verilog-project",
+        "//verible/common/text:symbol",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "enhanced-unused-detector_test",
+    srcs = ["enhanced-unused-detector_test.cc"],
+    deps = [
+        ":data-flow-analyzer",
+        ":enhanced-unused-detector",
+        ":symbol-table",
+        ":verilog-analyzer",
+        ":verilog-project",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "call-graph",
     srcs = ["call-graph.cc"],
     hdrs = ["call-graph.h"],
