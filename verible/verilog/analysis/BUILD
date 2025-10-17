@@ -155,6 +155,34 @@ cc_test(
 )
 
 cc_library(
+    name = "port-connection-validator",
+    srcs = ["port-connection-validator.cc"],
+    hdrs = ["port-connection-validator.h"],
+    deps = [
+        ":symbol-table",
+        "//verible/common/text:symbol",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "port-connection-validator_test",
+    srcs = ["port-connection-validator_test.cc"],
+    deps = [
+        ":port-connection-validator",
+        ":symbol-table",
+        ":verilog-analyzer",
+        ":verilog-project",
+        "//verible/common/analysis:syntax-tree-search",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "call-graph",
     srcs = ["call-graph.cc"],
     hdrs = ["call-graph.h"],
