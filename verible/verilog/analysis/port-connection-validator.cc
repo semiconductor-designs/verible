@@ -23,7 +23,12 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "verible/common/analysis/syntax-tree-search.h"
+#include "verible/common/text/concrete-syntax-leaf.h"
+#include "verible/common/text/concrete-syntax-tree.h"
 #include "verible/common/text/symbol.h"
+#include "verible/common/text/tree-utils.h"
+#include "verible/verilog/CST/port.h"
 #include "verible/verilog/analysis/symbol-table.h"
 
 namespace verilog {
@@ -98,16 +103,27 @@ void PortConnectionValidator::ValidateModuleInstances(
           // Extract ports from the module definition
           std::vector<PortInfo> formal_ports = ExtractPorts(*module_def);
           
-          // Extract connections from this instance (stub for now)
-          std::vector<PortConnection> connections;  // TODO: Extract from CST
+          // Extract connections from this instance
+          std::vector<PortConnection> connections = ExtractConnections(inst_node);
           
-          // For driver conflict detection, track output ports
-          for (const auto& port : formal_ports) {
-            if (port.direction == PortDirection::kOutput) {
-              // In a real implementation, we'd get the actual signal name from CST
-              // For now, we'll use a simplified approach
-              std::string signal_name = std::string(inst_name) + "_signal";
-              signal_to_output_instances[signal_name].push_back(std::string(inst_name));
+          // Link connections to formal ports
+          for (auto& conn : connections) {
+            for (const auto& port : formal_ports) {
+              if (port.name == conn.formal_name) {
+                conn.formal_port = &port;
+                break;
+              }
+            }
+          }
+          
+          // For driver conflict detection, track output port connections
+          for (const auto& conn : connections) {
+            if (conn.formal_port && 
+                conn.formal_port->direction == PortDirection::kOutput &&
+                !conn.actual_expression.empty()) {
+              // Track which signal this output is driving
+              signal_to_output_instances[conn.actual_expression].push_back(
+                  std::string(inst_name));
             }
           }
           
@@ -209,8 +225,45 @@ std::vector<PortConnection> PortConnectionValidator::ExtractConnections(
     const SymbolTableNode& instance_node) {
   std::vector<PortConnection> connections;
   
-  // TODO: Implement connection extraction from module instance
-  // This will traverse the CST to find port connections
+  const SymbolInfo& inst_info = instance_node.Value();
+  if (!inst_info.syntax_origin) {
+    return connections;  // No CST node available
+  }
+  
+  // Find all named port connections (.port_name(expression))
+  auto named_ports = FindAllActualNamedPort(*inst_info.syntax_origin);
+  
+  for (const auto& port_match : named_ports) {
+    const verible::Symbol* port_symbol = port_match.match;
+    if (!port_symbol) continue;
+    
+    // Extract port name
+    const verible::SyntaxTreeLeaf* port_name_leaf = 
+        GetActualNamedPortName(*port_symbol);
+    if (!port_name_leaf) continue;
+    
+    std::string formal_name(port_name_leaf->get().text());
+    
+    // Extract the actual expression (what's connected to the port)
+    const verible::Symbol* paren_group = GetActualNamedPortParenGroup(*port_symbol);
+    std::string actual_expr;
+    
+    if (paren_group) {
+      // Get the text of the expression inside the parentheses
+      actual_expr = verible::StringSpanOfSymbol(*paren_group);
+      // Remove parentheses
+      if (actual_expr.size() >= 2 && actual_expr.front() == '(' && actual_expr.back() == ')') {
+        actual_expr = actual_expr.substr(1, actual_expr.size() - 2);
+      }
+    } else {
+      // Empty connection like .port()
+      actual_expr = "";
+    }
+    
+    PortConnection conn(formal_name, actual_expr);
+    conn.syntax_origin = port_symbol;
+    connections.push_back(conn);
+  }
   
   return connections;
 }
