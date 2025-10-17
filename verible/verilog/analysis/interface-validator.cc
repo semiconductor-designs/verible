@@ -106,20 +106,50 @@ std::vector<ModportInfo> InterfaceValidator::ExtractModports(
     const SymbolTableNode& node) {
   std::vector<ModportInfo> modports;
   
-  // Get the CST syntax origin for this interface
-  const SymbolInfo& info = node.Value();
-  if (!info.syntax_origin) {
-    // No CST available - this might happen if symbol table wasn't built from CST
-    // Try extracting from symbol table children as fallback
-    for (const auto& [child_name, child_node] : node) {
-      const SymbolInfo& child_info = child_node.Value();
-      if (child_info.metatype == SymbolMetaType::kModport) {
-        ModportInfo mp_info(child_name);
-        mp_info.syntax_origin = child_info.syntax_origin;
+  // Try to extract from symbol table children first
+  // Modports appear as children of interface nodes in the symbol table
+  for (const auto& [child_name, child_node] : node) {
+    const SymbolInfo& child_info = child_node.Value();
+    
+    // Debug: print what we're seeing
+    // std::cerr << "  Child: " << child_name << " metatype=" << static_cast<int>(child_info.metatype) 
+    //           << " is_port=" << child_info.is_port_identifier << std::endl;
+    
+    // Check if this child looks like a modport (heuristic: has port info)
+    // Since there's no kModport metatype, we detect by structure
+    // Modports typically won't have children and aren't data instances
+    if (child_info.metatype == SymbolMetaType::kUnspecified &&
+        !child_info.is_port_identifier) {
+      // This might be a modport - create entry
+      ModportInfo mp_info(child_name);
+      mp_info.syntax_origin = child_info.syntax_origin;
+      
+      // Try to extract signals from this potential modport's children
+      for (const auto& [signal_name, signal_node] : child_node) {
+        const SymbolInfo& sig_info = signal_node.Value();
+        // Signals in modports typically have direction info
+        if (!sig_info.declared_type.direction.empty()) {
+          ModportDirection dir = ParseModportDirection(sig_info.declared_type.direction);
+          mp_info.AddSignal(signal_name, dir);
+        }
+      }
+      
+      // Only add if we found signals
+      if (!mp_info.signals.empty()) {
         modports.push_back(mp_info);
       }
     }
+  }
+  
+  // If we found modports from symbol table, return them
+  if (!modports.empty()) {
     return modports;
+  }
+  
+  // Fallback: try CST-based extraction
+  const SymbolInfo& info = node.Value();
+  if (!info.syntax_origin) {
+    return modports;  // No CST available
   }
   
   // Search for modport declarations in the CST
