@@ -45,6 +45,9 @@ absl::Status PortConnectionValidator::ValidateAllConnections() {
     return absl::InvalidArgumentError("Symbol table is null");
   }
   
+  // DEBUG: Confirm this is being called
+  // AddError("DEBUG: ValidateAllConnections called");
+  
   // Traverse the symbol table to find and validate all module instances
   // We need to:
   // 1. Find all modules
@@ -66,8 +69,11 @@ void PortConnectionValidator::ValidateModuleHierarchy(
   
   // If this is a module, validate its instances
   if (info.metatype == SymbolMetaType::kModule) {
-    std::string_view module_name = *node.Key();
-    ValidateModuleInstances(node, module_name);
+    const auto* key = node.Key();
+    if (key) {
+      std::string_view module_name = *key;
+      ValidateModuleInstances(node, module_name);
+    }
   }
   
   // Recurse into children
@@ -83,19 +89,25 @@ void PortConnectionValidator::ValidateModuleInstances(
   // Track all output connections in this module for driver conflict detection
   std::map<std::string, std::vector<std::string>> signal_to_output_instances;
   
+  // DEBUG: Track if we found any instances
+  int instance_count = 0;
+  
   // Find all module instances within this module
   // Instances are represented as kDataNetVariableInstance with a user_defined_type
   for (const auto& [inst_name, inst_node] : module_node) {
     const SymbolInfo& inst_info = inst_node.Value();
     
     // Check if this is a module instance
-    if (inst_info.metatype == SymbolMetaType::kDataNetVariableInstance &&
-        inst_info.declared_type.user_defined_type != nullptr) {
-      
-      // Get the module type being instantiated
-      const ReferenceComponentNode* type_ref = inst_info.declared_type.user_defined_type;
-      if (type_ref && type_ref->Children().size() > 0) {
-        std::string module_type(type_ref->Children().front().Value().identifier);
+    if (inst_info.metatype == SymbolMetaType::kDataNetVariableInstance) {
+      // Module instances have a user_defined_type
+      if (inst_info.declared_type.user_defined_type != nullptr) {
+        instance_count++;  // DEBUG
+        
+        // This is likely a module instance
+        const auto& ref_comp = inst_info.declared_type.user_defined_type->Value();
+        
+        // Get the module type name from the reference
+        std::string_view module_type = ref_comp.identifier;
         
         // Find the module definition in the symbol table
         const SymbolTableNode* module_def = FindModuleDefinition(module_type);
@@ -105,6 +117,15 @@ void PortConnectionValidator::ValidateModuleInstances(
           
           // Extract connections from this instance
           std::vector<PortConnection> connections = ExtractConnections(inst_node);
+          
+          // DEBUG: Log extraction results
+          if (connections.empty() && !formal_ports.empty()) {
+            // We have ports but no connections found - this is the issue!
+            AddWarning(absl::StrCat("DEBUG: Instance '", inst_name, 
+                                    "' of module '", module_type,
+                                    "' has ", formal_ports.size(), 
+                                    " ports but 0 connections extracted"));
+          }
           
           // Link connections to formal ports
           for (auto& conn : connections) {
@@ -134,11 +155,17 @@ void PortConnectionValidator::ValidateModuleInstances(
     }
   }
   
+  // DEBUG: Report what we found
+  if (instance_count == 0) {
+    // No instances found - this might be expected for leaf modules
+  }
+  
   // Check for driver conflicts (multiple outputs on same wire)
   for (const auto& [signal, instances] : signal_to_output_instances) {
     if (instances.size() > 1) {
       AddError(absl::StrCat("Multiple outputs driving signal '", signal,
-                            "' in module '", module_name, "'"));
+                            "' in module '", module_name, "' (",
+                            instances.size(), " drivers)"));
     }
   }
 }
@@ -154,7 +181,8 @@ const SymbolTableNode* PortConnectionValidator::FindModuleDefinition(
 const SymbolTableNode* PortConnectionValidator::FindModuleInNode(
     const SymbolTableNode& node, std::string_view module_name) const {
   // Check if this node is the module we're looking for
-  if (*node.Key() == module_name && 
+  const auto* key = node.Key();
+  if (key && *key == module_name && 
       node.Value().metatype == SymbolMetaType::kModule) {
     return &node;
   }
