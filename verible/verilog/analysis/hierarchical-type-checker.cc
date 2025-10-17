@@ -89,13 +89,19 @@ void HierarchicalTypeChecker::TraverseSymbolTable(const SymbolTableNode& node) {
   // Get the node's metatype
   const auto metatype = node.Value().metatype;
   
+  // Debug: Print what we're seeing
+  const auto* key = node.Key();
+  if (key) {
+    std::cerr << "DEBUG: Traversing node '" << *key << "' with metatype " 
+              << static_cast<int>(metatype) << std::endl;
+  }
+  
   // Check if this is a class, interface, or module
   if (metatype == SymbolMetaType::kClass ||
       metatype == SymbolMetaType::kInterface ||
       metatype == SymbolMetaType::kModule) {
     
     // Get the type name
-    const auto* key = node.Key();
     if (!key) return;
     
     std::string type_name(*key);
@@ -104,6 +110,10 @@ void HierarchicalTypeChecker::TraverseSymbolTable(const SymbolTableNode& node) {
     bool is_class = (metatype == SymbolMetaType::kClass);
     bool is_interface = (metatype == SymbolMetaType::kInterface);
     bool is_module = (metatype == SymbolMetaType::kModule);
+    
+    std::cerr << "DEBUG: Adding to hierarchy: " << type_name 
+              << " (class=" << is_class << ", interface=" << is_interface 
+              << ", module=" << is_module << ")" << std::endl;
     
     // Create a hierarchy node
     TypeHierarchyNode type_node(type_name, is_class, is_interface, is_module);
