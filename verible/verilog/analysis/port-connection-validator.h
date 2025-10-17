@@ -205,6 +205,20 @@ class PortConnectionValidator {
   // Adds a warning message
   void AddWarning(std::string_view message);
 
+  // Helper: Recursively validate module hierarchy
+  void ValidateModuleHierarchy(const SymbolTableNode& node);
+  
+  // Helper: Validate all instances within a module
+  void ValidateModuleInstances(const SymbolTableNode& module_node,
+                                std::string_view module_name);
+  
+  // Helper: Find a module definition by name
+  const SymbolTableNode* FindModuleDefinition(std::string_view module_name) const;
+  
+  // Helper: Recursive search for module in node tree
+  const SymbolTableNode* FindModuleInNode(const SymbolTableNode& node,
+                                           std::string_view module_name) const;
+
   const SymbolTable* symbol_table_;  // Not owned
   std::vector<std::string> errors_;
   std::vector<std::string> warnings_;
