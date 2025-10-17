@@ -196,8 +196,15 @@ class MultiFileResolver {
   // Helper: Extract module definitions from symbol table
   void ExtractModuleDefinitions();
   
+  // Helper: Recursively extract module definitions from a node
+  void ExtractModuleDefinitionsFromNode(const SymbolTableNode& node);
+  
   // Helper: Extract module instances from symbol table
   void ExtractModuleInstances();
+  
+  // Helper: Recursively extract module instances from a node
+  void ExtractModuleInstancesFromNode(const SymbolTableNode& node,
+                                      const std::string& parent_module);
   
   // Helper: Build dependency graph from instances
   void BuildDependencyGraphInternal();

@@ -324,15 +324,86 @@ std::vector<std::string> MultiFileResolver::GetUndefinedModules() const {
 }
 
 void MultiFileResolver::ExtractModuleDefinitions() {
-  // TODO: Implement extraction from symbol table
-  // This will iterate through the symbol table and find all module definitions
-  // For now, this is a stub that does nothing
+  if (!symbol_table_) {
+    return;
+  }
+  
+  // Recursively traverse symbol table to find all module definitions
+  ExtractModuleDefinitionsFromNode(symbol_table_->Root());
+}
+
+void MultiFileResolver::ExtractModuleDefinitionsFromNode(const SymbolTableNode& node) {
+  const auto& info = node.Value();
+  
+  // If this is a module definition, add it to our map
+  if (info.metatype == SymbolMetaType::kModule) {
+    const auto* key = node.Key();
+    if (key && !key->empty()) {
+      std::string module_name(*key);
+      module_definitions_[module_name] = &node;
+    }
+  }
+  
+  // Recursively traverse all children
+  for (const auto& child : node) {
+    ExtractModuleDefinitionsFromNode(child.second);
+  }
 }
 
 void MultiFileResolver::ExtractModuleInstances() {
-  // TODO: Implement extraction from symbol table
-  // This will iterate through the symbol table and find all module instances
-  // For now, this is a stub that does nothing
+  if (!symbol_table_) {
+    return;
+  }
+  
+  // Recursively traverse symbol table to find all module instances
+  ExtractModuleInstancesFromNode(symbol_table_->Root(), "");
+}
+
+void MultiFileResolver::ExtractModuleInstancesFromNode(
+    const SymbolTableNode& node, const std::string& parent_module) {
+  const auto& info = node.Value();
+  
+  // Track the current module context
+  std::string current_module = parent_module;
+  
+  // If this is a module definition, update the parent module context
+  if (info.metatype == SymbolMetaType::kModule) {
+    const auto* key = node.Key();
+    if (key && !key->empty()) {
+      current_module = std::string(*key);
+    }
+  }
+  
+  // If this is a data/net/variable/instance, check if it's a module instance
+  if (info.metatype == SymbolMetaType::kDataNetVariableInstance) {
+    // Module instances have a user_defined_type
+    if (info.declared_type.user_defined_type != nullptr) {
+      // This is likely a module instance
+      const auto& ref_comp = info.declared_type.user_defined_type->Value();
+      
+      // Get the instance name
+      const auto* instance_key = node.Key();
+      if (instance_key && !instance_key->empty()) {
+        std::string instance_name(*instance_key);
+        
+        // Get the module type name from the reference
+        std::string_view module_type = ref_comp.identifier;
+        
+        // Create a ModuleInstance and add it to our list
+        instances_.emplace_back(
+            instance_name,
+            module_type,
+            current_module,
+            info.syntax_origin
+        );
+      }
+    }
+  }
+  
+  // Recursively traverse all children
+  for (const auto& child : node) {
+    ExtractModuleInstancesFromNode(child.second, current_module);
+  }
 }
 
 void MultiFileResolver::BuildDependencyGraphInternal() {
