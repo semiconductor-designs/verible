@@ -89,15 +89,14 @@ endmodule
   
   // Should find one parameter
   const auto& params = tracker_->GetParameters();
-  
-  // Debug: print what we found
-  std::cout << "Found " << params.size() << " parameters:\n";
-  for (const auto& [key, param] : params) {
-    std::cout << "  " << key << " (localparam=" << param.is_localparam 
-              << ", type=" << param.type << ", default=" << param.default_value << ")\n";
-  }
-  
   EXPECT_FALSE(params.empty());
+  
+  // Verify parameter details
+  auto it = params.find("adder.WIDTH");
+  ASSERT_NE(it, params.end());
+  EXPECT_EQ(it->second.name, "WIDTH");
+  EXPECT_FALSE(it->second.is_localparam);
+  EXPECT_EQ(it->second.default_value, "8");
 }
 
 TEST_F(ParameterTrackerTest, LocalParameter) {

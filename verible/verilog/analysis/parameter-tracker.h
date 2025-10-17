@@ -120,7 +120,17 @@ class ParameterTracker {
   // Extract all parameter definitions from the symbol table
   void ExtractParameters();
 
-  // Traverse symbol table to find parameter definitions
+  // Traverse symbol table to find modules
+  void TraverseForModules(const SymbolTableNode& node);
+
+  // Extract parameters from a module's CST
+  // Args:
+  //   module_symbol: CST node for the module
+  //   module_name: Name of the module
+  void ExtractParametersFromModule(const verible::Symbol& module_symbol,
+                                  std::string_view module_name);
+
+  // Traverse symbol table to find parameter definitions (DEPRECATED)
   // Args:
   //   node: Current symbol table node
   //   module_context: Current module name (for scoping)

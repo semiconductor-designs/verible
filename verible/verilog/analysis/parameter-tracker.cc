@@ -57,38 +57,76 @@ absl::Status ParameterTracker::ValidateParameters() {
 }
 
 void ParameterTracker::ExtractParameters() {
-  if (symbol_table_) {
-    TraverseForParameters(symbol_table_->Root(), "");
-  }
+  if (!symbol_table_) return;
+  
+  // Traverse modules in symbol table to get module context
+  TraverseForModules(symbol_table_->Root());
 }
 
-void ParameterTracker::TraverseForParameters(const SymbolTableNode& node,
-                                            std::string_view module_context) {
+void ParameterTracker::TraverseForModules(const SymbolTableNode& node) {
   const SymbolInfo& info = node.Value();
   
-  // Update module context if this is a module definition
-  std::string current_module(module_context);
-  if (info.metatype == SymbolMetaType::kModule) {
-    current_module = std::string(*node.Key());
-  }
-  
-  // Check if this node is a parameter
-  if (info.metatype == SymbolMetaType::kParameter) {
+  // If this is a module, extract its parameters from CST
+  if (info.metatype == SymbolMetaType::kModule && info.syntax_origin) {
     const auto* key = node.Key();
-    if (key && !key->empty() && !current_module.empty()) {
-      std::string param_name(*key);
-      std::string qualified_name = absl::StrCat(current_module, ".", param_name);
-      
-      // Extract and store parameter definition
-      parameters_[qualified_name] = 
-          ExtractParameterDefinition(node, param_name, current_module);
+    if (key && !key->empty()) {
+      std::string module_name(*key);
+      ExtractParametersFromModule(*info.syntax_origin, module_name);
     }
   }
   
   // Recurse into children
   for (const auto& [name, child] : node) {
-    TraverseForParameters(child, current_module);
+    TraverseForModules(child);
   }
+}
+
+void ParameterTracker::ExtractParametersFromModule(
+    const verible::Symbol& module_symbol,
+    std::string_view module_name) {
+  
+  // Find all parameter declarations in this module
+  auto param_decls = FindAllParamDeclarations(module_symbol);
+  
+  for (const auto& match : param_decls) {
+    if (!match.match) continue;
+    
+    // Get parameter name
+    const verible::TokenInfo* name_token = GetParameterNameToken(*match.match);
+    if (!name_token) continue;
+    
+    std::string param_name(name_token->text());
+    std::string qualified_name = absl::StrCat(module_name, ".", param_name);
+    
+    // Extract parameter details
+    ParameterInfo info(param_name);
+    info.syntax_origin = match.match;
+    
+    // Determine if localparam
+    verilog_tokentype keyword = GetParamKeyword(*match.match);
+    info.is_localparam = (keyword == TK_localparam);
+    
+    // Extract default value
+    const verible::Symbol* expr = GetParamAssignExpression(*match.match);
+    if (expr) {
+      info.default_value = verible::StringSpanOfSymbol(*expr);
+    }
+    
+    // Extract type information
+    const verible::Symbol* type_info = GetParamTypeInfoSymbol(*match.match);
+    if (type_info && !IsTypeInfoEmpty(*type_info)) {
+      info.type = verible::StringSpanOfSymbol(*type_info);
+    }
+    
+    // Store
+    parameters_[qualified_name] = info;
+  }
+}
+
+void ParameterTracker::TraverseForParameters(const SymbolTableNode& node,
+                                            std::string_view module_context) {
+  // DEPRECATED: Parameters are not stored in symbol table as separate nodes
+  // Use ExtractParametersFromModule instead
 }
 
 ParameterInfo ParameterTracker::ExtractParameterDefinition(
