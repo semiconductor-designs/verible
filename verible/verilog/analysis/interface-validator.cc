@@ -19,6 +19,10 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
+#include "verible/common/analysis/syntax-tree-search.h"
+#include "verible/common/text/concrete-syntax-leaf.h"
+#include "verible/common/text/tree-utils.h"
+#include "verible/verilog/CST/module.h"
 #include "verible/verilog/analysis/symbol-table.h"
 
 namespace verilog {
@@ -91,16 +95,19 @@ InterfaceInfo InterfaceValidator::ExtractInterfaceDefinition(
     std::string_view interface_name) {
   InterfaceInfo info(interface_name);
   
-  // TODO: Extract interface details
-  // 1. Extract signals
+  // Extract interface details from symbol table
+  info.node = &node;
+  const SymbolInfo& sym_info = node.Value();
+  info.syntax_origin = sym_info.syntax_origin;
+  
+  // Extract signals from symbol table children
   info.signals = ExtractSignals(node);
   
-  // 2. Extract modports
+  // Extract modports from symbol table children  
   info.modports = ExtractModports(node);
   
-  // 3. Set syntax origin
-  info.node = &node;
-  info.syntax_origin = node.Value().syntax_origin;
+  // If we have CST syntax origin, we could extract more details
+  // For now, rely on symbol table structure
   
   return info;
 }

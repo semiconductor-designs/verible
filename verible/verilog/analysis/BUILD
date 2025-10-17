@@ -193,7 +193,11 @@ cc_library(
     hdrs = ["interface-validator.h"],
     deps = [
         ":symbol-table",
+        "//verible/common/analysis:syntax-tree-search",
+        "//verible/common/text:concrete-syntax-leaf",
         "//verible/common/text:symbol",
+        "//verible/common/text:tree-utils",
+        "//verible/verilog/CST:module",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/strings",
     ],
