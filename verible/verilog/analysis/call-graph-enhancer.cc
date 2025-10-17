@@ -21,10 +21,15 @@
 #include <string>
 #include <vector>
 
-#include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "absl/status/status.h"
+#include "verible/common/analysis/syntax-tree-search.h"
+#include "verible/common/text/concrete-syntax-leaf.h"
 #include "verible/common/text/symbol.h"
+#include "verible/common/util/casts.h"
+#include "verible/verilog/CST/functions.h"
+#include "verible/verilog/CST/verilog-nonterminals.h"
 #include "verible/verilog/analysis/symbol-table.h"
 #include "verible/verilog/analysis/verilog-project.h"
 
@@ -364,23 +369,55 @@ void CallGraphEnhancer::ExtractTaskNode(const SymbolTableNode& node,
 }
 
 void CallGraphEnhancer::FindCallsInFunction(CallGraphNode* function) {
-  // TODO: Implement CST traversal to find function calls
-  // This requires searching the function body for call expressions
-  // For now, stub implementation
-  (void)function;
+  if (!function || !function->syntax_origin) return;
+  
+  // Get function body from CST
+  const auto* func_body = GetFunctionBlockStatementList(*function->syntax_origin);
+  if (!func_body) return;
+  
+  // Find all function/task calls in the body using Verible API
+  auto call_matches = FindAllFunctionOrTaskCalls(*func_body);
+  
+  // Store call sites
+  for (const auto& call : call_matches) {
+    function->call_sites.push_back(call.match);
+  }
 }
 
 bool CallGraphEnhancer::IsCallExpression(const verible::Symbol& symbol) {
-  // TODO: Implement call expression detection
-  // Check if symbol is a function call node in CST
-  (void)symbol;
-  return false;
+  // Check if this is a Node (not a Leaf)
+  if (symbol.Kind() != verible::SymbolKind::kNode) {
+    return false;
+  }
+  
+  // Cast to Node and check tag
+  const auto& node = verible::SymbolCastToNode(symbol);
+  return static_cast<NodeEnum>(node.Tag().tag) == NodeEnum::kFunctionCall;
 }
 
 std::string CallGraphEnhancer::ExtractCalledFunction(const verible::Symbol& call_expr) {
-  // TODO: Implement function name extraction from call expression
-  // Parse the CST node to get the function name
-  (void)call_expr;
+  // Try the primary API first
+  const auto* name_leaf = GetFunctionCallName(call_expr);
+  if (name_leaf) {
+    return std::string(name_leaf->get().text());
+  }
+  
+  // Fallback: Try to get identifiers directly from the function call
+  const auto* identifiers = GetIdentifiersFromFunctionCall(call_expr);
+  if (identifiers && identifiers->Kind() == verible::SymbolKind::kNode) {
+    // Try to find an identifier leaf in the identifiers subtree
+    const auto& id_node = verible::SymbolCastToNode(*identifiers);
+    for (const auto& child : id_node.children()) {
+      if (child && child->Kind() == verible::SymbolKind::kLeaf) {
+        const auto& leaf = verible::SymbolCastToLeaf(*child);
+        std::string text(leaf.get().text());
+        if (!text.empty()) {
+          return text;
+        }
+      }
+    }
+  }
+  
   return "";
 }
 

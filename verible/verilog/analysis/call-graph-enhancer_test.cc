@@ -610,6 +610,340 @@ TEST_F(CallGraphEnhancerTest, MutualRecursion) {
   EXPECT_GE(nodes.size(), 2);
 }
 
+// =============================================================================
+// CST TRAVERSAL - ACTUAL CALL EDGE TESTS
+// =============================================================================
+
+TEST_F(CallGraphEnhancerTest, ActualCallEdgesSimple) {
+  const char* code = R"(
+    module test;
+      function int add(int x);
+        return x + 1;
+      endfunction
+      
+      function int compute(int x);
+        return add(x);
+      endfunction
+    endmodule
+  )";
+
+  ASSERT_TRUE(ParseCode(code));
+  CallGraphEnhancer enhancer(*symbol_table_, *project_);
+  auto status = enhancer.BuildEnhancedCallGraph();
+  EXPECT_TRUE(status.ok());
+  
+  // Verify edge created
+  auto* compute = enhancer.GetNode("compute");
+  ASSERT_NE(compute, nullptr);
+  EXPECT_GE(compute->callees.size(), 1);
+  
+  auto* add = enhancer.GetNode("add");
+  ASSERT_NE(add, nullptr);
+  EXPECT_GE(add->callers.size(), 1);
+}
+
+TEST_F(CallGraphEnhancerTest, ActualCallEdgesMultiple) {
+  const char* code = R"(
+    module test;
+      function int add(int x); return x + 1; endfunction
+      function int sub(int x); return x - 1; endfunction
+      
+      function int process(int x);
+        int a = add(x);
+        int b = sub(x);
+        return a + b;
+      endfunction
+    endmodule
+  )";
+
+  ASSERT_TRUE(ParseCode(code));
+  CallGraphEnhancer enhancer(*symbol_table_, *project_);
+  auto status = enhancer.BuildEnhancedCallGraph();
+  EXPECT_TRUE(status.ok());
+  
+  // Verify multiple edges
+  auto* process = enhancer.GetNode("process");
+  ASSERT_NE(process, nullptr);
+  EXPECT_GE(process->callees.size(), 2);
+}
+
+TEST_F(CallGraphEnhancerTest, ActualCallEdgesChained) {
+  const char* code = R"(
+    module test;
+      function int a(int x); return x + 1; endfunction
+      function int b(int x); return a(x); endfunction
+      function int c(int x); return b(x); endfunction
+    endmodule
+  )";
+
+  ASSERT_TRUE(ParseCode(code));
+  CallGraphEnhancer enhancer(*symbol_table_, *project_);
+  auto status = enhancer.BuildEnhancedCallGraph();
+  EXPECT_TRUE(status.ok());
+  
+  // Verify chain: c calls b, b calls a
+  auto* c = enhancer.GetNode("c");
+  ASSERT_NE(c, nullptr);
+  EXPECT_GE(c->callees.size(), 1);
+  
+  auto* b = enhancer.GetNode("b");
+  ASSERT_NE(b, nullptr);
+  EXPECT_GE(b->callees.size(), 1);
+}
+
+TEST_F(CallGraphEnhancerTest, ActualCallEdgesRecursiveDirect) {
+  const char* code = R"(
+    module test;
+      function int factorial(int n);
+        if (n <= 1) return 1;
+        return n * factorial(n - 1);
+      endfunction
+    endmodule
+  )";
+
+  ASSERT_TRUE(ParseCode(code));
+  CallGraphEnhancer enhancer(*symbol_table_, *project_);
+  auto status = enhancer.BuildEnhancedCallGraph();
+  EXPECT_TRUE(status.ok());
+  
+  // Verify recursion detected
+  auto cycles = enhancer.GetRecursionCycles();
+  EXPECT_GE(cycles.size(), 1);
+  
+  auto* factorial = enhancer.GetNode("factorial");
+  ASSERT_NE(factorial, nullptr);
+  EXPECT_TRUE(factorial->is_recursive);
+}
+
+TEST_F(CallGraphEnhancerTest, ActualCallEdgesRecursiveIndirect) {
+  const char* code = R"(
+    module test;
+      function int f(int x);
+        return g(x - 1);
+      endfunction
+      
+      function int g(int x);
+        if (x <= 0) return 0;
+        return f(x);
+      endfunction
+    endmodule
+  )";
+
+  ASSERT_TRUE(ParseCode(code));
+  CallGraphEnhancer enhancer(*symbol_table_, *project_);
+  auto status = enhancer.BuildEnhancedCallGraph();
+  EXPECT_TRUE(status.ok());
+  
+  // Verify indirect recursion detected
+  auto cycles = enhancer.GetRecursionCycles();
+  EXPECT_GE(cycles.size(), 1);
+  
+  auto* f = enhancer.GetNode("f");
+  auto* g = enhancer.GetNode("g");
+  ASSERT_NE(f, nullptr);
+  ASSERT_NE(g, nullptr);
+  EXPECT_TRUE(f->is_recursive);
+  EXPECT_TRUE(g->is_recursive);
+}
+
+TEST_F(CallGraphEnhancerTest, CallerCalleeRelationships) {
+  const char* code = R"(
+    module test;
+      function int helper(int x); return x * 2; endfunction
+      
+      function int worker(int x);
+        return helper(x) + helper(x + 1);
+      endfunction
+    endmodule
+  )";
+
+  ASSERT_TRUE(ParseCode(code));
+  CallGraphEnhancer enhancer(*symbol_table_, *project_);
+  auto status = enhancer.BuildEnhancedCallGraph();
+  EXPECT_TRUE(status.ok());
+  
+  // Verify bidirectional relationships
+  auto* worker = enhancer.GetNode("worker");
+  auto* helper = enhancer.GetNode("helper");
+  
+  ASSERT_NE(worker, nullptr);
+  ASSERT_NE(helper, nullptr);
+  
+  // worker calls helper
+  EXPECT_GE(worker->callees.size(), 1);
+  // helper is called by worker
+  EXPECT_GE(helper->callers.size(), 1);
+}
+
+TEST_F(CallGraphEnhancerTest, CallDepthComputation) {
+  const char* code = R"(
+    module test;
+      function int level0(int x); return x; endfunction
+      function int level1(int x); return level0(x); endfunction
+      function int level2(int x); return level1(x); endfunction
+    endmodule
+  )";
+
+  ASSERT_TRUE(ParseCode(code));
+  CallGraphEnhancer enhancer(*symbol_table_, *project_);
+  auto status = enhancer.BuildEnhancedCallGraph();
+  EXPECT_TRUE(status.ok());
+  
+  // Verify call depths
+  auto* level2 = enhancer.GetNode("level2");
+  auto* level1 = enhancer.GetNode("level1");
+  auto* level0 = enhancer.GetNode("level0");
+  
+  ASSERT_NE(level2, nullptr);
+  ASSERT_NE(level1, nullptr);
+  ASSERT_NE(level0, nullptr);
+  
+  // Depths should increase
+  EXPECT_TRUE(level2->call_depth >= level1->call_depth);
+  EXPECT_TRUE(level1->call_depth >= level0->call_depth);
+}
+
+TEST_F(CallGraphEnhancerTest, RecursionCycleDetection) {
+  const char* code = R"(
+    module test;
+      function int a(int x);
+        return b(x - 1);
+      endfunction
+      
+      function int b(int x);
+        return c(x - 1);
+      endfunction
+      
+      function int c(int x);
+        if (x <= 0) return 0;
+        return a(x);
+      endfunction
+    endmodule
+  )";
+
+  ASSERT_TRUE(ParseCode(code));
+  CallGraphEnhancer enhancer(*symbol_table_, *project_);
+  auto status = enhancer.BuildEnhancedCallGraph();
+  EXPECT_TRUE(status.ok());
+  
+  // Verify cycle detected
+  auto cycles = enhancer.GetRecursionCycles();
+  EXPECT_GE(cycles.size(), 1);
+  
+  // All three should be marked recursive
+  auto* a = enhancer.GetNode("a");
+  auto* b = enhancer.GetNode("b");
+  auto* c = enhancer.GetNode("c");
+  
+  ASSERT_NE(a, nullptr);
+  ASSERT_NE(b, nullptr);
+  ASSERT_NE(c, nullptr);
+  
+  EXPECT_TRUE(a->is_recursive);
+  EXPECT_TRUE(b->is_recursive);
+  EXPECT_TRUE(c->is_recursive);
+}
+
+TEST_F(CallGraphEnhancerTest, UnreachableFunctionDetection) {
+  const char* code = R"(
+    module test;
+      function int used(int x); return x; endfunction
+      function int caller(int x); return used(x); endfunction
+      function int orphan(int x); return x * 2; endfunction
+    endmodule
+  )";
+
+  ASSERT_TRUE(ParseCode(code));
+  CallGraphEnhancer enhancer(*symbol_table_, *project_);
+  auto status = enhancer.BuildEnhancedCallGraph();
+  EXPECT_TRUE(status.ok());
+  
+  // Verify unreachable detection
+  auto unreachable = enhancer.GetUnreachableFunctions();
+  
+  // orphan should be unreachable (no callers)
+  auto* orphan = enhancer.GetNode("orphan");
+  ASSERT_NE(orphan, nullptr);
+  EXPECT_TRUE(orphan->is_unreachable);
+}
+
+TEST_F(CallGraphEnhancerTest, MultipleCallSitesInFunction) {
+  const char* code = R"(
+    module test;
+      function int helper(int x); return x + 1; endfunction
+      
+      function int complex(int x, int y);
+        int a = helper(x);
+        int b = helper(y);
+        int c = helper(a + b);
+        return c;
+      endfunction
+    endmodule
+  )";
+
+  ASSERT_TRUE(ParseCode(code));
+  CallGraphEnhancer enhancer(*symbol_table_, *project_);
+  auto status = enhancer.BuildEnhancedCallGraph();
+  EXPECT_TRUE(status.ok());
+  
+  // Verify multiple call sites detected
+  auto* complex = enhancer.GetNode("complex");
+  ASSERT_NE(complex, nullptr);
+  EXPECT_GE(complex->call_sites.size(), 3);
+}
+
+TEST_F(CallGraphEnhancerTest, TaskCallDetection) {
+  const char* code = R"(
+    module test;
+      task helper(input int x, output int y);
+        y = x * 2;
+      endtask
+      
+      function int worker(int x);
+        int result;
+        helper(x, result);
+        return result;
+      endfunction
+    endmodule
+  )";
+
+  ASSERT_TRUE(ParseCode(code));
+  CallGraphEnhancer enhancer(*symbol_table_, *project_);
+  auto status = enhancer.BuildEnhancedCallGraph();
+  EXPECT_TRUE(status.ok());
+  
+  // Verify task is in graph
+  auto* helper = enhancer.GetNode("helper");
+  ASSERT_NE(helper, nullptr);
+  EXPECT_EQ(helper->type, CallGraphNode::kTask);
+  
+  // Verify function calls task
+  auto* worker = enhancer.GetNode("worker");
+  ASSERT_NE(worker, nullptr);
+  EXPECT_GE(worker->callees.size(), 1);
+}
+
+TEST_F(CallGraphEnhancerTest, StatisticsAfterCST) {
+  const char* code = R"(
+    module test;
+      function int a(int x); return x; endfunction
+      function int b(int x); return a(x); endfunction
+      function int c(int x); return b(x) + a(x); endfunction
+    endmodule
+  )";
+
+  ASSERT_TRUE(ParseCode(code));
+  CallGraphEnhancer enhancer(*symbol_table_, *project_);
+  auto status = enhancer.BuildEnhancedCallGraph();
+  EXPECT_TRUE(status.ok());
+  
+  // Verify statistics
+  auto stats = enhancer.GetStatistics();
+  EXPECT_EQ(stats.total_functions, 3);
+  EXPECT_GE(stats.total_edges, 3);
+  EXPECT_GE(stats.entry_points, 1);
+}
+
 }  // namespace
 }  // namespace verilog
 

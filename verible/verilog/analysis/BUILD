@@ -366,7 +366,12 @@ cc_library(
     deps = [
         ":symbol-table",
         ":verilog-project",
+        "//verible/common/analysis:syntax-tree-search",
+        "//verible/common/text:concrete-syntax-leaf",
         "//verible/common/text:symbol",
+        "//verible/common/util:casts",
+        "//verible/verilog/CST:functions",
+        "//verible/verilog/CST:verilog-nonterminals",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/strings",
     ],
