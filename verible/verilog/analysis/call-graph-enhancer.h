@@ -192,8 +192,8 @@ class CallGraphEnhancer {
   absl::Status FindUnreachableFunctions();
   
   // Query methods
-  std::vector<CallGraphNode*> GetAllNodes() const { return nodes_; }
-  std::vector<CallGraphEdge*> GetAllEdges() const { return edges_; }
+  std::vector<CallGraphNode*> GetAllNodes() const;
+  std::vector<CallGraphEdge*> GetAllEdges() const;
   std::vector<CallGraphNode*> GetEntryPoints() const;
   std::vector<CallGraphNode*> GetUnreachableFunctions() const;
   std::vector<RecursionCycle> GetRecursionCycles() const { return recursion_cycles_; }
@@ -216,14 +216,14 @@ class CallGraphEnhancer {
   
  private:
   // Node management
-  CallGraphNode* CreateNode(const std::string& name, CallGraphNode::NodeType type);
+  std::unique_ptr<CallGraphNode> CreateNode(const std::string& name, CallGraphNode::NodeType type);
   CallGraphNode* FindNode(const std::string& name) const;
-  void AddNode(CallGraphNode* node);
+  void AddNode(std::unique_ptr<CallGraphNode> node);
   
   // Edge management
-  CallGraphEdge* CreateEdge(CallGraphNode* caller, CallGraphNode* callee,
-                            const verible::Symbol* call_site);
-  void AddEdge(CallGraphEdge* edge);
+  std::unique_ptr<CallGraphEdge> CreateEdge(CallGraphNode* caller, CallGraphNode* callee,
+                                            const verible::Symbol* call_site);
+  void AddEdge(std::unique_ptr<CallGraphEdge> edge);
   
   // Traversal helpers
   void TraverseSymbolTable(const SymbolTableNode& node, const std::string& scope);
@@ -259,9 +259,9 @@ class CallGraphEnhancer {
   // Member variables
   const SymbolTable& symbol_table_;
   const VerilogProject& project_;
-  std::vector<CallGraphNode*> nodes_;
-  std::vector<CallGraphEdge*> edges_;
-  std::map<std::string, CallGraphNode*> name_to_node_;
+  std::vector<std::unique_ptr<CallGraphNode>> nodes_;
+  std::vector<std::unique_ptr<CallGraphEdge>> edges_;
+  std::map<std::string, CallGraphNode*> name_to_node_;  // Raw pointers for lookup
   std::vector<RecursionCycle> recursion_cycles_;
   CallGraphStatistics statistics_;
   std::vector<std::string> warnings_;

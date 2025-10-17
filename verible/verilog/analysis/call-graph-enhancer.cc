@@ -43,20 +43,11 @@ CallGraphEnhancer::CallGraphEnhancer(const SymbolTable& symbol_table,
 }
 
 CallGraphEnhancer::~CallGraphEnhancer() {
-  // Clean up allocated nodes
-  for (auto* node : nodes_) {
-    delete node;
-  }
-  // Clean up allocated edges
-  for (auto* edge : edges_) {
-    delete edge;
-  }
+  // Automatic cleanup with unique_ptr - no manual deletes needed
 }
 
 absl::Status CallGraphEnhancer::BuildEnhancedCallGraph() {
-  // Clear previous results
-  for (auto* node : nodes_) delete node;
-  for (auto* edge : edges_) delete edge;
+  // Clear previous results (unique_ptr handles deletion automatically)
   nodes_.clear();
   edges_.clear();
   name_to_node_.clear();
@@ -113,15 +104,15 @@ absl::Status CallGraphEnhancer::ExtractTasks() {
 
 absl::Status CallGraphEnhancer::ExtractCallSites() {
   // For each function node, find call sites in its body
-  for (auto* node : nodes_) {
-    FindCallsInFunction(node);
+  for (const auto& node : nodes_) {
+    FindCallsInFunction(node.get());
   }
   return absl::OkStatus();
 }
 
 absl::Status CallGraphEnhancer::BuildCallEdges() {
   // Build edges based on call sites
-  for (auto* caller : nodes_) {
+  for (const auto& caller : nodes_) {
     for (const auto* call_site : caller->call_sites) {
       // Extract called function name from call site
       std::string callee_name = ExtractCalledFunction(*call_site);
@@ -137,12 +128,12 @@ absl::Status CallGraphEnhancer::BuildCallEdges() {
       }
       
       // Create edge
-      auto* edge = CreateEdge(caller, callee, call_site);
-      AddEdge(edge);
+      auto edge = CreateEdge(caller.get(), callee, call_site);
+      AddEdge(std::move(edge));
       
       // Update caller/callee relationships
       caller->callees.push_back(callee);
-      callee->callers.push_back(caller);
+      callee->callers.push_back(caller.get());
     }
   }
   return absl::OkStatus();
@@ -153,9 +144,9 @@ absl::Status CallGraphEnhancer::DetectRecursion() {
   std::vector<CallGraphNode*> rec_stack;
   
   // Run DFS from each unvisited node
-  for (auto* node : nodes_) {
-    if (visited.find(node) == visited.end()) {
-      DetectRecursionDFS(node, visited, rec_stack);
+  for (const auto& node : nodes_) {
+    if (visited.find(node.get()) == visited.end()) {
+      DetectRecursionDFS(node.get(), visited, rec_stack);
     }
   }
   
@@ -176,8 +167,8 @@ absl::Status CallGraphEnhancer::ComputeCallDepths() {
 }
 
 absl::Status CallGraphEnhancer::IdentifyEntryPoints() {
-  for (auto* node : nodes_) {
-    if (IsEntryPoint(node)) {
+  for (const auto& node : nodes_) {
+    if (IsEntryPoint(node.get())) {
       node->is_entry_point = true;
       statistics_.entry_points++;
     }
@@ -186,7 +177,7 @@ absl::Status CallGraphEnhancer::IdentifyEntryPoints() {
 }
 
 absl::Status CallGraphEnhancer::FindUnreachableFunctions() {
-  for (auto* node : nodes_) {
+  for (const auto& node : nodes_) {
     // Unreachable if: no callers AND not an entry point AND not DPI
     if (node->callers.empty() && !node->is_entry_point && !node->is_dpi) {
       node->is_unreachable = true;
@@ -198,11 +189,29 @@ absl::Status CallGraphEnhancer::FindUnreachableFunctions() {
 
 // Query methods
 
+std::vector<CallGraphNode*> CallGraphEnhancer::GetAllNodes() const {
+  std::vector<CallGraphNode*> result;
+  result.reserve(nodes_.size());
+  for (const auto& node : nodes_) {
+    result.push_back(node.get());
+  }
+  return result;
+}
+
+std::vector<CallGraphEdge*> CallGraphEnhancer::GetAllEdges() const {
+  std::vector<CallGraphEdge*> result;
+  result.reserve(edges_.size());
+  for (const auto& edge : edges_) {
+    result.push_back(edge.get());
+  }
+  return result;
+}
+
 std::vector<CallGraphNode*> CallGraphEnhancer::GetEntryPoints() const {
   std::vector<CallGraphNode*> entry_points;
-  for (auto* node : nodes_) {
+  for (const auto& node : nodes_) {
     if (node->is_entry_point) {
-      entry_points.push_back(node);
+      entry_points.push_back(node.get());
     }
   }
   return entry_points;
@@ -210,9 +219,9 @@ std::vector<CallGraphNode*> CallGraphEnhancer::GetEntryPoints() const {
 
 std::vector<CallGraphNode*> CallGraphEnhancer::GetUnreachableFunctions() const {
   std::vector<CallGraphNode*> unreachable;
-  for (auto* node : nodes_) {
+  for (const auto& node : nodes_) {
     if (node->is_unreachable) {
-      unreachable.push_back(node);
+      unreachable.push_back(node.get());
     }
   }
   return unreachable;
@@ -248,9 +257,9 @@ bool CallGraphEnhancer::IsRecursive(const std::string& function_name) const {
 
 // Private methods
 
-CallGraphNode* CallGraphEnhancer::CreateNode(const std::string& name, 
-                                             CallGraphNode::NodeType type) {
-  auto* node = new CallGraphNode();
+std::unique_ptr<CallGraphNode> CallGraphEnhancer::CreateNode(const std::string& name, 
+                                                             CallGraphNode::NodeType type) {
+  auto node = std::make_unique<CallGraphNode>();
   node->name = name;
   node->fully_qualified_name = name;
   node->type = type;
@@ -265,23 +274,24 @@ CallGraphNode* CallGraphEnhancer::FindNode(const std::string& name) const {
   return nullptr;
 }
 
-void CallGraphEnhancer::AddNode(CallGraphNode* node) {
-  nodes_.push_back(node);
-  name_to_node_[node->name] = node;
+void CallGraphEnhancer::AddNode(std::unique_ptr<CallGraphNode> node) {
+  CallGraphNode* raw_ptr = node.get();
+  nodes_.push_back(std::move(node));
+  name_to_node_[raw_ptr->name] = raw_ptr;
   
   // Update statistics
-  if (node->type == CallGraphNode::kFunction) {
+  if (raw_ptr->type == CallGraphNode::kFunction) {
     statistics_.total_functions++;
-  } else if (node->type == CallGraphNode::kTask) {
+  } else if (raw_ptr->type == CallGraphNode::kTask) {
     statistics_.total_tasks++;
   }
   statistics_.total_nodes++;
 }
 
-CallGraphEdge* CallGraphEnhancer::CreateEdge(CallGraphNode* caller, 
-                                             CallGraphNode* callee,
-                                             const verible::Symbol* call_site) {
-  auto* edge = new CallGraphEdge();
+std::unique_ptr<CallGraphEdge> CallGraphEnhancer::CreateEdge(CallGraphNode* caller, 
+                                                             CallGraphNode* callee,
+                                                             const verible::Symbol* call_site) {
+  auto edge = std::make_unique<CallGraphEdge>();
   edge->caller = caller;
   edge->callee = callee;
   edge->call_site = call_site;
@@ -289,8 +299,8 @@ CallGraphEdge* CallGraphEnhancer::CreateEdge(CallGraphNode* caller,
   return edge;
 }
 
-void CallGraphEnhancer::AddEdge(CallGraphEdge* edge) {
-  edges_.push_back(edge);
+void CallGraphEnhancer::AddEdge(std::unique_ptr<CallGraphEdge> edge) {
+  edges_.push_back(std::move(edge));
   statistics_.total_edges++;
   statistics_.direct_calls++;
 }
@@ -329,12 +339,12 @@ void CallGraphEnhancer::ExtractFunctionNode(const SymbolTableNode& node,
   const auto& info = node.Value();
   
   // Create function node
-  auto* func_node = CreateNode(name, CallGraphNode::kFunction);
+  auto func_node = CreateNode(name, CallGraphNode::kFunction);
   func_node->syntax_origin = info.syntax_origin;
   func_node->file = info.file_origin;
   
   // Add to graph
-  AddNode(func_node);
+  AddNode(std::move(func_node));
 }
 
 void CallGraphEnhancer::ExtractTaskNode(const SymbolTableNode& node, 
@@ -345,12 +355,12 @@ void CallGraphEnhancer::ExtractTaskNode(const SymbolTableNode& node,
   const auto& info = node.Value();
   
   // Create task node
-  auto* task_node = CreateNode(name, CallGraphNode::kTask);
+  auto task_node = CreateNode(name, CallGraphNode::kTask);
   task_node->syntax_origin = info.syntax_origin;
   task_node->file = info.file_origin;
   
   // Add to graph
-  AddNode(task_node);
+  AddNode(std::move(task_node));
 }
 
 void CallGraphEnhancer::FindCallsInFunction(CallGraphNode* function) {
@@ -458,7 +468,7 @@ bool CallGraphEnhancer::IsEntryPoint(CallGraphNode* node) {
 
 void CallGraphEnhancer::ComputeStatistics() {
   // Find max call depth
-  for (auto* node : nodes_) {
+  for (const auto& node : nodes_) {
     if (node->call_depth > statistics_.max_call_depth) {
       statistics_.max_call_depth = node->call_depth;
     }
@@ -466,7 +476,7 @@ void CallGraphEnhancer::ComputeStatistics() {
   
   // Compute average call depth
   int total_depth = 0;
-  for (auto* node : nodes_) {
+  for (const auto& node : nodes_) {
     total_depth += node->call_depth;
   }
   if (statistics_.total_nodes > 0) {
