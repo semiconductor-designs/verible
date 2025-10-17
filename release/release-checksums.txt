@@ -1,2 +1,2 @@
-1e23c90e03e5e55725b165249a577a1c63a217cacac2867767681a0f12b33d54  veripg-validator-v5.0.0-macOS-arm64.tar.gz
-6de44c17c52ed4f50abf77340c715e2cddeb1a1676083efb90fbe1b0d34bb05e  veripg-validator-v5.0.0-macOS-arm64.zip
+96e42de1db4cb702991847e18d704718848bbb744b1b2b9efaf2866c34061215  veripg-validator-v5.0.0-macOS-arm64.tar.gz
+4d9b21b347ec2bb1908fba64efb5e08fa105f356dca7dc29a9971c2bd6d4d10c  veripg-validator-v5.0.0-macOS-arm64.zip

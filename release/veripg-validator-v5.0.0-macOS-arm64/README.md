@@ -18,14 +18,23 @@
    cd veripg-validator-v5.0.0-macOS-arm64
    ```
 
-2. **Add to PATH** (optional):
+2. **macOS Security: Remove Quarantine** (IMPORTANT):
    ```bash
-   export PATH=$PATH:$(pwd)/bin
+   # macOS may block downloaded binaries - remove quarantine attribute
+   xattr -d com.apple.quarantine bin/veripg-validator
+   
+   # Verify it's executable
+   chmod +x bin/veripg-validator
    ```
 
 3. **Verify Installation**:
    ```bash
    ./bin/veripg-validator --version
+   ```
+
+4. **Add to PATH** (optional):
+   ```bash
+   export PATH=$PATH:$(pwd)/bin
    ```
 
 ### Basic Usage
@@ -129,6 +138,66 @@ veripg-validator-v5.0.0-macOS-arm64/
 ```
 
 ---
+
+## ⚠️  IMPORTANT: Experimental Rules Warning
+
+### ⚠️  ALWAYS Use Production Config
+
+**For ALL production use, you MUST use the production configuration**:
+
+```bash
+./bin/veripg-validator --config examples/veripg-production.yaml design.sv
+```
+
+### Why This is Critical:
+
+**🟢 Production Config** (`veripg-production.yaml`):
+- ✅ Enables ONLY the 16 fully-tested, working rules
+- ✅ Disables all 24 experimental rules
+- ✅ Safe for production use
+- ✅ Proven accurate in comprehensive testing
+
+**🔴 Default Config** (without --config flag):
+- ⚠️  Enables ALL 40 rules including experimental
+- ⚠️  24 experimental rules may produce INCORRECT results
+- ⚠️  NOT recommended for production
+- ⚠️  Use ONLY for evaluation
+
+### Experimental Rules Status
+
+The following 24 rules are **EXPERIMENTAL** (framework-only, detection incomplete):
+
+**Naming Rules** (NAM_004-007):
+- NAM_004: Clock signal naming patterns
+- NAM_005: Reset signal naming patterns  
+- NAM_006: Active-low signal naming
+- NAM_007: Reserved keywords (partial)
+
+**Width Rules** (WID_001-005):
+- WID_001-005: Width mismatch detection (all 5 rules)
+
+**Power Intent Rules** (PWR_001-005):
+- PWR_001-005: Power domain validation (all 5 rules)
+
+**Structure Rules** (STR_001-008):
+- STR_001-008: Module structure validation (all 8 rules)
+
+**Status**: These rules have complete API/framework but detection logic is under development. They are disabled by default in `veripg-production.yaml`.
+
+### ⚠️  What Happens If You Use Default Config?
+
+Without specifying `--config examples/veripg-production.yaml`:
+- ❌ You may get FALSE POSITIVES (warnings on correct code)
+- ❌ You may get FALSE NEGATIVES (missing actual violations)
+- ❌ Results will be unreliable for 24/40 rules
+- ❌ **DO NOT** use for production validation
+
+### ✅ Safe Usage Pattern
+
+**ALWAYS use this command for production**:
+```bash
+./bin/veripg-validator --config examples/veripg-production.yaml <files>
+```
 
 ## 🎯 Recommended Configuration
 
@@ -373,6 +442,100 @@ rules:
 - Focus on production rules only
 
 See `docs/PERFORMANCE_ASSESSMENT_REPORT.md` for detailed analysis.
+
+---
+
+## 🔒 macOS Security & Gatekeeper
+
+### If macOS Blocks Execution
+
+macOS Gatekeeper may prevent execution of downloaded binaries with an error like:
+- "cannot be opened because the developer cannot be verified"
+- "macOS cannot verify that this app is free from malware"
+
+This is normal for unsigned binaries. Here's how to safely run the validator:
+
+### Solution 1: Remove Quarantine Attribute (Recommended)
+
+```bash
+# This removes macOS's download quarantine flag
+xattr -d com.apple.quarantine bin/veripg-validator
+
+# Verify it's executable
+chmod +x bin/veripg-validator
+
+# Test it works
+./bin/veripg-validator --version
+```
+
+### Solution 2: System Preferences Approval
+
+1. Try to run the binary: `./bin/veripg-validator --version`
+2. macOS will show a security warning
+3. Go to **System Preferences** → **Security & Privacy** → **General** tab
+4. You'll see a message about `veripg-validator` being blocked
+5. Click **"Allow Anyway"** or **"Open Anyway"**
+6. Try running the binary again
+7. Click **"Open"** when prompted
+
+### Solution 3: Spctl Override (Advanced)
+
+```bash
+# Allow this specific binary (after verifying checksum!)
+sudo spctl --add --label "VeriPG Validator" bin/veripg-validator
+
+# Or temporarily disable Gatekeeper (not recommended)
+sudo spctl --master-disable
+# ... run validator ...
+sudo spctl --master-enable
+```
+
+### Verify Binary Before First Use
+
+**IMPORTANT**: Always verify the checksum before removing security restrictions:
+
+```bash
+# Step 1: Check SHA256 checksum
+shasum -a 256 bin/veripg-validator
+
+# Step 2: Compare with SHA256SUMS file
+cat SHA256SUMS | grep veripg-validator
+
+# Step 3: Checksums should match exactly
+# If they match, it's safe to remove quarantine
+xattr -d com.apple.quarantine bin/veripg-validator
+```
+
+### Why macOS Blocks the Binary
+
+- The binary is **not code-signed** with an Apple Developer certificate
+- This is normal for open-source tools
+- The binary is **safe** - you can verify with the SHA256 checksum
+- Future releases may include code signing
+
+### Troubleshooting
+
+**"Operation not permitted"** when using xattr?
+```bash
+# Try with sudo
+sudo xattr -d com.apple.quarantine bin/veripg-validator
+sudo chmod +x bin/veripg-validator
+```
+
+**Still can't execute?**
+```bash
+# Check if quarantine attribute was removed
+xattr -l bin/veripg-validator
+# Should not list com.apple.quarantine
+
+# Check if file is executable
+ls -l bin/veripg-validator
+# Should show -rwxr-xr-x (x = executable)
+
+# Check file type
+file bin/veripg-validator
+# Should show: Mach-O 64-bit executable arm64
+```
 
 ---
 
