@@ -221,6 +221,33 @@ cc_test(
 )
 
 cc_library(
+    name = "parameter-tracker",
+    srcs = ["parameter-tracker.cc"],
+    hdrs = ["parameter-tracker.h"],
+    deps = [
+        ":symbol-table",
+        "//verible/common/text:symbol",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "parameter-tracker_test",
+    srcs = ["parameter-tracker_test.cc"],
+    deps = [
+        ":parameter-tracker",
+        ":symbol-table",
+        ":verilog-analyzer",
+        ":verilog-project",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "call-graph",
     srcs = ["call-graph.cc"],
     hdrs = ["call-graph.h"],

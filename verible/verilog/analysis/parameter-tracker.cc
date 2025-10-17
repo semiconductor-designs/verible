@@ -1,0 +1,211 @@
+// Copyright 2017-2025 The Verible Authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include "verible/verilog/analysis/parameter-tracker.h"
+
+#include <string>
+#include <string_view>
+
+#include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
+#include "verible/verilog/analysis/symbol-table.h"
+
+namespace verilog {
+namespace analysis {
+
+absl::Status ParameterTracker::TrackAllParameters() {
+  // Clear previous state
+  ClearDiagnostics();
+  parameters_.clear();
+  
+  if (!symbol_table_) {
+    return absl::InvalidArgumentError("Symbol table is null");
+  }
+  
+  // Extract all parameter definitions
+  ExtractParameters();
+  
+  // Extract all parameter overrides
+  ExtractOverrides();
+  
+  return absl::OkStatus();
+}
+
+absl::Status ParameterTracker::ValidateParameters() {
+  // Validation happens during extraction and override tracking
+  // Return error if any errors were found
+  return errors_.empty() ? absl::OkStatus() : 
+         absl::InvalidArgumentError(absl::StrCat(errors_.size(), " parameter error(s) found"));
+}
+
+void ParameterTracker::ExtractParameters() {
+  if (symbol_table_) {
+    TraverseForParameters(symbol_table_->Root(), "");
+  }
+}
+
+void ParameterTracker::TraverseForParameters(const SymbolTableNode& node,
+                                            std::string_view module_context) {
+  const SymbolInfo& info = node.Value();
+  
+  // Update module context if this is a module definition
+  std::string current_module(module_context);
+  if (info.metatype == SymbolMetaType::kModule) {
+    current_module = std::string(*node.Key());
+  }
+  
+  // Check if this node is a parameter
+  if (info.metatype == SymbolMetaType::kParameter) {
+    const auto* key = node.Key();
+    if (key && !key->empty() && !current_module.empty()) {
+      std::string param_name(*key);
+      std::string qualified_name = absl::StrCat(current_module, ".", param_name);
+      
+      // Extract and store parameter definition
+      parameters_[qualified_name] = 
+          ExtractParameterDefinition(node, param_name, current_module);
+    }
+  }
+  
+  // Recurse into children
+  for (const auto& [name, child] : node) {
+    TraverseForParameters(child, current_module);
+  }
+}
+
+ParameterInfo ParameterTracker::ExtractParameterDefinition(
+    const SymbolTableNode& node,
+    std::string_view param_name,
+    std::string_view module_context) {
+  ParameterInfo info(param_name);
+  
+  const SymbolInfo& sym_info = node.Value();
+  info.node = &node;
+  info.syntax_origin = sym_info.syntax_origin;
+  
+  // Determine if this is a localparam
+  // TODO: Extract from CST or symbol table metadata
+  info.is_localparam = false;  // Default to parameter
+  
+  // Extract type
+  info.type = ParseParameterType(node);
+  
+  // Extract default value
+  info.default_value = ParseParameterValue(node);
+  
+  return info;
+}
+
+void ParameterTracker::ExtractOverrides() {
+  if (symbol_table_) {
+    TraverseForOverrides(symbol_table_->Root(), "");
+  }
+}
+
+void ParameterTracker::TraverseForOverrides(const SymbolTableNode& node,
+                                           std::string_view module_context) {
+  const SymbolInfo& info = node.Value();
+  
+  // Update module context
+  std::string current_module(module_context);
+  if (info.metatype == SymbolMetaType::kModule) {
+    current_module = std::string(*node.Key());
+  }
+  
+  // Check if this is a module instance with parameter overrides
+  if (info.metatype == SymbolMetaType::kDataNetVariableInstance &&
+      info.declared_type.user_defined_type != nullptr) {
+    // TODO: Extract parameter overrides from CST
+    // This requires parsing the module instantiation syntax
+  }
+  
+  // Recurse into children
+  for (const auto& [name, child] : node) {
+    TraverseForOverrides(child, current_module);
+  }
+}
+
+bool ParameterTracker::ValidateParameterOverride(
+    std::string_view module_name,
+    std::string_view param_name,
+    std::string_view instance_name,
+    std::string_view new_value) {
+  
+  // Find the parameter definition
+  const ParameterInfo* param = FindParameter(module_name, param_name);
+  
+  if (!param) {
+    AddError(absl::StrCat("Parameter '", param_name, "' not found in module '", 
+                          module_name, "'"));
+    return false;
+  }
+  
+  // Check if parameter can be overridden
+  if (!param->CanBeOverridden()) {
+    AddError(absl::StrCat("Cannot override localparam '", param_name, 
+                          "' in module '", module_name, "' (instance: ", 
+                          instance_name, ")"));
+    return false;
+  }
+  
+  // TODO: Add type checking if type information is available
+  
+  return true;
+}
+
+const ParameterInfo* ParameterTracker::FindParameter(
+    std::string_view module_name,
+    std::string_view param_name) const {
+  std::string qualified_name = absl::StrCat(module_name, ".", param_name);
+  auto it = parameters_.find(qualified_name);
+  if (it != parameters_.end()) {
+    return &it->second;
+  }
+  return nullptr;
+}
+
+std::string ParameterTracker::ParseParameterType(
+    const SymbolTableNode& node) const {
+  const SymbolInfo& info = node.Value();
+  
+  // Try to get type from declared_type
+  if (info.declared_type.user_defined_type != nullptr) {
+    const auto& type_ref = info.declared_type.user_defined_type->Value();
+    if (!type_ref.identifier.empty()) {
+      return std::string(type_ref.identifier);
+    }
+  }
+  
+  // Default to unspecified
+  return "unspecified";
+}
+
+std::string ParameterTracker::ParseParameterValue(
+    const SymbolTableNode& node) const {
+  // TODO: Extract default value from CST
+  // For now, return empty string
+  return "";
+}
+
+void ParameterTracker::AddError(std::string_view message) {
+  errors_.push_back(std::string(message));
+}
+
+void ParameterTracker::AddWarning(std::string_view message) {
+  warnings_.push_back(std::string(message));
+}
+
+}  // namespace analysis
+}  // namespace verilog
+
