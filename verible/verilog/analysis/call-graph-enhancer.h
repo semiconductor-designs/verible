@@ -12,6 +12,54 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/// @file call-graph-enhancer.h
+/// @brief Enhanced call graph analysis for SystemVerilog functions and tasks
+///
+/// This module provides comprehensive call graph construction, recursion
+/// detection, and reachability analysis for SystemVerilog designs.
+///
+/// Features:
+/// - Function and task node extraction from symbol table
+/// - Call edge detection via CST (Concrete Syntax Tree) traversal
+/// - Direct and indirect recursion cycle detection
+/// - Entry point identification (functions with no callers)
+/// - Unreachable function detection
+/// - Call depth computation using BFS
+/// - Detailed statistics and reporting
+///
+/// Memory Management:
+/// - Uses std::unique_ptr for automatic memory safety
+/// - Exception-safe design
+/// - No manual memory management required
+///
+/// @example Basic Usage
+/// @code
+/// #include "verible/verilog/analysis/call-graph-enhancer.h"
+/// #include "verible/verilog/analysis/verilog-project.h"
+/// #include "verible/verilog/analysis/symbol-table.h"
+///
+/// verilog::VerilogProject project(".", {"design.sv"});
+/// verilog::SymbolTable symbol_table(nullptr);
+/// // ... build symbol table from project ...
+/// 
+/// verilog::CallGraphEnhancer enhancer(symbol_table, project);
+/// auto status = enhancer.BuildEnhancedCallGraph();
+/// if (!status.ok()) {
+///   std::cerr << "Error: " << status.message() << "\n";
+///   return;
+/// }
+/// 
+/// // Query results
+/// auto cycles = enhancer.GetRecursionCycles();
+/// for (const auto& cycle : cycles) {
+///   std::cout << "Recursion in: " << cycle.entry_node->name << "\n";
+/// }
+///
+/// auto stats = enhancer.GetStatistics();
+/// std::cout << "Functions: " << stats.total_functions << "\n";
+/// std::cout << "Edges: " << stats.total_edges << "\n";
+/// @endcode
+
 #ifndef VERIBLE_VERILOG_ANALYSIS_CALL_GRAPH_ENHANCER_H_
 #define VERIBLE_VERILOG_ANALYSIS_CALL_GRAPH_ENHANCER_H_
 
@@ -168,17 +216,35 @@ struct CallGraphStatistics {
         avg_call_depth(0.0f) {}
 };
 
-// Enhanced call graph analyzer for SystemVerilog
+/// @class CallGraphEnhancer
+/// @brief Enhanced call graph analyzer for SystemVerilog functions and tasks
+///
+/// Builds comprehensive call graphs by:
+/// 1. Extracting function/task nodes from the symbol table
+/// 2. Traversing CST to find function calls
+/// 3. Building call edges between caller and callee
+/// 4. Detecting recursion cycles using DFS
+/// 5. Computing call depths using BFS
+/// 6. Identifying entry points and unreachable functions
+///
+/// @note Thread-safe for read-only operations after BuildEnhancedCallGraph()
+/// @note Memory managed automatically via std::unique_ptr
 class CallGraphEnhancer {
  public:
-  // Constructor
+  /// @brief Constructs a call graph enhancer
+  /// @param symbol_table Symbol table containing function/task definitions
+  /// @param project Verilog project for source file access
   CallGraphEnhancer(const SymbolTable& symbol_table,
                     const VerilogProject& project);
   
-  // Destructor
+  /// @brief Destructor (automatic cleanup via unique_ptr)
   ~CallGraphEnhancer();
   
-  // Main analysis entry point
+  /// @brief Builds the complete call graph with all analysis
+  /// @return OK on success, error status on failure
+  /// @note Must be called before any query methods
+  /// @note Can be called multiple times to rebuild
+  /// @see ExtractFunctions(), DetectRecursion(), ComputeCallDepths()
   absl::Status BuildEnhancedCallGraph();
   
   // Specific analysis methods
