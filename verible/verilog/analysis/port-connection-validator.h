@@ -208,6 +208,27 @@ class PortConnectionValidator {
   // Helper: Recursively validate module hierarchy
   void ValidateModuleHierarchy(const SymbolTableNode& node);
   
+  // Helper to recursively validate with module context tracking
+  void ValidateModuleHierarchyWithContext(const SymbolTableNode& node,
+                                           const std::string& current_module);
+
+  // Helper to collect all instances in a module
+  void CollectModuleInstances(const SymbolTableNode& module_node,
+                               std::string_view module_name,
+                               std::map<std::string, std::vector<std::string>>& signal_drivers);
+
+  // Helper to validate a single instance
+  void ValidateSingleInstance(const SymbolTableNode& instance_node,
+                               std::string_view instance_name,
+                               std::string_view parent_module);
+
+  // Helper to validate a single instance and track output drivers
+  void ValidateSingleInstanceAndTrackDrivers(
+      const SymbolTableNode& instance_node,
+      std::string_view instance_name,
+      std::string_view parent_module,
+      std::map<std::string, std::vector<std::string>>& signal_drivers);
+  
   // Helper: Validate all instances within a module
   void ValidateModuleInstances(const SymbolTableNode& module_node,
                                 std::string_view module_name);

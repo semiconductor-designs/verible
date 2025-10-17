@@ -45,17 +45,7 @@ absl::Status PortConnectionValidator::ValidateAllConnections() {
     return absl::InvalidArgumentError("Symbol table is null");
   }
   
-  // DEBUG: Confirm this is being called
-  // AddError("DEBUG: ValidateAllConnections called");
-  
   // Traverse the symbol table to find and validate all module instances
-  // We need to:
-  // 1. Find all modules
-  // 2. For each module, find instances of other modules
-  // 3. Extract port connections for each instance
-  // 4. Validate connections (direction, type, completeness)
-  // 5. Detect driver conflicts within each parent module
-  
   ValidateModuleHierarchy(symbol_table_->Root());
   
   return errors_.empty() ? absl::OkStatus() : 
@@ -65,21 +55,120 @@ absl::Status PortConnectionValidator::ValidateAllConnections() {
 // Helper to recursively validate module hierarchy
 void PortConnectionValidator::ValidateModuleHierarchy(
     const SymbolTableNode& node) {
+  ValidateModuleHierarchyWithContext(node, "");
+}
+
+void PortConnectionValidator::ValidateModuleHierarchyWithContext(
+    const SymbolTableNode& node, const std::string& current_module) {
   const SymbolInfo& info = node.Value();
   
-  // If this is a module, validate its instances
+  // Track the current module context (like multi-file-resolver does)
+  std::string module_context = current_module;
+  
+  // If this is a module definition, update the context and collect all instances
   if (info.metatype == SymbolMetaType::kModule) {
     const auto* key = node.Key();
-    if (key) {
-      std::string_view module_name = *key;
-      ValidateModuleInstances(node, module_name);
+    if (key && !key->empty()) {
+      module_context = std::string(*key);
+      
+      // Collect all instances in this module to check for driver conflicts
+      std::map<std::string, std::vector<std::string>> signal_drivers;
+      CollectModuleInstances(node, module_context, signal_drivers);
+      
+      // Check for driver conflicts across all instances
+      for (const auto& [signal, drivers] : signal_drivers) {
+        if (drivers.size() > 1) {
+          AddError(absl::StrCat("Multiple outputs driving signal '", signal,
+                                "' in module '", module_context, "' (",
+                                drivers.size(), " drivers: ",
+                                absl::StrJoin(drivers, ", "), ")"));
+        }
+      }
     }
   }
   
-  // Recurse into children
+  // Recurse into all children with the current module context
   for (const auto& [name, child] : node) {
-    ValidateModuleHierarchy(child);
+    ValidateModuleHierarchyWithContext(child, module_context);
   }
+}
+
+// Helper to collect all instances in a module and track drivers
+void PortConnectionValidator::CollectModuleInstances(
+    const SymbolTableNode& module_node,
+    std::string_view module_name,
+    std::map<std::string, std::vector<std::string>>& signal_drivers) {
+  
+  // Iterate through direct children only (not recursive - modules nest)
+  for (const auto& [child_name, child_node] : module_node) {
+    const SymbolInfo& child_info = child_node.Value();
+    
+    // Check if this child is a module instance
+    if (child_info.metatype == SymbolMetaType::kDataNetVariableInstance &&
+        child_info.declared_type.user_defined_type != nullptr) {
+      
+      // Validate this single instance and track its drivers
+      ValidateSingleInstanceAndTrackDrivers(child_node, child_name, module_name, signal_drivers);
+    }
+  }
+}
+
+// Helper to validate a single module instance
+void PortConnectionValidator::ValidateSingleInstance(
+    const SymbolTableNode& instance_node,
+    std::string_view instance_name,
+    std::string_view parent_module) {
+  std::map<std::string, std::vector<std::string>> dummy_drivers;
+  ValidateSingleInstanceAndTrackDrivers(instance_node, instance_name, parent_module, dummy_drivers);
+}
+
+// Helper to validate a single module instance and track drivers
+void PortConnectionValidator::ValidateSingleInstanceAndTrackDrivers(
+    const SymbolTableNode& instance_node,
+    std::string_view instance_name,
+    std::string_view parent_module,
+    std::map<std::string, std::vector<std::string>>& signal_drivers) {
+  
+  const SymbolInfo& inst_info = instance_node.Value();
+  
+  // Get the module type name
+  const auto& ref_comp = inst_info.declared_type.user_defined_type->Value();
+  std::string_view module_type = ref_comp.identifier;
+  
+  if (module_type.empty()) {
+    return;  // No valid module type
+  }
+  
+  // Find the module definition
+  const SymbolTableNode* module_def = FindModuleDefinition(module_type);
+  if (!module_def) {
+    AddWarning(absl::StrCat("Module definition '", module_type, "' not found for instance '", instance_name, "'"));
+    return;
+  }
+  
+  // Extract ports from the module definition
+  std::vector<PortInfo> formal_ports = ExtractPorts(*module_def);
+  
+  // Extract connections from this instance
+  std::vector<PortConnection> connections = ExtractConnections(instance_node);
+  
+  // Link connections to formal ports and track output drivers
+  for (auto& conn : connections) {
+    for (const auto& port : formal_ports) {
+      if (port.name == conn.formal_name) {
+        conn.formal_port = &port;
+        
+        // If this is an output port, track it as driving the actual signal
+        if (port.direction == PortDirection::kOutput && !conn.actual_expression.empty()) {
+          signal_drivers[std::string(conn.actual_expression)].push_back(std::string(instance_name));
+        }
+        break;
+      }
+    }
+  }
+  
+  // Detect unconnected ports (driver conflicts checked at module level)
+  DetectUnconnectedPorts(formal_ports, connections, module_type);
 }
 
 // Helper to validate all instances within a module
@@ -103,11 +192,13 @@ void PortConnectionValidator::ValidateModuleInstances(
       if (inst_info.declared_type.user_defined_type != nullptr) {
         instance_count++;  // DEBUG
         
-        // This is likely a module instance
+        // Get the module type name from the reference (matching multi-file-resolver pattern)
         const auto& ref_comp = inst_info.declared_type.user_defined_type->Value();
-        
-        // Get the module type name from the reference
         std::string_view module_type = ref_comp.identifier;
+        
+        if (module_type.empty()) {
+          continue;  // No valid module type
+        }
         
         // Find the module definition in the symbol table
         const SymbolTableNode* module_def = FindModuleDefinition(module_type);
@@ -118,14 +209,11 @@ void PortConnectionValidator::ValidateModuleInstances(
           // Extract connections from this instance
           std::vector<PortConnection> connections = ExtractConnections(inst_node);
           
-          // DEBUG: Log extraction results
-          if (connections.empty() && !formal_ports.empty()) {
-            // We have ports but no connections found - this is the issue!
-            AddWarning(absl::StrCat("DEBUG: Instance '", inst_name, 
-                                    "' of module '", module_type,
-                                    "' has ", formal_ports.size(), 
-                                    " ports but 0 connections extracted"));
-          }
+          // DEBUG: Always log what we found
+          AddWarning(absl::StrCat("DEBUG: Instance '", inst_name, 
+                                  "' of '", module_type,
+                                  "': ", formal_ports.size(), " ports, ",
+                                  connections.size(), " connections"));
           
           // Link connections to formal ports
           for (auto& conn : connections) {
