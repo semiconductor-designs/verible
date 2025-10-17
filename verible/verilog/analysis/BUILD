@@ -130,6 +130,30 @@ cc_test(
 )
 
 cc_library(
+    name = "multi-file-resolver",
+    srcs = ["multi-file-resolver.cc"],
+    hdrs = ["multi-file-resolver.h"],
+    deps = [
+        ":symbol-table",
+        "//verible/common/text:symbol",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "multi-file-resolver_test",
+    srcs = ["multi-file-resolver_test.cc"],
+    deps = [
+        ":multi-file-resolver",
+        ":symbol-table",
+        ":verilog-project",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "call-graph",
     srcs = ["call-graph.cc"],
     hdrs = ["call-graph.h"],
