@@ -83,6 +83,7 @@ struct InterfaceInfo {
   const SymbolTableNode* node = nullptr;
   const verible::Symbol* syntax_origin = nullptr;
 
+  InterfaceInfo() = default;
   explicit InterfaceInfo(std::string_view n) : name(n) {}
   
   // Find a modport by name

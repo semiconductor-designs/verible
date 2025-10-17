@@ -122,12 +122,22 @@ std::vector<InterfaceSignal> InterfaceValidator::ExtractSignals(
     const SymbolTableNode& node) {
   std::vector<InterfaceSignal> signals;
   
-  // TODO: Traverse node children to find signal declarations
-  // For each signal:
-  // 1. Extract signal name
-  // 2. Extract signal type
-  // 3. Extract width (if applicable)
-  // 4. Create InterfaceSignal and add to vector
+  // Traverse node children to find signal declarations
+  for (const auto& [child_name, child_node] : node) {
+    const SymbolInfo& child_info = child_node.Value();
+    
+    // Look for variables and nets (but not modports, not modules, not other interfaces)
+    if (child_info.metatype == SymbolMetaType::kDataNetVariableInstance &&
+        child_info.declared_type.user_defined_type == nullptr) {  // Not a module/interface instance
+      
+      // Use "logic" as default type for now
+      // TODO: Extract actual type from syntax tree
+      InterfaceSignal signal(child_name, "logic");
+      signal.syntax_origin = child_info.syntax_origin;
+      
+      signals.push_back(signal);
+    }
+  }
   
   return signals;
 }
@@ -187,11 +197,16 @@ void InterfaceValidator::AddWarning(std::string_view message) {
 void InterfaceValidator::TraverseForInterfaces(const SymbolTableNode& node) {
   const SymbolInfo& info = node.Value();
   
-  // TODO: Check if this node is an interface definition
-  // If it is:
-  // 1. Extract interface name
-  // 2. Extract interface definition
-  // 3. Store in interfaces_ map
+  // Check if this node is an interface definition
+  if (info.metatype == SymbolMetaType::kInterface) {
+    const auto* key = node.Key();
+    if (key && !key->empty()) {
+      std::string interface_name(*key);
+      
+      // Extract the interface definition and store directly
+      interfaces_[interface_name] = ExtractInterfaceDefinition(node, interface_name);
+    }
+  }
   
   // Recurse into children
   for (const auto& [name, child] : node) {
