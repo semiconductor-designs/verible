@@ -36,24 +36,64 @@ absl::Status TypeChecker::CheckAssignment(const verible::Symbol& lhs,
     return absl::InvalidArgumentError("Type inference failed");
   }
   
-  // Check if assignment is valid
-  if (!IsAssignmentCompatible(*lhs_type, *rhs_type)) {
-    std::string error_msg = FormatTypeError(*lhs_type, *rhs_type);
+  // Use TypeCompatibilityChecker for comprehensive checking
+  auto compat_result = TypeCompatibilityChecker::CheckAssignment(*lhs_type, *rhs_type);
+  
+  // Handle compatibility result based on level
+  if (compat_result.IsError()) {
+    // Incompatible types (e.g., string to int)
+    std::string error_msg = absl::StrCat(
+        "Type error in assignment: ", compat_result.message,
+        " (", lhs_type->ToString(), " = ", rhs_type->ToString(), ")");
     AddError(error_msg);
     return absl::InvalidArgumentError(error_msg);
   }
   
-  // Check for warnings
-  if (options_.warn_narrowing && 
-      lhs_type->GetWidth() < rhs_type->GetWidth()) {
-    AddWarning(FormatNarrowingWarning(*rhs_type, *lhs_type));
+  if (compat_result.IsWarning()) {
+    // Potentially problematic assignment
+    // Check if warnings are enabled for this specific issue
+    bool should_warn = false;
+    
+    // Check if it's a narrowing warning
+    if (options_.warn_narrowing && 
+        compat_result.message.find("Truncation") != std::string::npos) {
+      should_warn = true;
+    }
+    
+    // Check if it's a sign mismatch warning
+    if (options_.warn_sign_mismatch &&
+        (compat_result.message.find("signed") != std::string::npos ||
+         compat_result.message.find("unsigned") != std::string::npos)) {
+      should_warn = true;
+    }
+    
+    // Check for state mismatch (X/Z loss)
+    if (compat_result.message.find("X/Z") != std::string::npos ||
+        compat_result.message.find("state") != std::string::npos) {
+      should_warn = true;
+    }
+    
+    // Check for precision loss (real to integral)
+    if (compat_result.message.find("precision") != std::string::npos) {
+      should_warn = true;
+    }
+    
+    if (should_warn) {
+      std::string warn_msg = absl::StrCat(
+          "Type warning in assignment: ", compat_result.message,
+          " (", lhs_type->ToString(), " = ", rhs_type->ToString(), ")");
+      
+      // If warnings_as_errors is enabled, treat as error
+      if (options_.warnings_as_errors) {
+        AddError(warn_msg);
+        return absl::InvalidArgumentError(warn_msg);
+      } else {
+        AddWarning(warn_msg);
+      }
+    }
   }
   
-  if (options_.warn_sign_mismatch &&
-      lhs_type->is_signed != rhs_type->is_signed) {
-    AddWarning(FormatSignMismatchWarning(*lhs_type, *rhs_type));
-  }
-  
+  // kExact or kSafe - assignment is OK
   return absl::OkStatus();
 }
 
@@ -69,15 +109,37 @@ absl::Status TypeChecker::CheckBinaryOperator(const verible::Symbol& op,
     return absl::InvalidArgumentError("Type inference failed");
   }
   
-  // Check operator compatibility
-  // For now, simplified: just check if both are numeric for arithmetic ops
-  // Full implementation would check specific operator requirements
-  if (!lhs_type->IsNumeric() || !rhs_type->IsNumeric()) {
+  // Determine operator type (simplified - would need actual operator token)
+  // For now, assume arithmetic by default
+  TypeCompatibilityChecker::BinaryOpType op_type = 
+      TypeCompatibilityChecker::BinaryOpType::kArithmetic;
+  
+  // Check operator compatibility using TypeCompatibilityChecker
+  auto compat_result = TypeCompatibilityChecker::CheckBinaryOp(
+      *lhs_type, *rhs_type, op_type);
+  
+  if (compat_result.IsError()) {
     std::string error_msg = absl::StrCat(
-        "Operator requires numeric operands, got ",
-        lhs_type->ToString(), " and ", rhs_type->ToString());
+        "Type error in binary operation: ", compat_result.message,
+        " (", lhs_type->ToString(), " op ", rhs_type->ToString(), ")");
     AddError(error_msg);
     return absl::InvalidArgumentError(error_msg);
+  }
+  
+  if (compat_result.IsWarning()) {
+    // Check if we should warn based on options
+    if (options_.warn_sign_mismatch || options_.warn_narrowing) {
+      std::string warn_msg = absl::StrCat(
+          "Type warning in binary operation: ", compat_result.message,
+          " (", lhs_type->ToString(), " op ", rhs_type->ToString(), ")");
+      
+      if (options_.warnings_as_errors) {
+        AddError(warn_msg);
+        return absl::InvalidArgumentError(warn_msg);
+      } else {
+        AddWarning(warn_msg);
+      }
+    }
   }
   
   return absl::OkStatus();

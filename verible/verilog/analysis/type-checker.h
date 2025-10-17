@@ -21,6 +21,7 @@
 #include "absl/status/status.h"
 #include "verible/common/text/symbol.h"
 #include "verible/verilog/analysis/symbol-table.h"
+#include "verible/verilog/analysis/type-compatibility-rules.h"
 #include "verible/verilog/analysis/type-inference.h"
 #include "verible/verilog/analysis/type-representation.h"
 
