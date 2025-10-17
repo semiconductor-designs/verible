@@ -310,7 +310,6 @@ class CallGraphEnhancer {
   void MarkRecursiveCycle(const std::vector<CallGraphNode*>& cycle);
   
   // Depth computation
-  void ComputeDepthBFS(CallGraphNode* entry_point);
   
   // Entry point detection
   bool IsEntryPoint(CallGraphNode* node);

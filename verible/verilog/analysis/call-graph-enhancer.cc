@@ -159,13 +159,49 @@ absl::Status CallGraphEnhancer::DetectRecursion() {
 }
 
 absl::Status CallGraphEnhancer::ComputeCallDepths() {
-  // Find all entry points
-  std::vector<CallGraphNode*> entry_points = GetEntryPoints();
+  // Initialize all depths to 0
+  for (const auto& node : nodes_) {
+    node->call_depth = 0;
+  }
   
-  // BFS from each entry point to compute depths
-  for (auto* entry : entry_points) {
-    entry->call_depth = 0;
-    ComputeDepthBFS(entry);
+  // Compute depth as "maximum path length from this node to leaf nodes"
+  // Leaf nodes (no callees) have depth 0
+  // Entry points have the highest depths
+  
+  // Use BFS from leaf nodes upward through callers
+  std::queue<CallGraphNode*> queue;
+  std::set<CallGraphNode*> in_queue;
+  
+  // Start with all leaf nodes (no callees)
+  for (const auto& node : nodes_) {
+    if (node->callees.empty()) {
+      node->call_depth = 0;
+      queue.push(node.get());
+      in_queue.insert(node.get());
+    }
+  }
+  
+  // BFS upward through callers
+  while (!queue.empty()) {
+    auto* node = queue.front();
+    queue.pop();
+    in_queue.erase(node);
+    
+    // Update all callers' depths
+    for (auto* caller : node->callers) {
+      int new_depth = node->call_depth + 1;
+      
+      // Update if we found a longer path
+      if (new_depth > caller->call_depth) {
+        caller->call_depth = new_depth;
+        
+        // Re-queue if not already queued
+        if (in_queue.find(caller) == in_queue.end()) {
+          queue.push(caller);
+          in_queue.insert(caller);
+        }
+      }
+    }
   }
   
   return absl::OkStatus();
@@ -479,28 +515,11 @@ void CallGraphEnhancer::MarkRecursiveCycle(const std::vector<CallGraphNode*>& cy
   }
 }
 
-void CallGraphEnhancer::ComputeDepthBFS(CallGraphNode* entry_point) {
-  std::queue<CallGraphNode*> queue;
-  queue.push(entry_point);
-  
-  while (!queue.empty()) {
-    auto* node = queue.front();
-    queue.pop();
-    
-    // Update callees' depths
-    for (auto* callee : node->callees) {
-      int new_depth = node->call_depth + 1;
-      if (new_depth > callee->call_depth) {
-        callee->call_depth = new_depth;
-        queue.push(callee);
-      }
-    }
-  }
-}
 
 bool CallGraphEnhancer::IsEntryPoint(CallGraphNode* node) {
-  // Entry point if no callers (and not already marked as entry point elsewhere)
-  return node->callers.empty();
+  // Entry point if: no callers AND has callees (participates in call graph)
+  // Orphan functions (no callers, no callees) are unreachable, not entry points
+  return node->callers.empty() && !node->callees.empty();
 }
 
 void CallGraphEnhancer::ComputeStatistics() {
