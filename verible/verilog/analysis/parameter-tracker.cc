@@ -182,16 +182,63 @@ void ParameterTracker::TraverseForOverrides(const SymbolTableNode& node,
     current_module = std::string(*node.Key());
   }
   
-  // Check if this is a module instance with parameter overrides
+  // Check if this is a module instance with potential parameter overrides
   if (info.metatype == SymbolMetaType::kDataNetVariableInstance &&
-      info.declared_type.user_defined_type != nullptr) {
-    // TODO: Extract parameter overrides from CST
-    // This requires parsing the module instantiation syntax
+      info.declared_type.user_defined_type != nullptr &&
+      info.syntax_origin) {
+    
+    // Get module type name
+    const auto& type_ref = info.declared_type.user_defined_type->Value();
+    if (!type_ref.identifier.empty()) {
+      std::string module_type(type_ref.identifier);
+      
+      // Get instance name
+      const auto* key = node.Key();
+      if (key && !key->empty()) {
+        std::string instance_name(*key);
+        
+        // Extract parameter overrides from CST
+        ExtractParameterOverrides(*info.syntax_origin, module_type, instance_name);
+      }
+    }
   }
   
   // Recurse into children
   for (const auto& [name, child] : node) {
     TraverseForOverrides(child, current_module);
+  }
+}
+
+void ParameterTracker::ExtractParameterOverrides(
+    const verible::Symbol& instance_symbol,
+    std::string_view module_type,
+    std::string_view instance_name) {
+  
+  // Find all parameter overrides in this instance
+  auto param_overrides = FindAllNamedParams(instance_symbol);
+  
+  // TODO: Parameter overrides need to be extracted from parent CST node
+  // The syntax_origin for kDataNetVariableInstance doesn't include the parameter list
+  // Need to traverse up to find kDataDeclaration or similar node that has #(...) parameters
+  
+  for (const auto& match : param_overrides) {
+    if (!match.match) continue;
+    
+    // Get parameter name
+    const verible::SyntaxTreeLeaf* param_leaf = GetNamedParamFromActualParam(*match.match);
+    if (!param_leaf) continue;
+    
+    std::string param_name(param_leaf->get().text());
+    
+    // Get parameter value
+    const verible::SyntaxTreeNode* value_node = GetParenGroupFromActualParam(*match.match);
+    std::string param_value;
+    if (value_node) {
+      param_value = verible::StringSpanOfSymbol(*value_node);
+    }
+    
+    // Validate and store the override
+    ValidateParameterOverride(module_type, param_name, instance_name, param_value);
   }
 }
 
@@ -202,21 +249,25 @@ bool ParameterTracker::ValidateParameterOverride(
     std::string_view new_value) {
   
   // Find the parameter definition
-  const ParameterInfo* param = FindParameter(module_name, param_name);
+  std::string qualified_name = absl::StrCat(module_name, ".", param_name);
+  auto it = parameters_.find(qualified_name);
   
-  if (!param) {
+  if (it == parameters_.end()) {
     AddError(absl::StrCat("Parameter '", param_name, "' not found in module '", 
                           module_name, "'"));
     return false;
   }
   
   // Check if parameter can be overridden
-  if (!param->CanBeOverridden()) {
+  if (!it->second.CanBeOverridden()) {
     AddError(absl::StrCat("Cannot override localparam '", param_name, 
                           "' in module '", module_name, "' (instance: ", 
                           instance_name, ")"));
     return false;
   }
+  
+  // Store the override
+  it->second.AddOverride(instance_name, new_value);
   
   // TODO: Add type checking if type information is available
   

@@ -158,6 +158,15 @@ class ParameterTracker {
   void TraverseForOverrides(const SymbolTableNode& node,
                            std::string_view module_context);
 
+  // Extract parameter overrides from a module instantiation
+  // Args:
+  //   instance_symbol: CST node for the module instance
+  //   module_type: Type of module being instantiated
+  //   instance_name: Name of the instance
+  void ExtractParameterOverrides(const verible::Symbol& instance_symbol,
+                                 std::string_view module_type,
+                                 std::string_view instance_name);
+
   // Validate that a parameter override is legal
   // Args:
   //   module_name: Name of module being instantiated
