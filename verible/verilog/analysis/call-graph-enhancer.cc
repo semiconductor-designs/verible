@@ -425,8 +425,10 @@ bool CallGraphEnhancer::IsInRecursionStack(CallGraphNode* node,
 
 void CallGraphEnhancer::MarkRecursiveCycle(const std::vector<CallGraphNode*>& cycle) {
   for (auto* node : cycle) {
-    node->is_recursive = true;
-    statistics_.recursive_functions++;
+    if (!node->is_recursive) {
+      node->is_recursive = true;
+      statistics_.recursive_functions++;
+    }
   }
 }
 
