@@ -145,8 +145,45 @@ std::vector<ModportInfo> InterfaceValidator::ExtractModports(
         ModportInfo modport_info(name_leaf->get().text());
         modport_info.syntax_origin = match.match;
         
-        // TODO: Extract signal directions from modport ports list
-        // This requires parsing kModportSimplePortsDeclaration
+        // Extract signal directions from modport ports
+        // Look for kModportSimplePortsDeclaration within this modport
+        auto port_decls = verible::SearchSyntaxTree(
+            *match.match,
+            NodekModportSimplePortsDeclaration());
+        
+        for (const auto& port_decl : port_decls) {
+          if (!port_decl.match) continue;
+          
+          // Extract direction (input/output/inout at position 0)
+          const verible::SyntaxTreeLeaf* dir_leaf = 
+              verible::GetSubtreeAsLeaf(*port_decl.match, 
+                                       NodeEnum::kModportSimplePortsDeclaration, 0);
+          
+          ModportDirection direction = ModportDirection::kUnknown;
+          if (dir_leaf) {
+            std::string_view dir_text = dir_leaf->get().text();
+            if (dir_text == "input") direction = ModportDirection::kInput;
+            else if (dir_text == "output") direction = ModportDirection::kOutput;
+            else if (dir_text == "inout") direction = ModportDirection::kInout;
+            else if (dir_text == "ref") direction = ModportDirection::kRef;
+          }
+          
+          // Extract signal names at position 1 (kModportPortsDeclaration)
+          const verible::SyntaxTreeNode* signals_node = 
+              verible::GetSubtreeAsNode(*port_decl.match,
+                                       NodeEnum::kModportSimplePortsDeclaration, 1);
+          
+          if (signals_node) {
+            // Search for signal identifiers within
+            auto signal_ids = verible::SearchSyntaxTree(*signals_node, NodekUnqualifiedId());
+            for (const auto& sig : signal_ids) {
+              if (sig.match && sig.match->Kind() == verible::SymbolKind::kLeaf) {
+                const auto* sig_leaf = verible::down_cast<const verible::SyntaxTreeLeaf*>(sig.match);
+                modport_info.AddSignal(sig_leaf->get().text(), direction);
+              }
+            }
+          }
+        }
         
         modports.push_back(modport_info);
       }
