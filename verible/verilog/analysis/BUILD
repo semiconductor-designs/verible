@@ -360,6 +360,34 @@ cc_test(
 )
 
 cc_library(
+    name = "call-graph-enhancer",
+    srcs = ["call-graph-enhancer.cc"],
+    hdrs = ["call-graph-enhancer.h"],
+    deps = [
+        ":symbol-table",
+        ":verilog-project",
+        "//verible/common/text:symbol",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "call-graph-enhancer_test",
+    srcs = ["call-graph-enhancer_test.cc"],
+    deps = [
+        ":call-graph-enhancer",
+        ":symbol-table",
+        ":verilog-analyzer",
+        ":verilog-project",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "call-graph",
     srcs = ["call-graph.cc"],
     hdrs = ["call-graph.h"],
