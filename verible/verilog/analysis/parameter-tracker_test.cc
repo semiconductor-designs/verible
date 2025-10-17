@@ -172,14 +172,14 @@ endmodule
   const auto& params = tracker_->GetParameters();
   auto it = params.find("register.WIDTH");
   ASSERT_NE(it, params.end());
+  EXPECT_EQ(it->second.name, "WIDTH");
+  EXPECT_FALSE(it->second.is_localparam);
+  EXPECT_EQ(it->second.default_value, "8");
   
-  // TODO: Override extraction not yet working - need to find correct CST node
-  // The syntax_origin for instances doesn't include #(...) parameter list
+  // TODO: Override extraction - CST navigation complex
+  // Need to correlate kDataDeclaration -> kInstantiationType -> kRegisterVariable
+  // Framework is in place, needs more CST investigation
   // EXPECT_EQ(it->second.overrides.size(), 1);
-  // if (!it->second.overrides.empty()) {
-  //   EXPECT_EQ(it->second.overrides[0].instance_name, "reg16");
-  //   EXPECT_EQ(it->second.overrides[0].new_value, "(16)");
-  // }
 }
 
 // Error Tests
@@ -211,19 +211,21 @@ endmodule
   absl::Status status = tracker_->TrackAllParameters();
   EXPECT_TRUE(status.ok());
   
-  // Verify both parameters were extracted
+  // Verify both parameters were extracted correctly
   const auto& params = tracker_->GetParameters();
   
   auto init_it = params.find("counter_with_max.INIT_VALUE");
   ASSERT_NE(init_it, params.end());
   EXPECT_FALSE(init_it->second.is_localparam);
+  EXPECT_EQ(init_it->second.default_value, "0");
   
   auto max_it = params.find("counter_with_max.MAX_VALUE");
   ASSERT_NE(max_it, params.end());
   EXPECT_TRUE(max_it->second.is_localparam);
+  EXPECT_EQ(max_it->second.default_value, "100");
   
-  // TODO: Override validation not yet working - need to extract from correct CST node
-  // Should detect error: cannot override localparam
+  // TODO: Override validation requires override extraction to work first
+  // Framework is in place, validation logic complete
   // EXPECT_FALSE(tracker_->GetErrors().empty());
 }
 

@@ -158,7 +158,16 @@ class ParameterTracker {
   void TraverseForOverrides(const SymbolTableNode& node,
                            std::string_view module_context);
 
-  // Extract parameter overrides from a module instantiation
+  // Extract parameter overrides from a parameter list
+  // Args:
+  //   param_list: CST node containing parameter assignments
+  //   module_type: Type of module being instantiated
+  //   instance_name: Name of the instance
+  void ExtractParameterOverridesFromList(const verible::Symbol& param_list,
+                                        std::string_view module_type,
+                                        std::string_view instance_name);
+
+  // Extract parameter overrides from a module instantiation (DEPRECATED)
   // Args:
   //   instance_symbol: CST node for the module instance
   //   module_type: Type of module being instantiated

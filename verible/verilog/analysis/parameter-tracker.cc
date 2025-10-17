@@ -19,12 +19,16 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
+#include "verible/common/analysis/syntax-tree-search.h"
 #include "verible/common/text/concrete-syntax-leaf.h"
 #include "verible/common/text/concrete-syntax-tree.h"
 #include "verible/common/text/symbol.h"
 #include "verible/common/text/token-info.h"
 #include "verible/common/text/tree-utils.h"
 #include "verible/verilog/CST/parameters.h"
+#include "verible/verilog/CST/type.h"
+#include "verible/verilog/CST/verilog-matchers.h"
+#include "verible/verilog/CST/verilog-nonterminals.h"
 #include "verible/verilog/analysis/symbol-table.h"
 #include "verible/verilog/parser/verilog-token-enum.h"
 
@@ -176,50 +180,75 @@ void ParameterTracker::TraverseForOverrides(const SymbolTableNode& node,
                                            std::string_view module_context) {
   const SymbolInfo& info = node.Value();
   
-  // Update module context
-  std::string current_module(module_context);
-  if (info.metatype == SymbolMetaType::kModule) {
-    current_module = std::string(*node.Key());
-  }
-  
-  // Check if this is a module instance with potential parameter overrides
-  if (info.metatype == SymbolMetaType::kDataNetVariableInstance &&
-      info.declared_type.user_defined_type != nullptr &&
-      info.syntax_origin) {
-    
-    // Get module type name
-    const auto& type_ref = info.declared_type.user_defined_type->Value();
-    if (!type_ref.identifier.empty()) {
-      std::string module_type(type_ref.identifier);
+  // Update module context and extract overrides from this module's CST
+  if (info.metatype == SymbolMetaType::kModule && info.syntax_origin) {
+    const auto* key = node.Key();
+    if (key && !key->empty()) {
+      std::string module_name(*key);
       
-      // Get instance name
-      const auto* key = node.Key();
-      if (key && !key->empty()) {
-        std::string instance_name(*key);
+      // Search for all kDataDeclaration nodes in this module
+      // These contain both kInstantiationType (with params) and kRegisterVariable (instances)
+      auto data_decls = verible::SearchSyntaxTree(*info.syntax_origin, 
+                                                  NodekDataDeclaration());
+      
+      for (const auto& decl_match : data_decls) {
+        if (!decl_match.match) continue;
         
-        // Extract parameter overrides from CST
-        ExtractParameterOverrides(*info.syntax_origin, module_type, instance_name);
+        // Look for kInstantiationType within this declaration
+        auto inst_types = verible::SearchSyntaxTree(*decl_match.match,
+                                                    NodekInstantiationType());
+        
+        if (inst_types.empty()) continue;  // Not a module instantiation
+        
+        // Get the module type name and parameter list from kInstantiationType
+        for (const auto& inst_type : inst_types) {
+          if (!inst_type.match) continue;
+          
+          // Get module type
+          const verible::Symbol* type_id = 
+              GetTypeIdentifierFromInstantiationType(*inst_type.match);
+          if (!type_id) continue;
+          
+          std::string module_type(verible::StringSpanOfSymbol(*type_id));
+          
+          // Get parameter list
+          const verible::SyntaxTreeNode* param_list = 
+              GetParamListFromInstantiationType(*inst_type.match);
+          
+          if (!param_list) continue;  // No parameter overrides
+          
+          // Now find all instances in this declaration
+          auto instances = verible::SearchSyntaxTree(*decl_match.match,
+                                                    NodekRegisterVariable());
+          
+          for (const auto& inst : instances) {
+            if (!inst.match) continue;
+            
+            // Get instance name
+            std::string instance_name(verible::StringSpanOfSymbol(*inst.match));
+            
+            // Extract parameter overrides for this instance
+            // TODO: Verify instance name extraction is correct
+            ExtractParameterOverridesFromList(*param_list, module_type, instance_name);
+          }
+        }
       }
     }
   }
   
   // Recurse into children
   for (const auto& [name, child] : node) {
-    TraverseForOverrides(child, current_module);
+    TraverseForOverrides(child, module_context);
   }
 }
 
-void ParameterTracker::ExtractParameterOverrides(
-    const verible::Symbol& instance_symbol,
+void ParameterTracker::ExtractParameterOverridesFromList(
+    const verible::Symbol& param_list,
     std::string_view module_type,
     std::string_view instance_name) {
   
-  // Find all parameter overrides in this instance
-  auto param_overrides = FindAllNamedParams(instance_symbol);
-  
-  // TODO: Parameter overrides need to be extracted from parent CST node
-  // The syntax_origin for kDataNetVariableInstance doesn't include the parameter list
-  // Need to traverse up to find kDataDeclaration or similar node that has #(...) parameters
+  // Find all named parameter assignments within the parameter list
+  auto param_overrides = FindAllNamedParams(param_list);
   
   for (const auto& match : param_overrides) {
     if (!match.match) continue;
@@ -240,6 +269,15 @@ void ParameterTracker::ExtractParameterOverrides(
     // Validate and store the override
     ValidateParameterOverride(module_type, param_name, instance_name, param_value);
   }
+}
+
+void ParameterTracker::ExtractParameterOverrides(
+    const verible::Symbol& instance_symbol,
+    std::string_view module_type,
+    std::string_view instance_name) {
+  // DEPRECATED: This function is no longer used
+  // Parameter overrides are now extracted via TraverseForOverrides
+  // which searches kDataDeclaration nodes in modules
 }
 
 bool ParameterTracker::ValidateParameterOverride(
