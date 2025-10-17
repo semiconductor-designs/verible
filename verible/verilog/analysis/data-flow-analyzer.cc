@@ -120,9 +120,12 @@ absl::Status DataFlowAnalyzer::AnalyzeDataFlow() {
 
 absl::Status DataFlowAnalyzer::BuildDataFlowGraph() {
   // Traverse the symbol table to extract all nodes
-  TraverseSymbolTable(symbol_table_.Root(), "");
+  // Start from root's children to avoid issues with root node itself
+  for (const auto& child : symbol_table_.Root()) {
+    TraverseSymbolTable(child.second, "");
+  }
   
-  // Extract all assignments to build edges
+  // Extract all assignments to build edges (stubbed for now)
   ExtractAssignments(symbol_table_.Root());
   
   // Analyze drivers and readers
@@ -135,6 +138,11 @@ absl::Status DataFlowAnalyzer::BuildDataFlowGraph() {
 
 void DataFlowAnalyzer::TraverseSymbolTable(const SymbolTableNode& node,
                                            const std::string& scope) {
+  // Safety check: prevent null key dereference
+  if (!node.Key()) {
+    return;
+  }
+  
   // Extract different types of nodes
   ExtractSignals(node, scope);
   ExtractVariables(node, scope);
@@ -152,6 +160,9 @@ void DataFlowAnalyzer::TraverseSymbolTable(const SymbolTableNode& node,
 
 void DataFlowAnalyzer::ExtractSignals(const SymbolTableNode& node,
                                       const std::string& scope) {
+  // Safety check
+  if (!node.Key()) return;
+  
   const auto& info = node.Value();
   
   // Check if this is a signal (wire, reg, logic)
@@ -174,6 +185,9 @@ void DataFlowAnalyzer::ExtractSignals(const SymbolTableNode& node,
 
 void DataFlowAnalyzer::ExtractVariables(const SymbolTableNode& node,
                                         const std::string& scope) {
+  // Safety check
+  if (!node.Key()) return;
+  
   // Variables are local to functions/tasks
   // For now, treat them similar to signals but mark as variables
   const auto& info = node.Value();
@@ -209,6 +223,9 @@ void DataFlowAnalyzer::ExtractPorts(const SymbolTableNode& node,
 
 void DataFlowAnalyzer::ExtractParameters(const SymbolTableNode& node,
                                          const std::string& scope) {
+  // Safety check
+  if (!node.Key()) return;
+  
   const auto& info = node.Value();
   
   // Check if this is a parameter
