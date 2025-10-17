@@ -295,6 +295,41 @@ cc_test(
 )
 
 cc_library(
+    name = "data-flow-analyzer",
+    srcs = ["data-flow-analyzer.cc"],
+    hdrs = ["data-flow-analyzer.h"],
+    deps = [
+        ":symbol-table",
+        ":verilog-project",
+        "//verible/common/analysis:syntax-tree-search",
+        "//verible/common/text:concrete-syntax-leaf",
+        "//verible/common/text:concrete-syntax-tree",
+        "//verible/common/text:symbol",
+        "//verible/common/text:token-info",
+        "//verible/common/text:tree-utils",
+        "//verible/verilog/CST:verilog-matchers",
+        "//verible/verilog/CST:verilog-nonterminals",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "data-flow-analyzer_test",
+    srcs = ["data-flow-analyzer_test.cc"],
+    deps = [
+        ":data-flow-analyzer",
+        ":symbol-table",
+        ":verilog-analyzer",
+        ":verilog-project",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "call-graph",
     srcs = ["call-graph.cc"],
     hdrs = ["call-graph.h"],
