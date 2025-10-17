@@ -71,7 +71,7 @@ ABSL_FLAG(bool, show_version, false,
 namespace verilog {
 namespace tools {
 
-constexpr char kVersion[] = "5.0.0-beta";
+constexpr char kVersion[] = "5.0.0";
 constexpr char kProgramName[] = "veripg-validator";
 
 // Parse severity level from string
