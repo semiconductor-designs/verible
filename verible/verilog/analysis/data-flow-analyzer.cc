@@ -29,6 +29,7 @@
 #include "verible/common/text/symbol.h"
 #include "verible/common/text/token-info.h"
 #include "verible/common/text/tree-utils.h"
+#include "verible/verilog/CST/parameters.h"
 #include "verible/verilog/CST/verilog-matchers.h"
 #include "verible/verilog/CST/verilog-nonterminals.h"
 #include "verible/verilog/analysis/symbol-table.h"
@@ -120,7 +121,10 @@ absl::Status DataFlowAnalyzer::AnalyzeDataFlow() {
 
 absl::Status DataFlowAnalyzer::BuildDataFlowGraph() {
   // Traverse the symbol table to extract all nodes
-  // Start from root's children to avoid issues with root node itself
+  // Start from root and traverse entire tree
+  TraverseSymbolTable(symbol_table_.Root(), "");
+  
+  // Also traverse from root's children with empty scope
   for (const auto& child : symbol_table_.Root()) {
     TraverseSymbolTable(child.second, "");
   }
@@ -153,6 +157,7 @@ void DataFlowAnalyzer::TraverseSymbolTable(const SymbolTableNode& node,
   std::string current_scope = scope.empty() ? 
       std::string(*node.Key()) : absl::StrCat(scope, ".", *node.Key());
   
+  // Iterate through all children
   for (const auto& child : node.Children()) {
     TraverseSymbolTable(child.second, current_scope);
   }
@@ -228,23 +233,43 @@ void DataFlowAnalyzer::ExtractParameters(const SymbolTableNode& node,
   
   const auto& info = node.Value();
   
-  // Check if this is a parameter
-  if (info.metatype == SymbolMetaType::kParameter) {
-    DataFlowNode df_node;
-    df_node.name = scope.empty() ? 
+  // Parameters are not direct symbol table entries
+  // They must be extracted from module CST using FindAllParamDeclarations
+  if (info.metatype == SymbolMetaType::kModule && info.syntax_origin) {
+    // Get module name for scope
+    std::string module_scope = scope.empty() ? 
         std::string(*node.Key()) : absl::StrCat(scope, ".", *node.Key());
-    df_node.local_name = std::string(*node.Key());
-    df_node.type = DataFlowNode::kParameter;
-    df_node.is_parameter = true;
-    df_node.is_constant = true;  // Parameters are always constants
-    df_node.syntax_origin = info.syntax_origin;
-    df_node.file = info.file_origin;
-    df_node.scope = scope;
-    df_node.symbol_node = &node;
     
-    graph_.nodes[df_node.name] = df_node;
-    graph_.parameters.push_back(&graph_.nodes[df_node.name]);
-    graph_.constant_list.push_back(df_node.name);
+    // Find all parameter declarations in this module's CST
+    auto param_decls = FindAllParamDeclarations(*info.syntax_origin);
+    
+    for (const auto& match : param_decls) {
+      if (!match.match) continue;
+      
+      // Get parameter name from CST
+      const verible::TokenInfo* name_token = GetParameterNameToken(*match.match);
+      if (!name_token) continue;
+      
+      std::string param_name(name_token->text());
+      std::string fully_qualified_name = absl::StrCat(module_scope, ".", param_name);
+      
+      // Create DataFlowNode for this parameter
+      DataFlowNode df_node;
+      df_node.name = fully_qualified_name;
+      df_node.local_name = param_name;
+      df_node.type = DataFlowNode::kParameter;
+      df_node.is_parameter = true;
+      df_node.is_constant = true;  // Parameters are always constants
+      df_node.syntax_origin = match.match;
+      df_node.file = info.file_origin;
+      df_node.scope = module_scope;
+      df_node.symbol_node = &node;
+      
+      // Add to graph
+      graph_.nodes[df_node.name] = df_node;
+      graph_.parameters.push_back(&graph_.nodes[df_node.name]);
+      graph_.constant_list.push_back(df_node.name);
+    }
   }
 }
 
