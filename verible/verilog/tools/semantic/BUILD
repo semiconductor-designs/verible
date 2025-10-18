@@ -48,6 +48,7 @@ cc_binary(
         "//verible/verilog/analysis:call-graph-enhancer",
         "//verible/verilog/analysis:data-flow-analyzer",
         "//verible/verilog/analysis:enhanced-unused-detector",
+        "//verible/verilog/analysis:kythe-analyzer",
         "//verible/verilog/analysis:symbol-table",
         "//verible/verilog/analysis:verilog-analyzer",
         "//verible/verilog/analysis:verilog-project",

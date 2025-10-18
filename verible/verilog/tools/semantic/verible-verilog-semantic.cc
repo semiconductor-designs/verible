@@ -37,6 +37,7 @@
 #include "verible/verilog/analysis/call-graph-enhancer.h"
 #include "verible/verilog/analysis/data-flow-analyzer.h"
 #include "verible/verilog/analysis/enhanced-unused-detector.h"
+#include "verible/verilog/analysis/kythe-analyzer.h"
 #include "verible/verilog/analysis/symbol-table.h"
 #include "verible/verilog/analysis/verilog-analyzer.h"
 #include "verible/verilog/analysis/verilog-project.h"
@@ -48,6 +49,7 @@ ABSL_FLAG(bool, pretty, true, "Pretty-print JSON output with indentation");
 ABSL_FLAG(bool, include_callgraph, true, "Include call graph analysis");
 ABSL_FLAG(bool, include_dataflow, false, "Include data flow analysis");
 ABSL_FLAG(bool, include_unused, false, "Include unused entity detection");
+ABSL_FLAG(bool, include_kythe, false, "Include Kythe variable reference extraction");
 ABSL_FLAG(bool, include_all, false, "Include all semantic analysis");
 
 namespace verilog {
@@ -86,6 +88,7 @@ absl::Status AnalyzeAndExport(absl::string_view filename) {
   bool run_callgraph = absl::GetFlag(FLAGS_include_callgraph) || absl::GetFlag(FLAGS_include_all);
   bool run_dataflow = absl::GetFlag(FLAGS_include_dataflow) || absl::GetFlag(FLAGS_include_all);
   bool run_unused = absl::GetFlag(FLAGS_include_unused) || absl::GetFlag(FLAGS_include_all);
+  bool run_kythe = absl::GetFlag(FLAGS_include_kythe) || absl::GetFlag(FLAGS_include_all);
 
   // Build combined JSON output
   nlohmann::json j;
@@ -147,6 +150,68 @@ absl::Status AnalyzeAndExport(absl::string_view filename) {
     std::string unused_json = exporter.ExportUnused(unused);
     auto unused_parsed = nlohmann::json::parse(unused_json);
     j["unused"] = unused_parsed["unused"];
+  }
+
+  // Run Kythe variable reference extraction
+  if (run_kythe) {
+    // Note: Kythe requires a real VerilogProject with file-based analysis
+    // We need to create a project that references the actual file
+    std::string parent_dir = ".";
+    size_t last_slash = filename.find_last_of("/\\");
+    std::string base_filename = (last_slash == std::string::npos) 
+        ? std::string(filename) 
+        : std::string(filename.substr(last_slash + 1));
+    if (last_slash != std::string::npos) {
+      parent_dir = std::string(filename.substr(0, last_slash));
+    }
+    
+    VerilogProject kythe_project(parent_dir, {});
+    SymbolTable kythe_symbol_table(&kythe_project);
+    
+    // Open the file in the project
+    auto status_or_file = kythe_project.OpenTranslationUnit(base_filename);
+    if (!status_or_file.ok()) {
+      std::cerr << "Kythe analysis failed to open file:\n"
+                << "  File: " << filename << "\n"
+                << "  Error: " << status_or_file.status().message() << "\n"
+                << "  Hint: Ensure the file exists and is readable\n";
+      return absl::Status(absl::StatusCode::kInternal,
+                          absl::StrCat("Kythe file open error: ", status_or_file.status().message()));
+    }
+    auto* kythe_source_file = *status_or_file;
+    
+    // Parse the file
+    const auto kythe_parse_status = kythe_source_file->Parse();
+    if (!kythe_parse_status.ok()) {
+      std::cerr << "Kythe analysis failed to parse file:\n"
+                << "  File: " << filename << "\n"
+                << "  Error: " << kythe_parse_status.message() << "\n";
+      return absl::Status(absl::StatusCode::kInvalidArgument,
+                          absl::StrCat("Kythe parse error: ", kythe_parse_status.message()));
+    }
+    
+    // Build symbol table
+    BuildSymbolTable(*kythe_source_file, &kythe_symbol_table, nullptr);
+    
+    // Run Kythe analysis
+    KytheAnalyzer kythe(kythe_symbol_table, kythe_project);
+    const auto kythe_status = kythe.BuildKytheFacts();
+    if (!kythe_status.ok()) {
+      std::cerr << "Kythe analysis failed:\n"
+                << "  File: " << filename << "\n"
+                << "  Error: " << kythe_status.message() << "\n"
+                << "  Hint: Check for complex constructs or syntax errors\n";
+      return absl::Status(absl::StatusCode::kInternal,
+                          absl::StrCat("Kythe analysis error: ", kythe_status.message()));
+    }
+    
+    // Export to JSON
+    std::string kythe_json = exporter.ExportKythe(kythe);
+    auto kythe_parsed = nlohmann::json::parse(kythe_json);
+    j["kythe"] = kythe_parsed["kythe"];
+    
+    // Update schema version to 1.1.0 when Kythe is included
+    j["schema_version"] = "1.1.0";
   }
 
   // Serialize final JSON
