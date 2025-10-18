@@ -20,6 +20,7 @@
 #include "verible/verilog/analysis/call-graph-enhancer.h"
 #include "verible/verilog/analysis/data-flow-analyzer.h"
 #include "verible/verilog/analysis/enhanced-unused-detector.h"
+#include "verible/verilog/analysis/kythe-analyzer.h"
 
 namespace verilog {
 
@@ -285,6 +286,84 @@ std::string SemanticJsonExporter::ExportUnused(
   // Return formatted JSON
   if (pretty_print_) {
     return j.dump(2);
+  } else {
+    return j.dump();
+  }
+}
+
+std::string SemanticJsonExporter::ExportKythe(
+    const KytheAnalyzer& kythe) const {
+  nlohmann::json j;
+
+  // Add schema versioning (bump to 1.1.0 for Kythe support)
+  j["schema_version"] = "1.1.0";
+  j["kythe"]["version"] = "1.0.0";
+
+  // Export variable references
+  j["kythe"]["variable_references"] = nlohmann::json::array();
+  for (const auto& ref : kythe.GetVariableReferences()) {
+    nlohmann::json ref_json;
+    ref_json["variable_name"] = SanitizeForJson(ref.variable_name);
+    ref_json["fully_qualified_name"] = SanitizeForJson(ref.fully_qualified_name);
+    
+    // Export location
+    nlohmann::json loc_json;
+    loc_json["file"] = SanitizeForJson(ref.location.file_path);
+    loc_json["byte_start"] = ref.location.byte_start;
+    loc_json["byte_end"] = ref.location.byte_end;
+    loc_json["line"] = ref.location.line;
+    loc_json["column"] = ref.location.column;
+    ref_json["location"] = loc_json;
+    
+    // Export reference type
+    ref_json["type"] = KytheReferenceTypeToString(ref.type);
+    
+    // Export context information
+    ref_json["parent_scope"] = SanitizeForJson(ref.parent_scope);
+    if (!ref.context.empty()) {
+      ref_json["context"] = SanitizeForJson(ref.context);
+    }
+    
+    j["kythe"]["variable_references"].push_back(ref_json);
+  }
+
+  // Export variable definitions
+  j["kythe"]["variable_definitions"] = nlohmann::json::array();
+  for (const auto& def : kythe.GetVariableDefinitions()) {
+    nlohmann::json def_json;
+    def_json["variable_name"] = SanitizeForJson(def.variable_name);
+    def_json["fully_qualified_name"] = SanitizeForJson(def.fully_qualified_name);
+    
+    // Export location
+    nlohmann::json loc_json;
+    loc_json["file"] = SanitizeForJson(def.location.file_path);
+    loc_json["byte_start"] = def.location.byte_start;
+    loc_json["byte_end"] = def.location.byte_end;
+    loc_json["line"] = def.location.line;
+    loc_json["column"] = def.location.column;
+    def_json["location"] = loc_json;
+    
+    // Export variable kind
+    def_json["kind"] = VariableKindToString(def.kind);
+    
+    j["kythe"]["variable_definitions"].push_back(def_json);
+  }
+
+  // Export statistics
+  const auto& stats = kythe.GetStatistics();
+  j["kythe"]["statistics"]["files_analyzed"] = stats.files_analyzed;
+  j["kythe"]["statistics"]["total_facts"] = stats.total_facts;
+  j["kythe"]["statistics"]["total_edges"] = stats.total_edges;
+  j["kythe"]["statistics"]["total_references"] = stats.total_references;
+  j["kythe"]["statistics"]["total_definitions"] = stats.total_definitions;
+  j["kythe"]["statistics"]["read_references"] = stats.read_references;
+  j["kythe"]["statistics"]["write_references"] = stats.write_references;
+  j["kythe"]["statistics"]["read_write_references"] = stats.read_write_references;
+  j["kythe"]["statistics"]["analysis_time_ms"] = stats.analysis_time_ms;
+
+  // Return formatted JSON
+  if (pretty_print_) {
+    return j.dump(2);  // 2-space indent
   } else {
     return j.dump();
   }

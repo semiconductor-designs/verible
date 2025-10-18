@@ -14,7 +14,10 @@
 
 #include "verible/verilog/tools/semantic/json-exporter.h"
 
+#include <filesystem>
+#include <fstream>
 #include <memory>
+#include <random>
 #include <set>
 #include <string>
 
@@ -23,6 +26,7 @@
 #include "verible/verilog/analysis/call-graph-enhancer.h"
 #include "verible/verilog/analysis/data-flow-analyzer.h"
 #include "verible/verilog/analysis/enhanced-unused-detector.h"
+#include "verible/verilog/analysis/kythe-analyzer.h"
 #include "verible/verilog/analysis/symbol-table.h"
 #include "verible/verilog/analysis/verilog-analyzer.h"
 #include "verible/verilog/analysis/verilog-project.h"
@@ -619,6 +623,150 @@ TEST_F(JsonExporterTest, DataFlowNodeTypes) {
     EXPECT_TRUE(node.contains("is_read"));
     EXPECT_TRUE(node.contains("is_written"));
   }
+}
+
+//-----------------------------------------------------------------------------
+// Kythe Export Tests
+//-----------------------------------------------------------------------------
+
+TEST(KytheJsonExporterTest, BasicExport) {
+  const char* code = R"(
+    module test;
+      logic sig;
+      assign sig = 1'b0;
+    endmodule
+  )";
+
+  // Create temp directory and file for Kythe
+  auto temp_dir = std::filesystem::temp_directory_path() / 
+                  ("kythe_json_test_" + std::to_string(std::random_device{}()));
+  std::filesystem::create_directories(temp_dir);
+  
+  auto file_path = temp_dir / "test.sv";
+  std::ofstream ofs(file_path);
+  ASSERT_TRUE(ofs.is_open());
+  ofs << code;
+  ofs.close();
+
+  // Parse and analyze
+  auto project = std::make_unique<VerilogProject>(
+      temp_dir.string(), std::vector<std::string>{});
+  auto symbol_table = std::make_unique<SymbolTable>(project.get());
+  
+  auto status_or_file = project->OpenTranslationUnit("test.sv");
+  ASSERT_TRUE(status_or_file.ok());
+  auto* source_file = *status_or_file;
+  
+  const auto parse_status = source_file->Parse();
+  ASSERT_TRUE(parse_status.ok());
+  
+  BuildSymbolTable(*source_file, symbol_table.get(), nullptr);
+  
+  // Build Kythe facts
+  KytheAnalyzer kythe(*symbol_table, *project);
+  const auto kythe_status = kythe.BuildKytheFacts();
+  ASSERT_TRUE(kythe_status.ok());
+
+  // Export to JSON
+  SemanticJsonExporter exporter;
+  std::string json_str = exporter.ExportKythe(kythe);
+
+  // Parse JSON
+  auto json = nlohmann::json::parse(json_str);
+
+  // Verify schema version
+  EXPECT_EQ(json["schema_version"], "1.1.0");
+  EXPECT_TRUE(json.contains("kythe"));
+  EXPECT_EQ(json["kythe"]["version"], "1.0.0");
+
+  // Verify structure
+  EXPECT_TRUE(json["kythe"].contains("variable_references"));
+  EXPECT_TRUE(json["kythe"].contains("variable_definitions"));
+  EXPECT_TRUE(json["kythe"].contains("statistics"));
+
+  // Verify statistics
+  const auto& stats = json["kythe"]["statistics"];
+  EXPECT_EQ(stats["files_analyzed"], 1);
+  EXPECT_GE(stats["total_references"], 0);
+  EXPECT_GE(stats["analysis_time_ms"], 0);
+
+  // Clean up
+  std::filesystem::remove_all(temp_dir);
+}
+
+TEST(KytheJsonExporterTest, VariableReferenceFormat) {
+  const char* code = R"(
+    module test;
+      logic data;
+      logic valid;
+      assign valid = 1'b1;
+      assign data = valid;
+    endmodule
+  )";
+
+  // Create temp directory and file
+  auto temp_dir = std::filesystem::temp_directory_path() / 
+                  ("kythe_json_test_" + std::to_string(std::random_device{}()));
+  std::filesystem::create_directories(temp_dir);
+  
+  auto file_path = temp_dir / "test.sv";
+  std::ofstream ofs(file_path);
+  ASSERT_TRUE(ofs.is_open());
+  ofs << code;
+  ofs.close();
+
+  // Parse and analyze
+  auto project = std::make_unique<VerilogProject>(
+      temp_dir.string(), std::vector<std::string>{});
+  auto symbol_table = std::make_unique<SymbolTable>(project.get());
+  
+  auto status_or_file = project->OpenTranslationUnit("test.sv");
+  ASSERT_TRUE(status_or_file.ok());
+  auto* source_file = *status_or_file;
+  
+  const auto parse_status = source_file->Parse();
+  ASSERT_TRUE(parse_status.ok());
+  
+  BuildSymbolTable(*source_file, symbol_table.get(), nullptr);
+  
+  // Build Kythe facts
+  KytheAnalyzer kythe(*symbol_table, *project);
+  const auto kythe_status = kythe.BuildKytheFacts();
+  ASSERT_TRUE(kythe_status.ok());
+
+  // Export to JSON
+  SemanticJsonExporter exporter;
+  std::string json_str = exporter.ExportKythe(kythe);
+
+  // Parse JSON
+  auto json = nlohmann::json::parse(json_str);
+
+  // Verify variable references structure
+  if (!json["kythe"]["variable_references"].empty()) {
+    const auto& ref = json["kythe"]["variable_references"][0];
+    
+    // Check required fields
+    EXPECT_TRUE(ref.contains("variable_name"));
+    EXPECT_TRUE(ref.contains("fully_qualified_name"));
+    EXPECT_TRUE(ref.contains("location"));
+    EXPECT_TRUE(ref.contains("type"));
+    
+    // Check location structure
+    const auto& loc = ref["location"];
+    EXPECT_TRUE(loc.contains("file"));
+    EXPECT_TRUE(loc.contains("byte_start"));
+    EXPECT_TRUE(loc.contains("byte_end"));
+    EXPECT_TRUE(loc.contains("line"));
+    EXPECT_TRUE(loc.contains("column"));
+    
+    // Check type is valid
+    std::string type_str = ref["type"];
+    EXPECT_TRUE(type_str == "read" || type_str == "write" || 
+                type_str == "read_write" || type_str == "unknown");
+  }
+
+  // Clean up
+  std::filesystem::remove_all(temp_dir);
 }
 
 }  // namespace

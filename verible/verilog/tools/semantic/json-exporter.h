@@ -26,6 +26,7 @@ namespace verilog {
 class CallGraphEnhancer;
 class DataFlowAnalyzer;
 class EnhancedUnusedDetector;
+class KytheAnalyzer;
 
 /**
  * @brief Exports Verible semantic analysis results to JSON format.
@@ -70,6 +71,17 @@ class SemanticJsonExporter {
    * @return JSON string representing unused entities
    */
   std::string ExportUnused(const EnhancedUnusedDetector& unused) const;
+
+  /**
+   * @brief Export Kythe variable reference analysis to JSON.
+   *
+   * Exports variable references (reads/writes), variable definitions,
+   * source locations, and statistics from Kythe indexing.
+   *
+   * @param kythe The KytheAnalyzer containing Kythe analysis data
+   * @return JSON string representing Kythe facts
+   */
+  std::string ExportKythe(const KytheAnalyzer& kythe) const;
 
   /**
    * @brief Set whether to pretty-print JSON output.
