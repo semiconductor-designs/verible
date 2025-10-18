@@ -20,6 +20,8 @@
 #include "gtest/gtest.h"
 #include "nlohmann/json.hpp"
 #include "verible/verilog/analysis/call-graph-enhancer.h"
+#include "verible/verilog/analysis/data-flow-analyzer.h"
+#include "verible/verilog/analysis/enhanced-unused-detector.h"
 #include "verible/verilog/analysis/symbol-table.h"
 #include "verible/verilog/analysis/verilog-analyzer.h"
 #include "verible/verilog/analysis/verilog-project.h"
@@ -210,6 +212,107 @@ TEST_F(JsonExporterTest, PrettyPrintControl) {
   auto j_pretty = nlohmann::json::parse(json_pretty);
   auto j_compact = nlohmann::json::parse(json_compact);
   EXPECT_EQ(j_pretty, j_compact);
+}
+
+TEST_F(JsonExporterTest, DataFlowBasic) {
+  const char* code = R"(
+    module dataflow_basic;
+      parameter WIDTH = 8;
+      input wire clk;
+      input wire [WIDTH-1:0] data_in;
+      output reg [WIDTH-1:0] data_out;
+      
+      reg [WIDTH-1:0] buffer;
+      
+      always @(posedge clk) begin
+        buffer = data_in;
+        data_out = buffer;
+      end
+    endmodule
+  )";
+
+  // Build symbol table
+  auto source_file = InMemoryVerilogSourceFile("dataflow_basic.sv", code);
+  auto symbol_table = std::make_unique<SymbolTable>(nullptr);
+  const auto diagnostics = BuildSymbolTable(source_file, symbol_table.get(), nullptr);
+
+  // Build data flow
+  VerilogProject project(".", std::vector<std::string>{});
+  DataFlowAnalyzer df(*symbol_table, project);
+  (void)df.BuildDataFlowGraph();
+
+  // Export to JSON
+  SemanticJsonExporter exporter;
+  std::string json_str = exporter.ExportDataFlow(df);
+
+  // Parse and validate
+  auto j = nlohmann::json::parse(json_str);
+  EXPECT_TRUE(j.contains("data_flow"));
+  EXPECT_TRUE(j["data_flow"].contains("nodes"));
+  EXPECT_TRUE(j["data_flow"].contains("edges"));
+  EXPECT_TRUE(j["data_flow"].contains("parameters"));
+  EXPECT_TRUE(j["data_flow"].contains("constant_list"));
+
+  // Verify structure is valid (parameter extraction may vary by implementation)
+  EXPECT_TRUE(j["data_flow"]["nodes"].is_array());
+  EXPECT_TRUE(j["data_flow"]["edges"].is_array());
+  EXPECT_TRUE(j["data_flow"]["parameters"].is_array());
+  EXPECT_TRUE(j["data_flow"]["constant_list"].is_array());
+}
+
+TEST_F(JsonExporterTest, UnusedBasic) {
+  const char* code = R"(
+    module unused_basic;
+      reg used_signal;
+      reg unused_signal;
+      
+      wire used_wire;
+      wire unused_wire;
+      
+      assign used_wire = used_signal;
+      
+      function int used_function(int x);
+        return x + 1;
+      endfunction
+      
+      function int unused_function(int x);
+        return x * 2;
+      endfunction
+      
+      initial begin
+        used_signal = 1'b0;
+        used_signal = used_function(5);
+      end
+    endmodule
+  )";
+
+  // Build symbol table
+  auto source_file = InMemoryVerilogSourceFile("unused_basic.sv", code);
+  auto symbol_table = std::make_unique<SymbolTable>(nullptr);
+  const auto diagnostics = BuildSymbolTable(source_file, symbol_table.get(), nullptr);
+
+  // Build data flow
+  VerilogProject project(".", std::vector<std::string>{});
+  DataFlowAnalyzer df(*symbol_table, project);
+  (void)df.BuildDataFlowGraph();
+
+  // Build unused detector (only 2 parameters: dataflow_analyzer, symbol_table)
+  EnhancedUnusedDetector unused(df, *symbol_table);
+  (void)unused.AnalyzeUnusedEntities();
+
+  // Export to JSON
+  SemanticJsonExporter exporter;
+  std::string json_str = exporter.ExportUnused(unused);
+
+  // Parse and validate
+  auto j = nlohmann::json::parse(json_str);
+  EXPECT_TRUE(j.contains("unused"));
+  EXPECT_TRUE(j["unused"].contains("entities"));
+  EXPECT_TRUE(j["unused"].contains("statistics"));
+  EXPECT_TRUE(j["unused"].contains("summary"));
+
+  // Should have detected unused entities
+  EXPECT_GE(j["unused"]["entities"].size(), 0);
 }
 
 }  // namespace

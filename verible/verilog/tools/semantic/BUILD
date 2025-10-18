@@ -14,6 +14,8 @@ cc_library(
     hdrs = ["json-exporter.h"],
     deps = [
         "//verible/verilog/analysis:call-graph-enhancer",
+        "//verible/verilog/analysis:data-flow-analyzer",
+        "//verible/verilog/analysis:enhanced-unused-detector",
         "@nlohmann_json//:json",
     ],
 )
@@ -24,6 +26,8 @@ cc_test(
     deps = [
         ":json-exporter",
         "//verible/verilog/analysis:call-graph-enhancer",
+        "//verible/verilog/analysis:data-flow-analyzer",
+        "//verible/verilog/analysis:enhanced-unused-detector",
         "//verible/verilog/analysis:symbol-table",
         "//verible/verilog/analysis:verilog-analyzer",
         "//verible/verilog/analysis:verilog-project",

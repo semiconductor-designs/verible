@@ -24,6 +24,8 @@ namespace verilog {
 
 // Forward declarations
 class CallGraphEnhancer;
+class DataFlowAnalyzer;
+class EnhancedUnusedDetector;
 
 /**
  * @brief Exports Verible semantic analysis results to JSON format.
@@ -46,6 +48,28 @@ class SemanticJsonExporter {
    * @return JSON string representing the call graph
    */
   std::string ExportCallGraph(const CallGraphEnhancer& cg) const;
+
+  /**
+   * @brief Export data flow analysis to JSON.
+   *
+   * Exports data flow graph including nodes (signals/variables/parameters),
+   * edges (data dependencies), and constant information.
+   *
+   * @param df The DataFlowAnalyzer containing the data flow data
+   * @return JSON string representing the data flow
+   */
+  std::string ExportDataFlow(const DataFlowAnalyzer& df) const;
+
+  /**
+   * @brief Export unused entity detection to JSON.
+   *
+   * Exports unused entities (signals, variables, functions, modules),
+   * statistics, and recommendations.
+   *
+   * @param unused The EnhancedUnusedDetector containing unused entity data
+   * @return JSON string representing unused entities
+   */
+  std::string ExportUnused(const EnhancedUnusedDetector& unused) const;
 
   /**
    * @brief Set whether to pretty-print JSON output.
