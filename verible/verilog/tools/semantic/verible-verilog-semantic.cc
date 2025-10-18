@@ -89,6 +89,8 @@ absl::Status AnalyzeAndExport(absl::string_view filename) {
 
   // Build combined JSON output
   nlohmann::json j;
+  j["schema_version"] = "1.0.0";
+  
   SemanticJsonExporter exporter;
   exporter.SetPrettyPrint(absl::GetFlag(FLAGS_pretty));
 
@@ -97,6 +99,10 @@ absl::Status AnalyzeAndExport(absl::string_view filename) {
     CallGraphEnhancer call_graph(symbol_table, project);
     const auto cg_status = call_graph.BuildEnhancedCallGraph();
     if (!cg_status.ok()) {
+      std::cerr << "Call graph analysis failed:\n"
+                << "  File: " << filename << "\n"
+                << "  Error: " << cg_status.message() << "\n"
+                << "  Hint: Check for syntax errors or unsupported function/task constructs\n";
       return absl::Status(absl::StatusCode::kInternal,
                           absl::StrCat("Call graph build error: ", cg_status.message()));
     }
@@ -110,6 +116,10 @@ absl::Status AnalyzeAndExport(absl::string_view filename) {
     DataFlowAnalyzer dataflow(symbol_table, project);
     const auto df_status = dataflow.BuildDataFlowGraph();
     if (!df_status.ok()) {
+      std::cerr << "Data flow analysis failed:\n"
+                << "  File: " << filename << "\n"
+                << "  Error: " << df_status.message() << "\n"
+                << "  Hint: Check for complex assignments or signal declarations\n";
       return absl::Status(absl::StatusCode::kInternal,
                           absl::StrCat("Data flow build error: ", df_status.message()));
     }
@@ -127,6 +137,10 @@ absl::Status AnalyzeAndExport(absl::string_view filename) {
     EnhancedUnusedDetector unused(dataflow, symbol_table);
     const auto unused_status = unused.AnalyzeUnusedEntities();
     if (!unused_status.ok()) {
+      std::cerr << "Unused entity detection failed:\n"
+                << "  File: " << filename << "\n"
+                << "  Error: " << unused_status.message() << "\n"
+                << "  Hint: Check that data flow analysis completed successfully\n";
       return absl::Status(absl::StatusCode::kInternal,
                           absl::StrCat("Unused detection error: ", unused_status.message()));
     }

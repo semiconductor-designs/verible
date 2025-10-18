@@ -23,15 +23,31 @@
 
 namespace verilog {
 
+namespace {
+// Helper function to sanitize strings for JSON export
+// Truncates very long strings to prevent memory issues
+std::string SanitizeForJson(const std::string& str) {
+  constexpr size_t kMaxStringLength = 10000;
+  if (str.size() > kMaxStringLength) {
+    return str.substr(0, kMaxStringLength) + "... [truncated]";
+  }
+  return str;
+}
+}  // namespace
+
 std::string SemanticJsonExporter::ExportCallGraph(
     const CallGraphEnhancer& cg) const {
   nlohmann::json j;
+
+  // Add schema versioning
+  j["schema_version"] = "1.0.0";
+  j["call_graph"]["version"] = "1.0.0";
 
   // Export nodes
   j["call_graph"]["nodes"] = nlohmann::json::array();
   for (const auto* node : cg.GetAllNodes()) {
     nlohmann::json node_json;
-    node_json["name"] = node->name;
+    node_json["name"] = SanitizeForJson(node->name);
     // Convert NodeType enum to string
     node_json["type"] = (node->type == CallGraphNode::kTask) ? "task" : "function";
     node_json["call_depth"] = node->call_depth;
@@ -47,8 +63,8 @@ std::string SemanticJsonExporter::ExportCallGraph(
   j["call_graph"]["edges"] = nlohmann::json::array();
   for (const auto* edge : cg.GetAllEdges()) {
     nlohmann::json edge_json;
-    edge_json["caller"] = edge->caller->name;
-    edge_json["callee"] = edge->callee->name;
+    edge_json["caller"] = SanitizeForJson(edge->caller->name);
+    edge_json["callee"] = SanitizeForJson(edge->callee->name);
     j["call_graph"]["edges"].push_back(edge_json);
   }
 
@@ -70,7 +86,7 @@ std::string SemanticJsonExporter::ExportCallGraph(
     nlohmann::json cycle_json;
     cycle_json["cycle"] = nlohmann::json::array();
     for (const auto* node : cycle.cycle_nodes) {
-      cycle_json["cycle"].push_back(node->name);
+      cycle_json["cycle"].push_back(SanitizeForJson(node->name));
     }
     j["call_graph"]["recursion_cycles"].push_back(cycle_json);
   }
@@ -88,12 +104,16 @@ std::string SemanticJsonExporter::ExportDataFlow(
   nlohmann::json j;
   const auto& graph = df.GetDataFlowGraph();
 
+  // Add schema versioning
+  j["schema_version"] = "1.0.0";
+  j["data_flow"]["version"] = "1.0.0";
+
   // Export nodes (from unordered_map)
   j["data_flow"]["nodes"] = nlohmann::json::array();
   for (const auto& [node_name, node] : graph.nodes) {
     nlohmann::json node_json;
-    node_json["name"] = node.name;
-    node_json["local_name"] = node.local_name;
+    node_json["name"] = SanitizeForJson(node.name);
+    node_json["local_name"] = SanitizeForJson(node.local_name);
     
     // Node type
     std::string type_str;
@@ -137,10 +157,10 @@ std::string SemanticJsonExporter::ExportDataFlow(
     nlohmann::json edge_json;
     // Export node names (pointers need to be converted)
     if (edge.source) {
-      edge_json["source"] = edge.source->name;
+      edge_json["source"] = SanitizeForJson(edge.source->name);
     }
     if (edge.target) {
-      edge_json["target"] = edge.target->name;
+      edge_json["target"] = SanitizeForJson(edge.target->name);
     }
     
     // Edge type
@@ -178,7 +198,7 @@ std::string SemanticJsonExporter::ExportDataFlow(
   for (const auto* param : graph.parameters) {
     if (param) {
       nlohmann::json param_json;
-      param_json["name"] = param->name;
+      param_json["name"] = SanitizeForJson(param->name);
       param_json["is_constant"] = param->is_constant;
       j["data_flow"]["parameters"].push_back(param_json);
     }
@@ -199,11 +219,15 @@ std::string SemanticJsonExporter::ExportUnused(
     const EnhancedUnusedDetector& unused) const {
   nlohmann::json j;
 
+  // Add schema versioning
+  j["schema_version"] = "1.0.0";
+  j["unused"]["version"] = "1.0.0";
+
   // Export unused entities
   j["unused"]["entities"] = nlohmann::json::array();
   for (const auto& entity : unused.GetUnusedEntities()) {
     nlohmann::json entity_json;
-    entity_json["name"] = entity.name;
+    entity_json["name"] = SanitizeForJson(entity.name);
     
     // Entity type
     std::string type_str;
@@ -237,7 +261,7 @@ std::string SemanticJsonExporter::ExportUnused(
     }
     entity_json["type"] = type_str;
     
-    entity_json["fully_qualified_name"] = entity.fully_qualified_name;
+    entity_json["fully_qualified_name"] = SanitizeForJson(entity.fully_qualified_name);
     
     j["unused"]["entities"].push_back(entity_json);
   }
