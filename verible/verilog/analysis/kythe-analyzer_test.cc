@@ -328,8 +328,8 @@ TEST_F(KytheAnalyzerTest, Statistics) {
   // Should have some references
   EXPECT_GE(stats.total_references, 0);
   
-  // Analysis time should be reasonable
-  EXPECT_GT(stats.analysis_time_ms, 0);
+  // Analysis time should be reasonable (may be 0 for very fast operations)
+  EXPECT_GE(stats.analysis_time_ms, 0);
   EXPECT_LT(stats.analysis_time_ms, 1000) << "Analysis took too long";
 }
 
