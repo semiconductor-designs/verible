@@ -350,6 +350,9 @@ class KytheAnalyzer {
   bool IsAnalyzed() const;
   
  private:
+  // Helper to traverse Kythe facts tree (implemented in .cc with full types)
+  void ProcessFactsTree(const void* node);  // void* to avoid forward declaration
+  
   // Dependencies (non-owning pointers)
   const SymbolTable* symbol_table_;
   const VerilogProject* project_;

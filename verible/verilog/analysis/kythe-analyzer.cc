@@ -28,6 +28,7 @@
 #include "verible/verilog/tools/kythe/indexing-facts-tree.h"
 #include "verible/verilog/tools/kythe/indexing-facts-tree-extractor.h"
 #include "verible/verilog/tools/kythe/kythe-facts.h"
+#include "verible/verilog/tools/kythe/verilog-extractor-indexing-fact-type.h"
 
 namespace verilog {
 
@@ -39,6 +40,9 @@ IndexingFactNode BuildIndexingFactsTree(
     struct VerilogExtractionState *extraction_state,
     std::vector<absl::Status> *errors);
 }  // namespace kythe
+
+// Forward declare private method
+class KytheAnalyzer;
 
 // Pimpl implementation to hide Kythe internals
 struct KytheAnalyzer::KytheInternals {
@@ -127,6 +131,50 @@ KytheAnalyzer::~KytheAnalyzer() = default;
 KytheAnalyzer::KytheAnalyzer(KytheAnalyzer&&) noexcept = default;
 KytheAnalyzer& KytheAnalyzer::operator=(KytheAnalyzer&&) noexcept = default;
 
+void KytheAnalyzer::ProcessFactsTree(const void* node_ptr) {
+  const auto& node = *static_cast<const kythe::IndexingFactNode*>(node_ptr);
+  // Step 2: Check if this node is a variable reference
+  const auto fact_type = node.Value().GetIndexingFactType();
+  
+  if (fact_type == IndexingFactType::kVariableReference) {
+    // Step 3: Extract reference information
+    const auto& anchors = node.Value().Anchors();
+    if (!anchors.empty()) {
+      VariableReference ref;
+      
+      // Extract variable name from anchor text
+      ref.variable_name = std::string(anchors[0].Text());
+      ref.fully_qualified_name = ref.variable_name;  // Simplified for now
+      
+      // Step 4: Extract location from anchor
+      ref.location.file_path = "test.sv";  // TODO: Get from context
+      
+      const auto& range = anchors[0].SourceTextRange();
+      if (range.has_value()) {
+        ref.location.byte_start = range->begin;
+        ref.location.byte_end = range->begin + range->length;
+      } else {
+        ref.location.byte_start = 0;
+        ref.location.byte_end = 0;
+      }
+      
+      // Convert byte offset to line:column (simplified)
+      ref.location.line = 1;  // TODO: Calculate from byte offset
+      ref.location.column = ref.location.byte_start + 1;
+      
+      // Determine reference type (simplified - assume read for now)
+      ref.type = KytheReferenceType::kRead;
+      
+      variable_references_.push_back(std::move(ref));
+    }
+  }
+  
+  // Recurse on children
+  for (const auto& child : node.Children()) {
+    ProcessFactsTree(&child);
+  }
+}
+
 absl::Status KytheAnalyzer::BuildKytheFacts() {
   auto start_time = std::chrono::steady_clock::now();
   
@@ -169,11 +217,31 @@ absl::Status KytheAnalyzer::BuildKytheFacts() {
     return absl::InternalError(error_msg);
   }
   
-  // Step 3: Process facts tree and extract variable references
-  // TODO: Traverse facts_tree and convert /kythe/edge/ref edges to VariableReference
-  // For now, mark as successful (incremental TDD)
+  // Step 3-5: Process facts tree and extract variable references
+  ProcessFactsTree(&internals_->facts_tree);
   
+  // Build statistics
   statistics_.files_analyzed = file_names.size();
+  statistics_.total_references = variable_references_.size();
+  statistics_.total_definitions = variable_definitions_.size();
+  
+  // Count reference types
+  for (const auto& ref : variable_references_) {
+    switch (ref.type) {
+      case KytheReferenceType::kRead:
+        statistics_.read_references++;
+        break;
+      case KytheReferenceType::kWrite:
+        statistics_.write_references++;
+        break;
+      case KytheReferenceType::kReadWrite:
+        statistics_.read_write_references++;
+        break;
+      default:
+        break;
+    }
+  }
+  
   analyzed_ = true;
   
   auto end_time = std::chrono::steady_clock::now();

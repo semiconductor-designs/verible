@@ -404,6 +404,7 @@ cc_library(
         "//verible/verilog/tools/kythe:indexing-facts-tree",
         "//verible/verilog/tools/kythe:indexing-facts-tree-extractor",
         "//verible/verilog/tools/kythe:kythe-facts",
+        "//verible/verilog/tools/kythe:verilog-extractor-indexing-fact-type",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/strings",
     ],
