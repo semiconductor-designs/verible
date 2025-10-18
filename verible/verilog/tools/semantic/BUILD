@@ -44,12 +44,15 @@ cc_binary(
         ":json-exporter",
         "//verible/common/util:init-command-line",
         "//verible/verilog/analysis:call-graph-enhancer",
+        "//verible/verilog/analysis:data-flow-analyzer",
+        "//verible/verilog/analysis:enhanced-unused-detector",
         "//verible/verilog/analysis:symbol-table",
         "//verible/verilog/analysis:verilog-analyzer",
         "//verible/verilog/analysis:verilog-project",
         "@abseil-cpp//absl/flags:flag",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/strings",
+        "@nlohmann_json//:json",
     ],
 )
 

@@ -21,6 +21,7 @@
 // Example usage:
 //   verible-verilog-semantic design.sv
 //   verible-verilog-semantic --output-file=output.json design.sv
+//   verible-verilog-semantic --include-dataflow --include-unused design.sv
 
 #include <fstream>
 #include <iostream>
@@ -31,8 +32,11 @@
 #include "absl/flags/flag.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
+#include "nlohmann/json.hpp"
 #include "verible/common/util/init-command-line.h"
 #include "verible/verilog/analysis/call-graph-enhancer.h"
+#include "verible/verilog/analysis/data-flow-analyzer.h"
+#include "verible/verilog/analysis/enhanced-unused-detector.h"
 #include "verible/verilog/analysis/symbol-table.h"
 #include "verible/verilog/analysis/verilog-analyzer.h"
 #include "verible/verilog/analysis/verilog-project.h"
@@ -41,6 +45,10 @@
 ABSL_FLAG(std::string, output_file, "",
           "Output file for JSON (default: stdout)");
 ABSL_FLAG(bool, pretty, true, "Pretty-print JSON output with indentation");
+ABSL_FLAG(bool, include_callgraph, true, "Include call graph analysis");
+ABSL_FLAG(bool, include_dataflow, false, "Include data flow analysis");
+ABSL_FLAG(bool, include_unused, false, "Include unused entity detection");
+ABSL_FLAG(bool, include_all, false, "Include all semantic analysis");
 
 namespace verilog {
 namespace {
@@ -74,18 +82,66 @@ absl::Status AnalyzeAndExport(absl::string_view filename) {
   const auto build_diagnostics = BuildSymbolTable(*source_file, &symbol_table, nullptr);
   // Note: BuildSymbolTable returns a vector of diagnostics, not a status
 
-  // Run call graph analysis
-  CallGraphEnhancer call_graph(symbol_table, project);
-  const auto cg_status = call_graph.BuildEnhancedCallGraph();
-  if (!cg_status.ok()) {
-    return absl::Status(absl::StatusCode::kInternal,
-                        absl::StrCat("Call graph build error: ", cg_status.message()));
-  }
+  // Determine which analyzers to run
+  bool run_callgraph = absl::GetFlag(FLAGS_include_callgraph) || absl::GetFlag(FLAGS_include_all);
+  bool run_dataflow = absl::GetFlag(FLAGS_include_dataflow) || absl::GetFlag(FLAGS_include_all);
+  bool run_unused = absl::GetFlag(FLAGS_include_unused) || absl::GetFlag(FLAGS_include_all);
 
-  // Export to JSON
+  // Build combined JSON output
+  nlohmann::json j;
   SemanticJsonExporter exporter;
   exporter.SetPrettyPrint(absl::GetFlag(FLAGS_pretty));
-  std::string json_output = exporter.ExportCallGraph(call_graph);
+
+  // Run call graph analysis
+  if (run_callgraph) {
+    CallGraphEnhancer call_graph(symbol_table, project);
+    const auto cg_status = call_graph.BuildEnhancedCallGraph();
+    if (!cg_status.ok()) {
+      return absl::Status(absl::StatusCode::kInternal,
+                          absl::StrCat("Call graph build error: ", cg_status.message()));
+    }
+    std::string cg_json = exporter.ExportCallGraph(call_graph);
+    auto cg_parsed = nlohmann::json::parse(cg_json);
+    j["call_graph"] = cg_parsed["call_graph"];
+  }
+
+  // Run data flow analysis
+  if (run_dataflow) {
+    DataFlowAnalyzer dataflow(symbol_table, project);
+    const auto df_status = dataflow.BuildDataFlowGraph();
+    if (!df_status.ok()) {
+      return absl::Status(absl::StatusCode::kInternal,
+                          absl::StrCat("Data flow build error: ", df_status.message()));
+    }
+    std::string df_json = exporter.ExportDataFlow(dataflow);
+    auto df_parsed = nlohmann::json::parse(df_json);
+    j["data_flow"] = df_parsed["data_flow"];
+  }
+
+  // Run unused entity detection
+  if (run_unused) {
+    // Unused detection requires data flow analysis
+    DataFlowAnalyzer dataflow(symbol_table, project);
+    (void)dataflow.BuildDataFlowGraph();
+    
+    EnhancedUnusedDetector unused(dataflow, symbol_table);
+    const auto unused_status = unused.AnalyzeUnusedEntities();
+    if (!unused_status.ok()) {
+      return absl::Status(absl::StatusCode::kInternal,
+                          absl::StrCat("Unused detection error: ", unused_status.message()));
+    }
+    std::string unused_json = exporter.ExportUnused(unused);
+    auto unused_parsed = nlohmann::json::parse(unused_json);
+    j["unused"] = unused_parsed["unused"];
+  }
+
+  // Serialize final JSON
+  std::string json_output;
+  if (absl::GetFlag(FLAGS_pretty)) {
+    json_output = j.dump(2);
+  } else {
+    json_output = j.dump();
+  }
 
   // Output to file or stdout
   const std::string output_file = absl::GetFlag(FLAGS_output_file);
