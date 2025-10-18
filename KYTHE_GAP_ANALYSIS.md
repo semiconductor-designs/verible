@@ -334,21 +334,20 @@ $ grep '/kythe/edge/ref' output | wc -l
 | **G4** | Complex types partial | P2 | Low | Document limitation |
 | **G5** | Generate blocks untested | P2 | Low | Add test case |
 | **G6** | Macro expansion partial | P2 | Low | Acceptable per req |
-| **G7** | 🚨 **Kythe port type crash** | **P0** | **CRITICAL** | Fix in Phase 3 (bug fix) |
+| **G7** | ~~Kythe port type crash~~ | ~~P0~~ | ~~CRITICAL~~ | ✅ **FIXED** (1.5h, commit 37daaa43) |
 
 ### Critical Gaps (P0)
 
-**⚠️ ONE CRITICAL BUG IDENTIFIED**: 
+**✅ ALL CRITICAL BUGS RESOLVED**
 
-**G7 - Kythe Extractor Port Type Crash**:
-- **Bug**: `verible-verilog-kythe-extractor` crashes on modules with explicit port types
-- **Error**: `Check failed: NodeEnum(t.tag) == NodeEnum::kUnqualifiedId (kDataType vs. kUnqualifiedId)`
-- **Example**: `module test(input logic clk);` → **CRASH**
-- **Workaround**: Use implicit ports or no ports
-- **Impact**: **Blocks OpenTitan validation** (all modules have typed ports)
-- **Priority**: **P0 - MUST FIX**
-- **Timeline**: Fix in Phase 3 or earlier
-- **Effort**: 1-2 hours (fix in `identifier.cc` port handling)
+**G7 - Kythe Extractor Port Type Crash** - ✅ **FIXED**:
+- **Bug**: `verible-verilog-kythe-extractor` crashed on modules with explicit port types
+- **Root Cause**: `GetIdentifierFromPortDeclaration()` used wrong child index for typed ports
+- **Fix**: Dynamic index selection based on direction/net type presence in CST
+- **Testing**: All tests pass (port_test, indexing-facts-tree-extractor_test)
+- **Validation**: FSM with typed ports extracts 20 references (was crashing)
+- **Commit**: 37daaa43 (1.5 hours)
+- **Status**: ✅ **PRODUCTION READY**
 
 ### Acceptable Limitations (P2)
 
