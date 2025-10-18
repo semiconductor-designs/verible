@@ -7,7 +7,8 @@ load("//bazel:variables.bzl", "STATIC_EXECUTABLES_FEATURE")
 package(
     default_applicable_licenses = ["//:license"],
     default_visibility = [
-        "//visibility:private",
+        "//verible/verilog/analysis:__pkg__",
+        "//verible/verilog/tools/semantic:__pkg__",
     ],
     features = ["layering_check"],
 )

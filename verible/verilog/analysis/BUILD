@@ -394,6 +394,37 @@ cc_test(
 )
 
 cc_library(
+    name = "kythe-analyzer",
+    srcs = ["kythe-analyzer.cc"],
+    hdrs = ["kythe-analyzer.h"],
+    deps = [
+        ":symbol-table",
+        ":verilog-project",
+        "//verible/verilog/tools/kythe:indexing-facts-tree",
+        "//verible/verilog/tools/kythe:indexing-facts-tree-extractor",
+        "//verible/verilog/tools/kythe:kythe-facts",
+        "//verible/verilog/tools/kythe:kythe-facts-extractor",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "kythe-analyzer_test",
+    srcs = ["kythe-analyzer_test.cc"],
+    deps = [
+        ":kythe-analyzer",
+        ":symbol-table",
+        ":verilog-analyzer",
+        ":verilog-project",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "call-graph",
     srcs = ["call-graph.cc"],
     hdrs = ["call-graph.h"],
