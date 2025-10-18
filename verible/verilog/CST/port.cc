@@ -52,8 +52,16 @@ std::vector<verible::TreeSearchMatch> FindAllTaskFunctionPortDeclarations(
 }
 
 const SyntaxTreeLeaf *GetIdentifierFromPortDeclaration(const Symbol &symbol) {
+  // Port declarations have different structures:
+  // - With direction at @0 (input/output/inout): identifier at child @4
+  // - With net type at @1 (wire/reg/etc), no direction: identifier at child @4
+  // - Without direction or net type (propagated type): identifier at child @3
+  const bool has_direction = GetDirectionFromPortDeclaration(symbol) != nullptr;
+  const bool has_net_type = verible::GetSubtreeAsSymbol(symbol, NodeEnum::kPortDeclaration, 1) != nullptr;
+  const int identifier_index = (has_direction || has_net_type) ? 4 : 3;
+  
   const auto *identifier_symbol =
-      verible::GetSubtreeAsSymbol(symbol, NodeEnum::kPortDeclaration, 3);
+      verible::GetSubtreeAsSymbol(symbol, NodeEnum::kPortDeclaration, identifier_index);
   if (!identifier_symbol) return nullptr;
   return AutoUnwrapIdentifier(*identifier_symbol);
 }
