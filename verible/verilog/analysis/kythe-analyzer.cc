@@ -133,16 +133,48 @@ absl::Status KytheAnalyzer::BuildKytheFacts() {
   // Clear previous results
   Clear();
   
-  // Phase 3 Implementation: Extract variable references from SymbolTable
-  // This is a simplified initial implementation that will be enhanced iteratively
+  // Phase 3.1 Implementation (Per Plan): Reuse existing Kythe extraction logic
   
-  // The SymbolTable contains all the symbols (variables, ports, parameters)
-  // We'll traverse it to create VariableDefinition and VariableReference structures
+  // Step 1: Collect file list from project
+  std::vector<std::string> file_names;
+  for (const auto& file_entry : *project_) {
+    file_names.push_back(file_entry.first);
+  }
   
-  // For now: Mark as analyzed with minimal data
-  // TODO: Implement full traversal and reference extraction in next iteration
+  if (file_names.empty()) {
+    analyzed_ = true;  // Empty analysis is valid
+    statistics_.files_analyzed = 0;
+    
+    auto end_time = std::chrono::steady_clock::now();
+    statistics_.analysis_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        end_time - start_time).count();
+    
+    return absl::OkStatus();
+  }
+  
+  // Step 2: Extract Kythe facts using existing extractor
+  std::vector<absl::Status> errors;
+  internals_->facts_tree = kythe::ExtractFiles(
+      project_->TranslationUnitRoot(),  // file_list_path
+      const_cast<VerilogProject*>(project_),  // project
+      file_names,  // file_names
+      &errors);
+  
+  // Check for extraction errors
+  if (!errors.empty()) {
+    std::string error_msg = "Kythe extraction failed:\n";
+    for (const auto& err : errors) {
+      absl::StrAppend(&error_msg, "  ", err.message(), "\n");
+    }
+    return absl::InternalError(error_msg);
+  }
+  
+  // Step 3: Process facts tree and extract variable references
+  // TODO: Traverse facts_tree and convert /kythe/edge/ref edges to VariableReference
+  // For now, mark as successful (incremental TDD)
+  
+  statistics_.files_analyzed = file_names.size();
   analyzed_ = true;
-  statistics_.files_analyzed = 1;
   
   auto end_time = std::chrono::steady_clock::now();
   statistics_.analysis_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(

@@ -14,7 +14,10 @@
 
 #include "verible/verilog/analysis/kythe-analyzer.h"
 
+#include <filesystem>
+#include <fstream>
 #include <memory>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -33,39 +36,62 @@ using ::testing::Contains;
 using ::testing::SizeIs;
 
 // Helper class to set up test environment
+// Uses temporary files like Kythe's own tests
 class KytheAnalyzerTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    project_ = std::make_unique<VerilogProject>(".", std::vector<std::string>{});
-    symbol_table_ = std::make_unique<SymbolTable>(nullptr);
+    // Create temp directory for test files
+    temp_dir_ = std::filesystem::temp_directory_path() / 
+                ("kythe_test_" + std::to_string(std::random_device{}()));
+    std::filesystem::create_directories(temp_dir_);
+    
+    project_ = std::make_unique<VerilogProject>(
+        temp_dir_.string(), std::vector<std::string>{});
+    symbol_table_ = std::make_unique<SymbolTable>(project_.get());
   }
 
   void TearDown() override {
     project_.reset();
     symbol_table_.reset();
+    
+    // Clean up temp directory
+    if (std::filesystem::exists(temp_dir_)) {
+      std::filesystem::remove_all(temp_dir_);
+    }
   }
 
   // Helper to parse SystemVerilog code and build symbol table
   bool ParseCode(absl::string_view code, const std::string& filename = "test.sv") {
-    // Create an in-memory source file
-    auto source_file = std::make_unique<InMemoryVerilogSourceFile>(filename, code);
+    // Write code to temporary file
+    auto file_path = temp_dir_ / filename;
+    std::ofstream ofs(file_path);
+    if (!ofs) return false;
+    ofs << code;
+    ofs.close();
+    
+    // Open file in project
+    auto status_or_file = project_->OpenTranslationUnit(filename);
+    if (!status_or_file.ok()) {
+      return false;
+    }
+    
+    auto* source_file = *status_or_file;
+    
+    // Parse the file
     const auto parse_status = source_file->Parse();
     if (!parse_status.ok()) {
       return false;
     }
     
-    // Build symbol table directly from the source file
+    // Build symbol table
     const auto build_diagnostics = BuildSymbolTable(*source_file, symbol_table_.get(), nullptr);
-    // Ignore diagnostics - we just need the symbol table populated
     
-    // Store source file to keep it alive
-    source_files_.push_back(std::move(source_file));
     return true;
   }
 
+  std::filesystem::path temp_dir_;
   std::unique_ptr<VerilogProject> project_;
   std::unique_ptr<SymbolTable> symbol_table_;
-  std::vector<std::unique_ptr<InMemoryVerilogSourceFile>> source_files_;
   
   // Helper to extract variable names from references
   std::vector<std::string> ExtractVarNames(
