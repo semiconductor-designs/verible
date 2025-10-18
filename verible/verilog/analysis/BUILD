@@ -400,7 +400,9 @@ cc_library(
     deps = [
         ":symbol-table",
         ":verilog-project",
+        "//verible/common/text:tree-utils",
         "//verible/verilog/tools/kythe:indexing-facts-tree",
+        "//verible/verilog/tools/kythe:indexing-facts-tree-extractor",
         "//verible/verilog/tools/kythe:kythe-facts",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/strings",
