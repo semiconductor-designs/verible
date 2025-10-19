@@ -32,9 +32,17 @@
 #include <vector>
 
 #include "absl/status/statusor.h"
+#include "absl/status/status.h"
 #include "verible/common/strings/mem-block.h"
+#include "verible/common/text/macro-definition.h"
 
 namespace verilog {
+
+// Forward declarations
+class VerilogPreprocess;
+
+// For accessing preprocessor data
+struct VerilogPreprocessData;
 
 // Resolves `include directives for SystemVerilog preprocessing
 class IncludeFileResolver {
@@ -72,6 +80,32 @@ class IncludeFileResolver {
   // Clear all cached files (for testing)
   void ClearCache() { file_cache_.clear(); }
 
+  // =========================================================================
+  // Feature 2: Pre-Include Support (v5.4.0)
+  // =========================================================================
+
+  // Preload include files and extract their macro definitions
+  // 
+  // This processes the specified include files through the preprocessor and
+  // extracts all macro definitions, making them available for subsequent parsing.
+  // 
+  // Args:
+  //   pre_include_files: List of filenames to process before the main file
+  // 
+  // Returns:
+  //   OK status if all files were processed successfully,
+  //   error otherwise (file not found, circular includes, etc.)
+  absl::Status PreloadIncludes(
+      const std::vector<std::string>& pre_include_files);
+
+  // Get the preprocessor data (including macros) from pre-included files
+  // 
+  // Returns:
+  //   Pointer to VerilogPreprocessData, or nullptr if no pre-includes loaded
+  const VerilogPreprocessData* GetPreloadedData() const {
+    return preloaded_data_.get();
+  }
+
  private:
   // Try to find file in the filesystem
   absl::StatusOr<std::filesystem::path> FindIncludeFile(
@@ -90,6 +124,9 @@ class IncludeFileResolver {
 
   // Stack of currently processing includes (for cycle detection)
   std::vector<std::string> include_stack_;
+
+  // Preprocessor data from pre-included files (v5.4.0)
+  std::unique_ptr<VerilogPreprocessData> preloaded_data_;
 };
 
 }  // namespace verilog

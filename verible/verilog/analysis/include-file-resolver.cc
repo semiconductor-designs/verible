@@ -24,7 +24,11 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "verible/common/strings/mem-block.h"
+#include "verible/common/text/token-info.h"
+#include "verible/common/text/token-stream-view.h"
 #include "verible/common/util/file-util.h"
+#include "verible/verilog/preprocessor/verilog-preprocess.h"
+#include "verible/verilog/parser/verilog-lexer.h"
 
 namespace verilog {
 
@@ -136,6 +140,77 @@ absl::StatusOr<std::string_view> IncludeFileResolver::LoadFile(
   file_cache_[filepath_str] = content;
 
   return view;
+}
+
+// ===========================================================================
+// Feature 2: Pre-Include Support (v5.4.0)
+// ===========================================================================
+
+absl::Status IncludeFileResolver::PreloadIncludes(
+    const std::vector<std::string>& pre_include_files) {
+  // Clear any previously preloaded data
+  preloaded_data_.reset();
+
+  // Create a preprocessor with include file resolution enabled
+  VerilogPreprocess::Config config{
+      .filter_branches = false,    // Keep all branches
+      .include_files = true,       // Process includes
+      .expand_macros = false        // Don't expand - just collect definitions
+  };
+
+  // Create a file opener lambda that uses this resolver
+  VerilogPreprocess::FileOpener file_opener =
+      [this](std::string_view include_file) -> absl::StatusOr<std::string_view> {
+    return this->ResolveInclude(include_file);
+  };
+
+  // Create storage for accumulated preprocessor data
+  preloaded_data_ = std::make_unique<VerilogPreprocessData>();
+
+  // Process each pre-include file
+  for (const auto& pre_include_file : pre_include_files) {
+    // Find and load the file
+    auto content_or = ResolveInclude(pre_include_file);
+    if (!content_or.ok()) {
+      return absl::NotFoundError(
+          absl::StrCat("Pre-include file not found: ", pre_include_file,
+                       ". ", content_or.status().message()));
+    }
+
+    // Lex the file content into a token sequence
+    VerilogLexer lexer(*content_or);
+    verible::TokenSequence token_sequence;
+    for (lexer.DoNextToken(); !lexer.GetLastToken().isEOF();
+         lexer.DoNextToken()) {
+      token_sequence.push_back(lexer.GetLastToken());
+    }
+
+    // Create token stream view
+    verible::TokenStreamView token_stream;
+    verible::InitTokenStreamView(token_sequence, &token_stream);
+
+    // Process through a new preprocessor for this file
+    VerilogPreprocess preprocessor(config, file_opener);
+    auto file_data = preprocessor.ScanStream(token_stream);
+
+    // Check for errors
+    if (!file_data.errors.empty()) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Error processing pre-include file ", pre_include_file,
+                       ": ", file_data.errors[0].error_message));
+    }
+
+    // Merge macro definitions into preloaded_data_
+    for (const auto& [name, definition] : file_data.macro_definitions) {
+      // Only add if not already defined (first definition wins)
+      if (preloaded_data_->macro_definitions.find(name) == 
+          preloaded_data_->macro_definitions.end()) {
+        preloaded_data_->macro_definitions.insert({name, definition});
+      }
+    }
+  }
+
+  return absl::OkStatus();
 }
 
 }  // namespace verilog

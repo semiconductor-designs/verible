@@ -970,7 +970,12 @@ cc_library(
     hdrs = ["include-file-resolver.h"],
     deps = [
         "//verible/common/strings:mem-block",
+        "//verible/common/text:macro-definition",
+        "//verible/common/text:token-info",
+        "//verible/common/text:token-stream-view",
         "//verible/common/util:file-util",
+        "//verible/verilog/parser:verilog-lexer",
+        "//verible/verilog/preprocessor:verilog-preprocess",
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
@@ -982,6 +987,7 @@ cc_test(
     srcs = ["include-file-resolver_test.cc"],
     deps = [
         ":include-file-resolver",
+        "//verible/verilog/preprocessor:verilog-preprocess",
         "@abseil-cpp//absl/status",
         "@googletest//:gtest",
         "@googletest//:gtest_main",
