@@ -7835,6 +7835,48 @@ endmodule
   EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
 }
 
+// Test event trigger in complex class task context
+// This reproduces the OpenTitan spi_monitor.sv pattern
+TEST(VerilogParserTest, EventTriggerInComplexClassTask) {
+  const std::string code = R"(
+class item;
+  event byte_sampled_ev;
+endclass
+
+class monitor;
+  item host_item;
+  
+  virtual protected task collect_flash_trans();
+    int num_addr_bytes;
+    -> host_item.byte_sampled_ev;
+  endtask
+endclass
+)";
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
+// Test event trigger after macro-like constructs
+TEST(VerilogParserTest, EventTriggerAfterMacroInTask) {
+  const std::string code = R"(
+`define uvm_info(ID, MSG, VERBOSITY) $display(MSG)
+`define gfn get_full_name()
+
+class item;
+  event byte_sampled_ev;
+endclass
+
+class monitor;
+  item host_item;
+  
+  virtual protected task collect_flash_trans();
+    `uvm_info(`gfn, "Triggering event", 0)
+    -> host_item.byte_sampled_ev;
+  endtask
+endclass
+)";
+  EXPECT_TRUE(VerilogAnalyzer(code, "").Analyze().ok());
+}
+
 }  // namespace
 
 }  // namespace verilog

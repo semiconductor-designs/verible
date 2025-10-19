@@ -651,11 +651,29 @@ int LexicalContext::InterpretToken(int token_enum) const {
     // '->' can be interpreted as logical implication, constraint implication,
     // or event-trigger.
     case _TK_RARROW: {
+      // Diagnostic logging for event trigger disambiguation
+      VLOG(1) << "InterpretToken: _TK_RARROW";
+      VLOG(1) << "  randomize_active=" << randomize_call_tracker_.IsActive();
+      VLOG(1) << "  constraint_active=" << constraint_declaration_tracker_.IsActive();
+      const bool expecting_stmt = ExpectingStatement();
+      VLOG(1) << "  ExpectingStatement=" << expecting_stmt;
+      VLOG(1) << "  InStatementContext=" << InStatementContext();
+      VLOG(1) << "  in_task_body=" << in_task_body_;
+      VLOG(1) << "  in_function_body=" << in_function_body_;
+      VLOG(1) << "  in_initial_always_final=" << in_initial_always_final_construct_;
+      if (previous_token_ != nullptr) {
+        VLOG(1) << "  previous_token=" << previous_token_->token_enum()
+                << " (text: " << previous_token_->text() << ")";
+      } else {
+        VLOG(1) << "  previous_token=null";
+      }
+      
       if (randomize_call_tracker_.IsActive()) {
         // e.g.
         //   randomize() with {
         //     x -> y;
         //   }
+        VLOG(1) << "  -> Interpreted as: TK_CONSTRAINT_IMPLIES (randomize context)";
         return randomize_call_tracker_.InterpretToken(token_enum);
       }
       if (constraint_declaration_tracker_.IsActive()) {
@@ -663,21 +681,51 @@ int LexicalContext::InterpretToken(int token_enum) const {
         //   constraint c {
         //     x -> y;
         //   }
+        VLOG(1) << "  -> Interpreted as: TK_CONSTRAINT_IMPLIES (constraint context)";
         return constraint_declaration_tracker_.InterpretToken(token_enum);
       }
-      if (ExpectingStatement()) {
+      if (expecting_stmt) {
         // e.g.
         //   task foo();
         //     ...
         //     -> x;
         //     ...
         //   endtask
+        VLOG(1) << "  -> Interpreted as: TK_TRIGGER (statement context)";
         return TK_TRIGGER;
       }
-      // Everywhere where right-arrow can appear should be interpreted
+      
+      // BUGFIX: If in task/function body but not "expecting statement" due to
+      // context loss (e.g., after macro expansion), apply a permissive rule.
+      // This handles OpenTitan patterns where macros like `uvm_info(...) 
+      // precede event triggers, causing ExpectingStatement() to return false
+      // even though we're at statement level.
+      //
+      // Strategy: In task/function bodies, prefer TK_TRIGGER unless we have
+      // strong evidence we're in an expression (e.g., previous token is an
+      // identifier/operator that suggests binary operation).
+      if ((in_task_body_ || in_function_body_) && previous_token_ != nullptr) {
+        const int prev_enum = previous_token_->token_enum();
+        // If previous token suggests we're in a binary expression, use IMPLIES
+        // Examples: "a = b -> x" or "if (a -> b)"
+        if (prev_enum == SymbolIdentifier || prev_enum == '=' ||
+            prev_enum == TK_LOR || prev_enum == TK_LAND ||
+            prev_enum == '(' || prev_enum == '[') {
+          // Likely in an expression, keep as LOGICAL_IMPLIES
+          VLOG(1) << "  -> Interpreted as: TK_LOGICAL_IMPLIES (in expression within procedural body)";
+          return TK_LOGICAL_IMPLIES;
+        }
+        // Otherwise, in procedural body, assume TK_TRIGGER
+        VLOG(1) << "  -> Interpreted as: TK_TRIGGER (permissive: in procedural body, not obviously an expression)";
+        return TK_TRIGGER;
+      }
+      
+      // Everywhere else, right-arrow should be interpreted
       // as the 'implies' binary operator for expressions.
       // e.g.
       //   if (a -> b) ...
+      //   a = b -> x;
+      VLOG(1) << "  -> Interpreted as: TK_LOGICAL_IMPLIES (expression context)";
       return TK_LOGICAL_IMPLIES;
     } break;
       // TODO(b/129204554): disambiguate '<='
@@ -708,11 +756,14 @@ bool LexicalContext::ExpectingStatement() const {
   if (InStatementContext()) {
     // Exclude states that are partially into a statement.
     const auto state = ExpectingBodyItemStart();
+    VLOG(1) << __FUNCTION__ << ": InStatementContext=true, ExpectingBodyItemStart="
+            << state.value << ", reason=" << state.reason;
     VLOG(2) << __FUNCTION__ << ": " << state.value << ", " << state.reason;
     return state.value;
   }
   // TODO(fangism): There are many more contexts that expect statements, add
   // them as they are needed.  In verilog.y (grammar), see statement_or_null.
+  VLOG(1) << __FUNCTION__ << ": InStatementContext=false";
   return false;
 }
 

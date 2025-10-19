@@ -1892,6 +1892,61 @@ TEST_F(LexicalContextTest, ScanInitialStatementEventTrigger) {
   EXPECT_FALSE(in_module_body_);
 }
 
+// Test event trigger in complex UVM-like context (after macro expansion)
+// This reproduces the OpenTitan pattern that was failing
+TEST_F(LexicalContextTest, EventTriggerAfterUVMMacroInTask) {
+  const char code[] = R"(
+  class item;
+    event byte_sampled_ev;
+  endclass
+  
+  class monitor;
+    item host_item;
+    
+    virtual protected task collect_trans();
+      `uvm_info(`gfn, "message", UVM_DEBUG)
+      -> host_item.byte_sampled_ev;
+    endtask
+  endclass
+  )";
+  Tokenize(code);
+  CheckInitialState();
+  
+  // Navigate through the tokens to find the '->' that should be TK_TRIGGER
+  // Class declaration
+  ExpectTokenSequence({TK_class, SymbolIdentifier /* item */, ';'});
+  ExpectTokenSequence({TK_event, SymbolIdentifier /* byte_sampled_ev */, ';'});
+  ExpectTokenSequence({TK_endclass});
+  
+  // Monitor class
+  ExpectTokenSequence({TK_class, SymbolIdentifier /* monitor */, ';'});
+  ExpectTokenSequence({SymbolIdentifier /* item */, SymbolIdentifier /* host_item */, ';'});
+  
+  // Task declaration
+  ExpectTokenSequence({TK_virtual, TK_protected, TK_task, SymbolIdentifier /* collect_trans */});
+  EXPECT_TRUE(in_task_declaration_);
+  
+  ExpectTokenSequence({'(', ')', ';'});
+  EXPECT_TRUE(in_task_body_);
+  
+  // After macro call, find and verify the -> is interpreted as TK_TRIGGER
+  // Skip through tokens until we find the arrow
+  bool found_arrow = false;
+  while (token_iter_ != token_refs_.end()) {
+    if ((*token_iter_)->token_enum() == _TK_RARROW ||
+        (*token_iter_)->token_enum() == TK_TRIGGER) {
+      // The arrow should be transformed to TK_TRIGGER in task body
+      ExpectTransformedToken(_TK_RARROW, TK_TRIGGER);
+      found_arrow = true;
+      break;
+    }
+    AdvanceToken();
+  }
+  
+  EXPECT_TRUE(found_arrow) << "Should have found -> token in task body";
+  EXPECT_TRUE(in_task_body_);
+}
+
 // Test that '->' is correctly interpreted as a logical implication.
 TEST_F(LexicalContextTest, AssignmentToLogcalImplicationExpression) {
   const char code[] = R"(
