@@ -144,16 +144,21 @@ static std::unique_ptr<VerilogAnalyzer> ParseWithLanguageMode(
     const std::shared_ptr<verible::MemBlock> &content,
     std::string_view filename,
     const verilog::VerilogPreprocess::Config &preprocess_config,
-    VerilogAnalyzer::FileOpener file_opener = nullptr) {
+    VerilogAnalyzer::FileOpener file_opener = nullptr,
+    const verilog::VerilogPreprocessData* preloaded_data = nullptr) {
   switch (absl::GetFlag(FLAGS_lang)) {
     case LanguageMode::kAutoDetect:
       return VerilogAnalyzer::AnalyzeAutomaticMode(content, filename,
                                                    preprocess_config);
-      // TODO: Pass file_opener through AnalyzeAutomaticMode
+      // TODO: Pass file_opener and preloaded_data through AnalyzeAutomaticMode
     case LanguageMode::kSystemVerilog: {
       auto analyzer = std::make_unique<VerilogAnalyzer>(content, filename,
                                                         preprocess_config,
                                                         file_opener);
+      // Feature 2 (v5.4.0): Seed with preloaded macros
+      if (preloaded_data) {
+        analyzer->SetPreloadedMacros(preloaded_data->macro_definitions);
+      }
       const auto status = ABSL_DIE_IF_NULL(analyzer)->Analyze();
       if (!status.ok()) std::cerr << status.message() << std::endl;
       return analyzer;
@@ -201,10 +206,11 @@ static int AnalyzeOneFile(
     std::string_view filename,
     const verilog::VerilogPreprocess::Config &preprocess_config,
     VerilogAnalyzer::FileOpener file_opener,
+    const verilog::VerilogPreprocessData* preloaded_data,
     json *json_out) {
   int exit_status = 0;
   const auto analyzer =
-      ParseWithLanguageMode(content, filename, preprocess_config, file_opener);
+      ParseWithLanguageMode(content, filename, preprocess_config, file_opener, preloaded_data);
   const auto lex_status = ABSL_DIE_IF_NULL(analyzer)->LexStatus();
   const auto parse_status = analyzer->ParseStatus();
 
@@ -381,9 +387,12 @@ int main(int argc, char **argv) {
       };
     }
     
+    // Get preloaded macros from pre-includes
+    const auto* preloaded_data = include_resolver ? include_resolver->GetPreloadedData() : nullptr;
+    
     json file_json;
     int file_status =
-        AnalyzeOneFile(content, filename, preprocess_config, file_opener, &file_json);
+        AnalyzeOneFile(content, filename, preprocess_config, file_opener, preloaded_data, &file_json);
     exit_status = std::max(exit_status, file_status);
     if (absl::GetFlag(FLAGS_export_json)) {
       json_out[std::string{filename.begin(), filename.end()}] =

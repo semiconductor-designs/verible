@@ -17,6 +17,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string_view>
 #include <utility>
 
@@ -96,6 +97,13 @@ class VerilogAnalyzer : public verible::FileAnalyzer {
     return preprocessor_data_;
   }
 
+  // Feature 2 (v5.4.0): Seed preprocessor with preloaded macros
+  // Call this before Analyze() to make macros from pre-includes available
+  void SetPreloadedMacros(
+      const VerilogPreprocessData::MacroDefinitionRegistry& macros) {
+    preloaded_macros_ = macros;
+  }
+
   // Maybe this belongs in a subclass like VerilogFileAnalyzer?
   // TODO(fangism): Retain a copy of the token stream transformer because it
   // may contain tokens backed by generated text.
@@ -132,6 +140,9 @@ class VerilogAnalyzer : public verible::FileAnalyzer {
   const VerilogPreprocess::Config preprocess_config_;
   FileOpener file_opener_;
   VerilogPreprocessData preprocessor_data_;
+
+  // Feature 2 (v5.4.0): Preloaded macros from pre-include files
+  std::optional<VerilogPreprocessData::MacroDefinitionRegistry> preloaded_macros_;
 
   // Status of lexing.
   absl::Status lex_status_;

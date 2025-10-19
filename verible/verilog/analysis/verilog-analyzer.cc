@@ -262,6 +262,12 @@ absl::Status VerilogAnalyzer::Analyze() {
   //   Not all analyses will want to preprocess.
   {
     VerilogPreprocess preprocessor(preprocess_config_, file_opener_);
+    
+    // Feature 2 (v5.4.0): Seed with preloaded macros from pre-includes
+    if (preloaded_macros_) {
+      preprocessor.SeedMacroDefinitions(*preloaded_macros_);
+    }
+    
     preprocessor_data_ = preprocessor.ScanStream(Data().GetTokenStreamView());
     if (!preprocessor_data_.errors.empty()) {
       for (const auto &error : preprocessor_data_.errors) {

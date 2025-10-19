@@ -138,6 +138,15 @@ class VerilogPreprocess {
   void setPreprocessingInfo(
       const verilog::FileList::PreprocessingInfo &preprocess_info);
 
+  // Feature 2 (v5.4.0): Seed preprocessor with preloaded macros
+  // Call this before ScanStream() to make macros from pre-includes available
+  void SeedMacroDefinitions(
+      const VerilogPreprocessData::MacroDefinitionRegistry& macros) {
+    for (const auto& [name, definition] : macros) {
+      RegisterMacroDefinition(definition);
+    }
+  }
+
  private:
   using StreamIteratorGenerator =
       std::function<TokenStreamView::const_iterator()>;
