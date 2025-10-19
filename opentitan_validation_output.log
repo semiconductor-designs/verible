@@ -1,0 +1,103 @@
+================================================================
+OpenTitan Full Corpus Validation - v5.4.0
+================================================================
+
+This will test all SystemVerilog files in OpenTitan
+Expected time: 10-20 minutes
+
+Total files to test: 3911
+
+Progress: 50/3911 (1%) - Pass: 49, Fail: 0
+Progress: 100/3911 (2%) - Pass: 99, Fail: 0
+Progress: 150/3911 (3%) - Pass: 149, Fail: 0
+Progress: 200/3911 (5%) - Pass: 199, Fail: 0
+Progress: 250/3911 (6%) - Pass: 249, Fail: 0
+Progress: 300/3911 (7%) - Pass: 298, Fail: 1
+Progress: 350/3911 (8%) - Pass: 348, Fail: 1
+Progress: 400/3911 (10%) - Pass: 398, Fail: 1
+Progress: 450/3911 (11%) - Pass: 448, Fail: 1
+Progress: 500/3911 (12%) - Pass: 498, Fail: 1
+Progress: 550/3911 (14%) - Pass: 547, Fail: 2
+Progress: 600/3911 (15%) - Pass: 596, Fail: 3
+Progress: 650/3911 (16%) - Pass: 645, Fail: 4
+Progress: 700/3911 (17%) - Pass: 695, Fail: 4
+Progress: 750/3911 (19%) - Pass: 745, Fail: 4
+Progress: 800/3911 (20%) - Pass: 795, Fail: 4
+Progress: 850/3911 (21%) - Pass: 845, Fail: 4
+Progress: 900/3911 (23%) - Pass: 895, Fail: 4
+Progress: 950/3911 (24%) - Pass: 942, Fail: 7
+Progress: 1000/3911 (25%) - Pass: 992, Fail: 7
+Progress: 1050/3911 (26%) - Pass: 1041, Fail: 8
+Progress: 1100/3911 (28%) - Pass: 1091, Fail: 8
+Progress: 1150/3911 (29%) - Pass: 1141, Fail: 8
+Progress: 1200/3911 (30%) - Pass: 1191, Fail: 8
+Progress: 1250/3911 (31%) - Pass: 1241, Fail: 8
+Progress: 1300/3911 (33%) - Pass: 1290, Fail: 9
+Progress: 1350/3911 (34%) - Pass: 1339, Fail: 10
+Progress: 1400/3911 (35%) - Pass: 1386, Fail: 13
+Progress: 1450/3911 (37%) - Pass: 1435, Fail: 14
+Progress: 1500/3911 (38%) - Pass: 1485, Fail: 14
+Progress: 1550/3911 (39%) - Pass: 1535, Fail: 14
+Progress: 1600/3911 (40%) - Pass: 1585, Fail: 14
+Progress: 1650/3911 (42%) - Pass: 1635, Fail: 14
+Progress: 1700/3911 (43%) - Pass: 1684, Fail: 15
+Progress: 1750/3911 (44%) - Pass: 1733, Fail: 16
+Progress: 1800/3911 (46%) - Pass: 1783, Fail: 16
+Progress: 1850/3911 (47%) - Pass: 1833, Fail: 16
+Progress: 1900/3911 (48%) - Pass: 1883, Fail: 16
+Progress: 1950/3911 (49%) - Pass: 1933, Fail: 16
+Progress: 2000/3911 (51%) - Pass: 1982, Fail: 17
+Progress: 2050/3911 (52%) - Pass: 2031, Fail: 18
+Progress: 2100/3911 (53%) - Pass: 2081, Fail: 18
+Progress: 2150/3911 (54%) - Pass: 2131, Fail: 18
+Progress: 2200/3911 (56%) - Pass: 2181, Fail: 18
+Progress: 2250/3911 (57%) - Pass: 2230, Fail: 19
+Progress: 2300/3911 (58%) - Pass: 2273, Fail: 26
+Progress: 2350/3911 (60%) - Pass: 2322, Fail: 27
+Progress: 2400/3911 (61%) - Pass: 2372, Fail: 27
+Progress: 2450/3911 (62%) - Pass: 2422, Fail: 27
+Progress: 2500/3911 (63%) - Pass: 2472, Fail: 27
+Progress: 2550/3911 (65%) - Pass: 2521, Fail: 28
+Progress: 2600/3911 (66%) - Pass: 2571, Fail: 28
+Progress: 2650/3911 (67%) - Pass: 2621, Fail: 28
+Progress: 2700/3911 (69%) - Pass: 2670, Fail: 29
+Progress: 2750/3911 (70%) - Pass: 2720, Fail: 29
+Progress: 2800/3911 (71%) - Pass: 2769, Fail: 30
+Progress: 2850/3911 (72%) - Pass: 2819, Fail: 30
+Progress: 2900/3911 (74%) - Pass: 2869, Fail: 30
+Progress: 2950/3911 (75%) - Pass: 2919, Fail: 30
+Progress: 3000/3911 (76%) - Pass: 2969, Fail: 30
+Progress: 3050/3911 (77%) - Pass: 3019, Fail: 30
+Progress: 3100/3911 (79%) - Pass: 3069, Fail: 30
+Progress: 3150/3911 (80%) - Pass: 3119, Fail: 30
+Progress: 3200/3911 (81%) - Pass: 3169, Fail: 30
+Progress: 3250/3911 (83%) - Pass: 3219, Fail: 30
+Progress: 3300/3911 (84%) - Pass: 3269, Fail: 30
+Progress: 3350/3911 (85%) - Pass: 3319, Fail: 30
+Progress: 3400/3911 (86%) - Pass: 3369, Fail: 30
+Progress: 3450/3911 (88%) - Pass: 3419, Fail: 30
+Progress: 3500/3911 (89%) - Pass: 3468, Fail: 31
+Progress: 3550/3911 (90%) - Pass: 3518, Fail: 31
+Progress: 3600/3911 (92%) - Pass: 3568, Fail: 31
+Progress: 3650/3911 (93%) - Pass: 3617, Fail: 32
+Progress: 3700/3911 (94%) - Pass: 3667, Fail: 32
+Progress: 3750/3911 (95%) - Pass: 3716, Fail: 33
+Progress: 3800/3911 (97%) - Pass: 3763, Fail: 36
+Progress: 3850/3911 (98%) - Pass: 3813, Fail: 36
+Progress: 3900/3911 (99%) - Pass: 3860, Fail: 39
+
+================================================================
+SUMMARY
+================================================================
+Total files:      3911
+Passed:           3872 (99.00%)
+Failed:           39
+
+Success rate:     99.00%
+================================================================
+
+Full results saved to: opentitan_full_validation_20251019_095101.txt
+
+✅ EXCELLENT: 99.00% success rate!
+
+Validation complete!

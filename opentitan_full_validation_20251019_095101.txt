@@ -1,0 +1,135 @@
+================================================================
+OpenTitan Full Validation Results - v5.4.0
+Date: Sun Oct 19 09:51:01 PDT 2025
+Total Files: 3911
+================================================================
+
+FAILED FILES:
+
+FAIL: hw/top_earlgrey/ip_autogen/otp_ctrl/dv/env/otp_ctrl_env_cfg.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/top_earlgrey/ip_autogen/otp_ctrl/dv/env/otp_ctrl_env_cfg.sv:53:5-11: syntax error at token "foreach"
+
+FAIL: hw/top_earlgrey/dv/autogen/tb__xbar_connect.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/top_earlgrey/dv/autogen/tb__xbar_connect.sv:30:27: syntax error at token "("
+
+FAIL: hw/top_earlgrey/ip/xbar_peri/dv/autogen/tb__xbar_connect.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/top_earlgrey/ip/xbar_peri/dv/autogen/tb__xbar_connect.sv:7:14: syntax error at token "("
+
+FAIL: hw/top_earlgrey/ip/xbar_main/dv/autogen/tb__xbar_connect.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/top_earlgrey/ip/xbar_main/dv/autogen/tb__xbar_connect.sv:7:14: syntax error at token "("
+
+FAIL: hw/top_englishbreakfast/dv/autogen/tb__xbar_connect.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/top_englishbreakfast/dv/autogen/tb__xbar_connect.sv:30:27: syntax error at token "("
+
+FAIL: hw/top_englishbreakfast/ip/xbar_peri/dv/autogen/tb__xbar_connect.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/top_englishbreakfast/ip/xbar_peri/dv/autogen/tb__xbar_connect.sv:7:14: syntax error at token "("
+
+FAIL: hw/top_englishbreakfast/ip/xbar_main/dv/autogen/tb__xbar_connect.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/top_englishbreakfast/ip/xbar_main/dv/autogen/tb__xbar_connect.sv:7:14: syntax error at token "("
+
+FAIL: hw/top_darjeeling/ip_autogen/otp_ctrl/dv/env/otp_ctrl_env_cfg.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/top_darjeeling/ip_autogen/otp_ctrl/dv/env/otp_ctrl_env_cfg.sv:51:5-11: syntax error at token "foreach"
+
+FAIL: hw/top_darjeeling/dv/env/seq_lib/chip_sw_pwrmgr_deep_sleep_all_wake_ups_vseq.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/top_darjeeling/dv/env/seq_lib/chip_sw_pwrmgr_deep_sleep_all_wake_ups_vseq.sv:157:9-10: syntax error at token "->"
+
+FAIL: hw/top_darjeeling/dv/autogen/tb__xbar_connect.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/top_darjeeling/dv/autogen/tb__xbar_connect.sv:30:27: syntax error at token "("
+
+FAIL: hw/top_darjeeling/ip/xbar_dbg/dv/autogen/tb__xbar_connect.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/top_darjeeling/ip/xbar_dbg/dv/autogen/tb__xbar_connect.sv:7:13: syntax error at token "("
+
+FAIL: hw/top_darjeeling/ip/xbar_peri/dv/autogen/tb__xbar_connect.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/top_darjeeling/ip/xbar_peri/dv/autogen/tb__xbar_connect.sv:7:14: syntax error at token "("
+
+FAIL: hw/top_darjeeling/ip/xbar_mbx/dv/autogen/tb__xbar_connect.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/top_darjeeling/ip/xbar_mbx/dv/autogen/tb__xbar_connect.sv:7:13: syntax error at token "("
+
+FAIL: hw/top_darjeeling/ip/xbar_main/dv/autogen/tb__xbar_connect.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/top_darjeeling/ip/xbar_main/dv/autogen/tb__xbar_connect.sv:7:14: syntax error at token "("
+
+FAIL: hw/dv/sv/cip_lib/cip_base_env_cfg.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/dv/sv/cip_lib/cip_base_env_cfg.sv:109:3: syntax error at token "}"
+
+FAIL: hw/dv/sv/spi_agent/spi_monitor.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/dv/sv/spi_agent/spi_monitor.sv:291:5-6: syntax error at token "->"
+
+FAIL: hw/dv/sv/dv_lib/dv_base_env_cfg.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/dv/sv/dv_lib/dv_base_env_cfg.sv:60:5-11: syntax error at token "foreach"
+
+FAIL: hw/ip/edn/dv/env/edn_env_cfg.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/ip/edn/dv/env/edn_env_cfg.sv:14:5-7: syntax error at token "for"
+
+FAIL: hw/ip/csrng/dv/env/csrng_env_cfg.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/ip/csrng/dv/env/csrng_env_cfg.sv:98:3: syntax error at token "}"
+
+FAIL: hw/ip/aon_timer/dv/env/aon_timer_scoreboard.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/ip/aon_timer/dv/env/aon_timer_scoreboard.sv:1033:3-4: syntax error at token "->"
+
+FAIL: hw/ip/spi_device/pre_dv/tb/spid_jedec_tb.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/ip/spi_device/pre_dv/tb/spid_jedec_tb.sv:97:10-13: syntax error at token "task"
+
+FAIL: hw/ip/spi_device/pre_dv/tb/spid_upload_tb.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/ip/spi_device/pre_dv/tb/spid_upload_tb.sv:186:10-13: syntax error at token "task"
+
+FAIL: hw/ip/spi_device/pre_dv/tb/spid_readcmd_tb.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/ip/spi_device/pre_dv/tb/spid_readcmd_tb.sv:180:10-13: syntax error at token "task"
+
+FAIL: hw/ip/spi_device/pre_dv/program/spiflash.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/ip/spi_device/pre_dv/program/spiflash.sv:192:10-13: syntax error at token "task"
+
+FAIL: hw/ip/spi_device/pre_dv/program/prog_passthrough_host.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/ip/spi_device/pre_dv/program/prog_passthrough_host.sv:117:10-13: syntax error at token "task"
+
+FAIL: hw/ip/spi_device/pre_dv/program/prog_passthrough_sw.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/ip/spi_device/pre_dv/program/prog_passthrough_sw.sv:229:10-13: syntax error at token "task"
+
+FAIL: hw/ip/spi_device/dv/env/spi_device_scoreboard.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/ip/spi_device/dv/env/spi_device_scoreboard.sv:643:7-27: syntax error at token "`CREATE_TPM_CASE_STMT"
+
+FAIL: hw/ip/sram_ctrl/dv/env/sram_ctrl_env_cfg.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/ip/sram_ctrl/dv/env/sram_ctrl_env_cfg.sv:43:3: syntax error at token "}"
+
+FAIL: hw/ip/otbn/dv/uvm/env/otbn_env_cfg.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/ip/otbn/dv/uvm/env/otbn_env_cfg.sv:80:3: syntax error at token "}"
+
+FAIL: hw/ip/entropy_src/dv/env/entropy_src_env_cfg.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/ip/entropy_src/dv/env/entropy_src_env_cfg.sv:176:3: syntax error at token "}"
+
+FAIL: hw/ip/kmac/dv/env/kmac_env_cov.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/ip/kmac/dv/env/kmac_env_cov.sv:68:5-17: syntax error at token "`XOF_CROSS_CG"
+
+FAIL: hw/vendor/lowrisc_ibex/dv/uvm/icache/dv/ibex_icache_core_agent/ibex_icache_core_if.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/vendor/lowrisc_ibex/dv/uvm/icache/dv/ibex_icache_core_agent/ibex_icache_core_if.sv:137:5: syntax error at token "@"
+
+FAIL: hw/vendor/lowrisc_ibex/dv/uvm/core_ibex/riscv_dv_extension/riscv_core_setting.tpl.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/vendor/lowrisc_ibex/dv/uvm/core_ibex/riscv_dv_extension/riscv_core_setting.tpl.sv:57:3-4: syntax error at token "if"
+
+FAIL: hw/vendor/lowrisc_ibex/dv/formal/check/protocol/irqs.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/vendor/lowrisc_ibex/dv/formal/check/protocol/irqs.sv:12:6: syntax error at token ":"
+
+FAIL: hw/vendor/lowrisc_ibex/dv/formal/check/peek/compare_helper.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/vendor/lowrisc_ibex/dv/formal/check/peek/compare_helper.sv:78:33: syntax error at token "1"
+
+FAIL: hw/vendor/lowrisc_ibex/dv/formal/check/peek/mem.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/vendor/lowrisc_ibex/dv/formal/check/peek/mem.sv:101:5: syntax error at token "."
+
+FAIL: hw/vendor/lowrisc_ibex/vendor/google_riscv-dv/src/isa/custom/riscv_custom_instr_enum.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/vendor/lowrisc_ibex/vendor/google_riscv-dv/src/isa/custom/riscv_custom_instr_enum.sv:3:1: syntax error (unexpected EOF)
+
+FAIL: hw/vendor/lowrisc_ibex/vendor/google_riscv-dv/src/riscv_instr_pkg.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/vendor/lowrisc_ibex/vendor/google_riscv-dv/src/riscv_instr_pkg.sv:743:5-19: syntax error at token "`VECTOR_INCLUDE"
+
+FAIL: hw/vendor/lowrisc_ibex/vendor/google_riscv-dv/src/riscv_instr_cover_group.sv
+  /Users/jonguksong/Projects/OpenTitan-to-RPG/subtrees/opentitan/hw/vendor/lowrisc_ibex/vendor/google_riscv-dv/src/riscv_instr_cover_group.sv:514:18: syntax error at token ":"
+
+
+================================================================
+SUMMARY
+================================================================
+Total files:      3911
+Passed:           3872 (99.00%)
+Failed:           39
+
+Success rate:     99.00%
+================================================================
