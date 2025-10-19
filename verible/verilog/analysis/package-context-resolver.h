@@ -35,8 +35,9 @@ namespace verilog {
 class PackageContextResolver {
  public:
   // Constructor accepts include resolver for resolving includes within packages
-  explicit PackageContextResolver(IncludeFileResolver* include_resolver)
-      : include_resolver_(include_resolver) {}
+  explicit PackageContextResolver(IncludeFileResolver* include_resolver, 
+                                  bool enable_includes = true)
+      : include_resolver_(include_resolver), enable_includes_(enable_includes) {}
 
   // Parse a single package file and extract its context
   //
@@ -80,6 +81,7 @@ class PackageContextResolver {
 
  private:
   IncludeFileResolver* include_resolver_;  // Not owned
+  bool enable_includes_;  // Whether to process include directives in packages
 
   // Extract macro definitions from parsed package
   // Uses include_resolver_ to process `include directives

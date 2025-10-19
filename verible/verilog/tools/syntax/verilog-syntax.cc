@@ -141,6 +141,11 @@ ABSL_FLAG(std::vector<std::string>, package_context, {},
           "Useful for OpenTitan UVM testbenches that rely on package context.\n"
           "Example: --package_context=dv_base_test_pkg.sv");
 
+ABSL_FLAG(bool, package_context_disable_includes, false,
+          "Disable include processing in package context files.\n"
+          "Use this if package includes cause parsing issues.\n"
+          "Macros from the package file itself will still be extracted.");
+
 using nlohmann::json;
 using verible::ConcreteSyntaxTree;
 using verible::ParserVerifier;
@@ -378,10 +383,15 @@ int main(int argc, char **argv) {
   std::unique_ptr<verilog::CombinedPackageContext> package_context;
   const auto package_files = absl::GetFlag(FLAGS_package_context);
   if (!package_files.empty()) {
-    std::cerr << "Processing " << package_files.size() << " package file(s) for context..." << std::endl;
+    const bool disable_includes = absl::GetFlag(FLAGS_package_context_disable_includes);
+    std::cerr << "Processing " << package_files.size() << " package file(s) for context";
+    if (disable_includes) {
+      std::cerr << " (includes disabled)";
+    }
+    std::cerr << "..." << std::endl;
     
-    // Create package context resolver
-    verilog::PackageContextResolver pkg_resolver(include_resolver.get());
+    // Create package context resolver with include option
+    verilog::PackageContextResolver pkg_resolver(include_resolver.get(), !disable_includes);
     
     auto context_or = pkg_resolver.ParsePackages(package_files);
     if (!context_or.ok()) {

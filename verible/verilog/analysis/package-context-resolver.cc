@@ -56,10 +56,10 @@ absl::StatusOr<PackageContext> PackageContextResolver::ParsePackage(
   }
 
   // Create analyzer for the package
-  // Include processing enabled to capture macros from include files
+  // Include processing can be enabled/disabled via constructor
   VerilogPreprocess::Config preprocess_config{
       .filter_branches = false,
-      .include_files = true,  // Enable to process `include directives in packages
+      .include_files = enable_includes_,  // Configurable include processing
       .expand_macros = false
   };
 
