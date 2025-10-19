@@ -1,0 +1,15 @@
+=== Broader Corpus Testing ===
+Using: ./bazel-bin/verible/verilog/tools/syntax/verible-verilog-syntax
+
+Testing Ibex RISC-V Core...
+Ibex: 621 / 637 passed (97%)
+
+Testing PULPino...
+PULPino: 43 / 44 passed (97%)
+
+Testing OpenTitan (sampling 100 files)...
+OpenTitan: 14 / 100 passed (14%)
+
+=== Summary ===
+Total: 678 / 781 passed (86%)
+⚠️  Success rate below 90%, consider investigating

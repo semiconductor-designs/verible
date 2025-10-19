@@ -1,0 +1,37 @@
+=== Analyzing Corpus Failures ===
+Analysis date: Sun Oct 19 14:59:15 PDT 2025
+
+Project: Ibex RISC-V Core
+------------------------
+File: test_corpus/ibex/formal/data_ind_timing/formal_tb_frag.svh
+test_corpus/ibex/formal/data_ind_timing/formal_tb_frag.svh:5:16: syntax error at token "("
+
+File: test_corpus/ibex/formal/icache/formal_tb_frag.svh
+test_corpus/ibex/formal/icache/formal_tb_frag.svh:16:8: syntax error at token "("
+
+File: test_corpus/ibex/dv/uvm/icache/dv/ibex_icache_core_agent/ibex_icache_core_if.sv
+test_corpus/ibex/dv/uvm/icache/dv/ibex_icache_core_agent/ibex_icache_core_if.sv:137:5: syntax error at token "@"
+test_corpus/ibex/dv/uvm/icache/dv/ibex_icache_core_agent/ibex_icache_core_if.sv:141:3-13: syntax error at token "endsequence"
+
+Ibex: 3 failures out of 50 files analyzed
+
+Project: PULPino
+----------------
+File: test_corpus/pulpino/rtl/includes/apu_defines.sv
+test_corpus/pulpino/rtl/includes/apu_defines.sv:12:12: preprocessing error (unexpected EOF) : expected macro definition body text, but got: (#0: "")
+
+PULPino: 1 failures out of 44 files analyzed
+
+Project: OpenTitan
+------------------
+OpenTitan: 0 failures out of 50 files analyzed
+
+=== Common Error Patterns ===
+   2 syntax error at token "("
+   1 syntax error at token "endsequence"
+   1 syntax error at token "@"
+
+=== Error Type Summary ===
+Include not found: 0
+Undefined macro: 0
+Syntax errors: 7
