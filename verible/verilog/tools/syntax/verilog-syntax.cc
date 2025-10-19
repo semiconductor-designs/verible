@@ -48,6 +48,7 @@
 #include "verible/verilog/CST/verilog-tree-print.h"
 #include "verible/verilog/analysis/include-file-resolver.h"
 #include "verible/verilog/analysis/json-diagnostics.h"
+#include "verible/verilog/analysis/package-context-resolver.h"
 #include "verible/verilog/analysis/verilog-analyzer.h"
 #include "verible/verilog/analysis/verilog-excerpt-parse.h"
 #include "verible/verilog/parser/verilog-parser.h"
@@ -133,6 +134,12 @@ ABSL_FLAG(std::vector<std::string>, pre_include, {},
           "These files are processed first, making their macros available.\n"
           "Useful for UVM/OpenTitan testbenches that require macro preludes.\n"
           "Example: --pre_include=uvm_macros.svh,dv_macros.svh");
+
+ABSL_FLAG(std::vector<std::string>, package_context, {},
+          "List of package files to parse for context (macros, types).\n"
+          "Package files are parsed first, making their definitions available.\n"
+          "Useful for OpenTitan UVM testbenches that rely on package context.\n"
+          "Example: --package_context=dv_base_test_pkg.sv");
 
 using nlohmann::json;
 using verible::ConcreteSyntaxTree;
@@ -367,6 +374,27 @@ int main(int argc, char **argv) {
     }
   }
 
+  // Feature 3 (v5.4.0): Process package context files if specified
+  std::unique_ptr<verilog::CombinedPackageContext> package_context;
+  const auto package_files = absl::GetFlag(FLAGS_package_context);
+  if (!package_files.empty()) {
+    std::cerr << "Processing " << package_files.size() << " package file(s) for context..." << std::endl;
+    
+    // Create package context resolver
+    verilog::PackageContextResolver pkg_resolver(include_resolver.get());
+    
+    auto context_or = pkg_resolver.ParsePackages(package_files);
+    if (!context_or.ok()) {
+      std::cerr << "Error processing package context: " << context_or.status().message() << std::endl;
+      return 1;
+    }
+    
+    package_context = std::make_unique<verilog::CombinedPackageContext>(std::move(*context_or));
+    std::cerr << "Loaded package context: " 
+              << package_context->MacroCount() << " macro(s), "
+              << package_context->TypeCount() << " type(s)" << std::endl;
+  }
+
   int exit_status = 0;
   // All positional arguments are file names.  Exclude program name.
   for (std::string_view filename :
@@ -401,9 +429,30 @@ int main(int argc, char **argv) {
     // Get preloaded macros from pre-includes
     const auto* preloaded_data = include_resolver ? include_resolver->GetPreloadedData() : nullptr;
     
+    // Feature 3 (v5.4.0): Merge package context macros with preloaded data
+    // Note: We only merge macro_definitions, not the entire VerilogPreprocessData
+    verilog::VerilogPreprocessData combined_preload_data;
+    if (preloaded_data) {
+      // Copy only macro definitions
+      for (const auto& [name, definition] : preloaded_data->macro_definitions) {
+        combined_preload_data.macro_definitions.insert({name, definition});
+      }
+    }
+    if (package_context) {
+      // Add package context macros (package macros take precedence)
+      for (const auto& [name, definition] : package_context->all_macros) {
+        auto it = combined_preload_data.macro_definitions.find(name);
+        if (it != combined_preload_data.macro_definitions.end()) {
+          combined_preload_data.macro_definitions.erase(it);
+        }
+        combined_preload_data.macro_definitions.insert({name, definition});
+      }
+    }
+    const auto* final_preload_data = (preloaded_data || package_context) ? &combined_preload_data : nullptr;
+    
     json file_json;
     int file_status =
-        AnalyzeOneFile(content, filename, preprocess_config, file_opener, preloaded_data, &file_json);
+        AnalyzeOneFile(content, filename, preprocess_config, file_opener, final_preload_data, &file_json);
     exit_status = std::max(exit_status, file_status);
     if (absl::GetFlag(FLAGS_export_json)) {
       json_out[std::string{filename.begin(), filename.end()}] =
