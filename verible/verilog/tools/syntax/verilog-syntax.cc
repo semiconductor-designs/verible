@@ -128,6 +128,12 @@ ABSL_FLAG(bool, expand_macros, false,
           "Default is false to preserve macros for knowledge graph building.\n"
           "Set to true if you want to see expanded macro bodies.");
 
+ABSL_FLAG(std::vector<std::string>, pre_include, {},
+          "List of files to include before parsing the main file.\n"
+          "These files are processed first, making their macros available.\n"
+          "Useful for UVM/OpenTitan testbenches that require macro preludes.\n"
+          "Example: --pre_include=uvm_macros.svh,dv_macros.svh");
+
 using nlohmann::json;
 using verible::ConcreteSyntaxTree;
 using verible::ParserVerifier;
@@ -319,6 +325,29 @@ int main(int argc, char **argv) {
     include_resolver = std::make_unique<verilog::IncludeFileResolver>(include_paths);
     std::cerr << "Include file support enabled with " << include_paths.size() 
               << " search path(s)" << std::endl;
+  }
+
+  // Process pre-include files if specified
+  const auto pre_includes = absl::GetFlag(FLAGS_pre_include);
+  if (!pre_includes.empty()) {
+    if (!include_resolver) {
+      std::cerr << "Error: --pre_include requires --include_paths to be set" << std::endl;
+      return 1;
+    }
+    
+    std::cerr << "Processing " << pre_includes.size() << " pre-include file(s)..." << std::endl;
+    auto status = include_resolver->PreloadIncludes(pre_includes);
+    if (!status.ok()) {
+      std::cerr << "Error processing pre-includes: " << status.message() << std::endl;
+      return 1;
+    }
+    
+    // Show which macros were preloaded
+    const auto* preloaded_data = include_resolver->GetPreloadedData();
+    if (preloaded_data) {
+      std::cerr << "Preloaded " << preloaded_data->macro_definitions.size() 
+                << " macro(s) from pre-include files" << std::endl;
+    }
   }
 
   int exit_status = 0;
