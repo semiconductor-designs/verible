@@ -962,3 +962,28 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+# Include File Resolver for Preprocessing Support  
+cc_library(
+    name = "include-file-resolver",
+    srcs = ["include-file-resolver.cc"],
+    hdrs = ["include-file-resolver.h"],
+    deps = [
+        "//verible/common/strings:mem-block",
+        "//verible/common/util:file-util",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "include-file-resolver_test",
+    srcs = ["include-file-resolver_test.cc"],
+    deps = [
+        ":include-file-resolver",
+        "@abseil-cpp//absl/status",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)

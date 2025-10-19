@@ -626,3 +626,101 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+
+# UVM Enhancement Phase 2.3: UVM Macro Expansion (Week 5)
+cc_test(
+    name = "verilog-parser-uvm-macros_test",
+    srcs = ["verilog-parser-uvm-macros_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# Week 7: Complex Argument Parsing Tests
+cc_test(
+    name = "verilog-parser-complex-args_test",
+    srcs = ["verilog-parser-complex-args_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# Week 8: Code Block Arguments Tests
+cc_test(
+    name = "verilog-parser-code-block-args_test",
+    srcs = ["verilog-parser-code-block-args_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "verilog-parser-recursive-macros_test",
+    srcs = ["verilog-parser-recursive-macros_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# Week 11: Extern Constraint Tests
+cc_test(
+    name = "verilog-parser-extern-constraint_test",
+    srcs = ["verilog-parser-extern-constraint_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# UVM Enhancement Phase 3.1: Extern Constraint Support (Week 11)
+
+# UVM Enhancement Phase 3.2: Distribution Constraint Details (Week 12)
+cc_test(
+    name = "verilog-parser-dist-constraints_test",
+    srcs = ["verilog-parser-dist-constraints_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# UVM Enhancement Phase 3.3-3.4: Advanced Constraint Operators (Weeks 13-14)
+cc_test(
+    name = "verilog-parser-constraint-operators_test",
+    srcs = ["verilog-parser-constraint-operators_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# UVM Enhancement Phase 4.1: Type Parameter Support (Week 17)
+cc_test(
+    name = "verilog-parser-type-params_test",
+    srcs = ["verilog-parser-type-params_test.cc"],
+    deps = [
+        "//verible/common/parser:parser-test-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)

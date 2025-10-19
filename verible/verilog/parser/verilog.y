@@ -1757,6 +1757,8 @@ preprocessor_else_constraint_expression
 constraint_prototype
   : TK_static_opt TK_constraint GenericIdentifier ';'
     { $$ = MakeTaggedNode(N::kConstraintPrototype, $1, $2, $3, $4); }
+  | TK_extern TK_constraint GenericIdentifier ';'
+    { $$ = MakeTaggedNode(N::kConstraintPrototype, $1, $2, $3, $4); }
   ;
 constraint_set
   : constraint_expression

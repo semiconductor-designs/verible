@@ -31,17 +31,23 @@ namespace verilog {
 // VerilogAnalyzer analyzes Verilog and SystemVerilog code syntax.
 class VerilogAnalyzer : public verible::FileAnalyzer {
  public:
+  using FileOpener = VerilogPreprocess::FileOpener;
+
   VerilogAnalyzer(std::shared_ptr<verible::MemBlock> text,
                   std::string_view name,
-                  const VerilogPreprocess::Config &preprocess_config)
+                  const VerilogPreprocess::Config &preprocess_config,
+                  FileOpener file_opener = nullptr)
       : verible::FileAnalyzer(std::move(text), name),
-        preprocess_config_(preprocess_config) {}
+        preprocess_config_(preprocess_config),
+        file_opener_(file_opener) {}
 
   // Legacy constructor.
   VerilogAnalyzer(std::string_view text, std::string_view name,
-                  const VerilogPreprocess::Config &preprocess_config)
+                  const VerilogPreprocess::Config &preprocess_config,
+                  FileOpener file_opener = nullptr)
       : verible::FileAnalyzer(text, name),
-        preprocess_config_(preprocess_config) {}
+        preprocess_config_(preprocess_config),
+        file_opener_(file_opener) {}
 
   // Legacy constructor.
   // TODO(hzeller): Remove once every instantiation sets preprocessor config.
@@ -124,6 +130,7 @@ class VerilogAnalyzer : public verible::FileAnalyzer {
 
   // Preprocessor.
   const VerilogPreprocess::Config preprocess_config_;
+  FileOpener file_opener_;
   VerilogPreprocessData preprocessor_data_;
 
   // Status of lexing.

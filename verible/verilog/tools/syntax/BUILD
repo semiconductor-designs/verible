@@ -29,6 +29,7 @@ cc_binary(
         "//verible/common/util:logging",
         "//verible/verilog/CST:verilog-tree-json",
         "//verible/verilog/CST:verilog-tree-print",
+        "//verible/verilog/analysis:include-file-resolver",
         "//verible/verilog/analysis:json-diagnostics",
         "//verible/verilog/analysis:verilog-analyzer",
         "//verible/verilog/analysis/checkers:verilog-lint-rules",

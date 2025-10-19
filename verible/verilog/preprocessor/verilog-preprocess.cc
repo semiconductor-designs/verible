@@ -39,6 +39,7 @@
 #include "verible/verilog/parser/verilog-lexer.h"
 #include "verible/verilog/parser/verilog-parser.h"  // for verilog_symbol_name()
 #include "verible/verilog/parser/verilog-token-enum.h"
+#include "verible/verilog/preprocessor/uvm-macros.h"
 #include "verible/verilog/preprocessor/verilog-preprocess-expr.h"
 
 namespace verilog {
@@ -324,8 +325,18 @@ absl::Status VerilogPreprocess::HandleMacroIdentifier(
 
   // Finding the macro definition.
   const std::string_view sv = (*iter)->text();
-  const auto *found =
-      FindOrNull(preprocess_data_.macro_definitions, sv.substr(1));
+  const std::string_view macro_name = sv.substr(1);
+  
+  // Phase 2.2: Implement macro lookup with priority: User > UVM > Undefined
+  // 1. First, check user-defined macros
+  const auto *found = FindOrNull(preprocess_data_.macro_definitions, macro_name);
+  
+  // 2. If not found in user-defined macros, check UVM macro registry
+  if (!found) {
+    found = FindOrNull(preprocessor::GetUvmMacroRegistry(), macro_name);
+  }
+  
+  // 3. If still not found, report error
   if (!found) {
     preprocess_data_.errors.emplace_back(
         **iter,

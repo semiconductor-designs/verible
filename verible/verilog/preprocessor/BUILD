@@ -23,10 +23,21 @@ cc_library(
 )
 
 cc_library(
+    name = "uvm-macros",
+    srcs = ["uvm-macros.cc"],
+    hdrs = ["uvm-macros.h"],
+    deps = [
+        "//verible/common/text:macro-definition",
+        "//verible/common/text:token-info",
+    ],
+)
+
+cc_library(
     name = "verilog-preprocess",
     srcs = ["verilog-preprocess.cc"],
     hdrs = ["verilog-preprocess.h"],
     deps = [
+        ":uvm-macros",
         ":verilog-preprocess-expr",
         "//verible/common/lexer:token-generator",
         "//verible/common/lexer:token-stream-adapter",
@@ -44,6 +55,16 @@ cc_library(
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "uvm-macros_test",
+    srcs = ["uvm-macros_test.cc"],
+    deps = [
+        ":uvm-macros",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
     ],
 )
 
@@ -66,6 +87,18 @@ cc_test(
         "@abseil-cpp//absl/status",
         "@abseil-cpp//absl/status:statusor",
         "@abseil-cpp//absl/strings",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "verilog-preprocess-uvm_test",
+    srcs = ["verilog-preprocess-uvm_test.cc"],
+    deps = [
+        ":verilog-preprocess",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@abseil-cpp//absl/status",
         "@googletest//:gtest",
         "@googletest//:gtest_main",
     ],

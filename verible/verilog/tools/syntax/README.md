@@ -20,11 +20,16 @@ usage: verible-verilog-syntax [options] <file(s)...>
       default: 0;
     --export_json (Uses JSON for output. Intended to be used as an input for
       other tools.); default: false;
+    --include_paths (Comma-separated list of directories to search for `include files.
+      Can be specified multiple times. Example: --include_paths=/path/to/includes);
+      default: ;
     --lang (Selects language variant to parse. Options:
       auto: SystemVerilog-2017, but may auto-detect alternate parsing modes
       sv: strict SystemVerilog-2017, with explicit alternate parsing modes
       lib: Verilog library map language (LRM Ch. 33)
       ); default: auto;
+    --preprocess (Enable full preprocessing (macro expansion + include files).
+      Set to false for syntax-only checking without preprocessing.); default: true;
     --printrawtokens (Prints all lexed tokens, including filtered ones.);
       default: false;
     --printtokens (Prints all lexed and filtered tokens); default: false;
@@ -34,6 +39,51 @@ usage: verible-verilog-syntax [options] <file(s)...>
 ```
 
 ## Features
+
+### Preprocessing Support
+
+The tool supports SystemVerilog preprocessing including:
+- **Macro expansion**: `` `define`` macros are expanded
+- **Include files**: `` `include`` directives are resolved
+- **Conditional compilation**: `` `ifdef``, `` `ifndef``, `` `else``, `` `endif``
+
+**Usage with include files**:
+```bash
+# Specify directories to search for include files
+verible-verilog-syntax \
+  --include_paths=/path/to/includes \
+  --include_paths=/other/path \
+  file.sv
+
+# Or comma-separated
+verible-verilog-syntax \
+  --include_paths=/path/to/includes,/other/path \
+  file.sv
+```
+
+**Example**:
+```systemverilog
+// macros.svh
+`define CLK_CONSTRAINT(freq) freq inside {[24:100]};
+
+// main.sv
+`include "macros.svh"
+
+class my_config;
+  rand int clk_freq;
+  constraint clk_c {
+    `CLK_CONSTRAINT(clk_freq)  // ← Macro expanded from include
+  }
+endclass
+```
+
+**Known Limitations**:
+- **Deep nesting** (3+ levels of includes) may not fully resolve all macros
+  - Works: `file.sv` → `include a.svh` → `include b.svh` (2 levels)
+  - May need Kythe: `file.sv` → `a.svh` → `b.svh` → `c.svh` → macro (3+ levels)
+- For complex projects with deeply nested includes, consider using `verible-verilog-kythe-extractor`
+
+### Alternative Parsing Modes
 
 The parser supports
 [alternative parsing modes](../../analysis#alternative-parsing-modes) where a

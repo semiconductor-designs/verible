@@ -46,6 +46,7 @@
 #include "verible/common/util/logging.h"  // for operator<<, LOG, LogMessage, etc
 #include "verible/verilog/CST/verilog-tree-json.h"
 #include "verible/verilog/CST/verilog-tree-print.h"
+#include "verible/verilog/analysis/include-file-resolver.h"
 #include "verible/verilog/analysis/json-diagnostics.h"
 #include "verible/verilog/analysis/verilog-analyzer.h"
 #include "verible/verilog/analysis/verilog-excerpt-parse.h"
@@ -114,6 +115,14 @@ ABSL_FLAG(bool, show_diagnostic_context, false,
           "line on which the diagnostic was found,"
           "followed by a line with a position marker");
 
+ABSL_FLAG(std::vector<std::string>, include_paths, {},
+          "Comma-separated list of directories to search for `include files.\n"
+          "Example: --include_paths=/path/to/includes,/other/path");
+
+ABSL_FLAG(bool, preprocess, true,
+          "Enable full preprocessing (macro expansion + include files).\n"
+          "Set to false for syntax-only checking without preprocessing.");
+
 using nlohmann::json;
 using verible::ConcreteSyntaxTree;
 using verible::ParserVerifier;
@@ -123,14 +132,17 @@ using verilog::VerilogAnalyzer;
 static std::unique_ptr<VerilogAnalyzer> ParseWithLanguageMode(
     const std::shared_ptr<verible::MemBlock> &content,
     std::string_view filename,
-    const verilog::VerilogPreprocess::Config &preprocess_config) {
+    const verilog::VerilogPreprocess::Config &preprocess_config,
+    VerilogAnalyzer::FileOpener file_opener = nullptr) {
   switch (absl::GetFlag(FLAGS_lang)) {
     case LanguageMode::kAutoDetect:
       return VerilogAnalyzer::AnalyzeAutomaticMode(content, filename,
                                                    preprocess_config);
+      // TODO: Pass file_opener through AnalyzeAutomaticMode
     case LanguageMode::kSystemVerilog: {
       auto analyzer = std::make_unique<VerilogAnalyzer>(content, filename,
-                                                        preprocess_config);
+                                                        preprocess_config,
+                                                        file_opener);
       const auto status = ABSL_DIE_IF_NULL(analyzer)->Analyze();
       if (!status.ok()) std::cerr << status.message() << std::endl;
       return analyzer;
@@ -138,6 +150,7 @@ static std::unique_ptr<VerilogAnalyzer> ParseWithLanguageMode(
     case LanguageMode::kVerilogLibraryMap:
       return verilog::AnalyzeVerilogLibraryMap(content->AsStringView(),
                                                filename, preprocess_config);
+      // TODO: AnalyzeVerilogLibraryMap doesn't support file_opener yet
   }
   return nullptr;
 }
@@ -176,10 +189,11 @@ static int AnalyzeOneFile(
     const std::shared_ptr<verible::MemBlock> &content,
     std::string_view filename,
     const verilog::VerilogPreprocess::Config &preprocess_config,
+    VerilogAnalyzer::FileOpener file_opener,
     json *json_out) {
   int exit_status = 0;
   const auto analyzer =
-      ParseWithLanguageMode(content, filename, preprocess_config);
+      ParseWithLanguageMode(content, filename, preprocess_config, file_opener);
   const auto lex_status = ABSL_DIE_IF_NULL(analyzer)->LexStatus();
   const auto parse_status = analyzer->ParseStatus();
 
@@ -291,6 +305,17 @@ int main(int argc, char **argv) {
 
   json json_out;
 
+  // Create include file resolver if paths provided
+  const auto include_paths = absl::GetFlag(FLAGS_include_paths);
+  const bool enable_preprocessing = absl::GetFlag(FLAGS_preprocess);
+  
+  std::unique_ptr<verilog::IncludeFileResolver> include_resolver;
+  if (!include_paths.empty() && enable_preprocessing) {
+    include_resolver = std::make_unique<verilog::IncludeFileResolver>(include_paths);
+    std::cerr << "Include file support enabled with " << include_paths.size() 
+              << " search path(s)" << std::endl;
+  }
+
   int exit_status = 0;
   // All positional arguments are file names.  Exclude program name.
   for (std::string_view filename :
@@ -303,14 +328,26 @@ int main(int argc, char **argv) {
     }
     std::shared_ptr<verible::MemBlock> content = std::move(*content_status);
 
-    // TODO(hzeller): is there ever a situation in which we do not want
-    // to use the preprocessor ?
+    // Configure preprocessing based on flags
+    // NOTE: expand_macros only works properly with include_files support
     const verilog::VerilogPreprocess::Config preprocess_config{
         .filter_branches = true,
+        .include_files = enable_preprocessing && include_resolver != nullptr,
+        .expand_macros = enable_preprocessing && include_resolver != nullptr,
     };
+    
+    // Create file_opener lambda if include resolver available
+    VerilogAnalyzer::FileOpener file_opener = nullptr;
+    if (include_resolver) {
+      file_opener = [&include_resolver, &filename](std::string_view include_file) 
+          -> absl::StatusOr<std::string_view> {
+        return include_resolver->ResolveInclude(include_file, filename);
+      };
+    }
+    
     json file_json;
     int file_status =
-        AnalyzeOneFile(content, filename, preprocess_config, &file_json);
+        AnalyzeOneFile(content, filename, preprocess_config, file_opener, &file_json);
     exit_status = std::max(exit_status, file_status);
     if (absl::GetFlag(FLAGS_export_json)) {
       json_out[std::string{filename.begin(), filename.end()}] =
