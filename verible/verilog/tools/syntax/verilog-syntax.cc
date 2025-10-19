@@ -23,7 +23,7 @@
 #include <iomanip>
 #include <iostream>
 #include <memory>
-#include <sstream>  // IWYU pragma: keep  // for ostringstream
+#include <sstream>  // IWYU pragma: keep  // for ostringstream, istringstream
 #include <string>   // for string, allocator, etc
 #include <string_view>
 #include <utility>
@@ -152,6 +152,12 @@ ABSL_FLAG(bool, auto_wrap_includes, false,
           "that are meant to be included within a larger module.\n"
           "When enabled, wraps the file content in a generated module with common signals.");
 
+ABSL_FLAG(std::string, macro_library, "",
+          "Path to a macro library file with predefined macros.\n"
+          "Format: MACRO_NAME(args)=definition (one per line, # for comments).\n"
+          "Useful for loading common DV/UVM macros without full file includes.\n"
+          "Example: --macro_library=opentitan_dv.macros");
+
 using nlohmann::json;
 using verible::ConcreteSyntaxTree;
 using verible::ParserVerifier;
@@ -174,6 +180,63 @@ static std::shared_ptr<verible::MemBlock> WrapContentInModule(
   wrapped += "endmodule\n";
   
   return std::make_shared<verible::StringMemBlock>(std::move(wrapped));
+}
+
+// Helper function to load macro library file and convert to `define statements
+static absl::StatusOr<std::string> LoadMacroLibrary(std::string_view library_path) {
+  // Read the library file
+  auto content_or = verible::file::GetContentAsString(std::string(library_path));
+  if (!content_or.ok()) {
+    return absl::NotFoundError(
+        absl::StrCat("Macro library file not found: ", library_path));
+  }
+  
+  std::string content = *content_or;
+  std::string defines;
+  
+  // Parse line by line
+  std::istringstream stream(content);
+  std::string line;
+  int line_number = 0;
+  
+  while (std::getline(stream, line)) {
+    line_number++;
+    
+    // Trim whitespace
+    size_t start = line.find_first_not_of(" \t");
+    if (start == std::string::npos) continue;  // Empty line
+    line = line.substr(start);
+    
+    // Skip comments
+    if (line.empty() || line[0] == '#') continue;
+    
+    // Parse format: MACRO_NAME(args)=definition or MACRO_NAME=definition
+    size_t eq_pos = line.find('=');
+    if (eq_pos == std::string::npos) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Invalid macro definition at line ", line_number, 
+                       ": missing '=' in: ", line));
+    }
+    
+    std::string macro_call = line.substr(0, eq_pos);
+    std::string definition = line.substr(eq_pos + 1);
+    
+    // Trim spaces around macro call and definition
+    size_t end = macro_call.find_last_not_of(" \t");
+    if (end != std::string::npos) {
+      macro_call = macro_call.substr(0, end + 1);
+    }
+    
+    start = definition.find_first_not_of(" \t");
+    if (start != std::string::npos) {
+      definition = definition.substr(start);
+    }
+    
+    // Convert to SystemVerilog `define
+    defines += "`define " + macro_call + " " + definition + "\n";
+  }
+  
+  return defines;
 }
 
 static std::unique_ptr<VerilogAnalyzer> ParseWithLanguageMode(
@@ -445,6 +508,23 @@ int main(int argc, char **argv) {
     const bool auto_wrap = absl::GetFlag(FLAGS_auto_wrap_includes);
     if (auto_wrap) {
       content = WrapContentInModule(content);
+    }
+
+    // Feature 4 (v5.4.1): Prepend macro library definitions if flag is set
+    const std::string macro_library_path = absl::GetFlag(FLAGS_macro_library);
+    if (!macro_library_path.empty()) {
+      auto defines_or = LoadMacroLibrary(macro_library_path);
+      if (!defines_or.ok()) {
+        std::cerr << "Error loading macro library: " << defines_or.status().message() << std::endl;
+        exit_status = 1;
+        continue;
+      }
+      
+      // Prepend macro definitions to content
+      std::string combined_content = *defines_or;
+      combined_content += "\n";
+      combined_content += content->AsStringView();
+      content = std::make_shared<verible::StringMemBlock>(std::move(combined_content));
     }
 
     // Configure preprocessing based on flags

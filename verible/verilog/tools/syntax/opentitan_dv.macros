@@ -1,0 +1,34 @@
+# OpenTitan DV Macro Library
+# Format: MACRO_NAME(args)=definition
+# Lines starting with # are comments
+
+# DV utility macros (from dv_macros.svh)
+DV_CHECK(expr_)=if (!(expr_)) begin $error("DV_CHECK failed: %s", `"expr_`"); end
+DV_CHECK_FATAL(expr_,msg_="")=if (!(expr_)) begin $fatal(1, msg_); end
+DV_CHECK_EQ(act_,exp_,msg_="")=if ((act_) !== (exp_)) begin $error("DV_CHECK_EQ failed: %s", msg_); end
+DV_CHECK_NE(act_,exp_,msg_="")=if ((act_) === (exp_)) begin $error("DV_CHECK_NE failed: %s", msg_); end
+DV_CHECK_LT(act_,exp_,msg_="")=if ((act_) >= (exp_)) begin $error("DV_CHECK_LT failed: %s", msg_); end
+DV_CHECK_GT(act_,exp_,msg_="")=if ((act_) <= (exp_)) begin $error("DV_CHECK_GT failed: %s", msg_); end
+DV_CHECK_LE(act_,exp_,msg_="")=if ((act_) > (exp_)) begin $error("DV_CHECK_LE failed: %s", msg_); end
+DV_CHECK_GE(act_,exp_,msg_="")=if ((act_) < (exp_)) begin $error("DV_CHECK_GE failed: %s", msg_); end
+
+# Clock constraint macros
+DV_COMMON_CLK_CONSTRAINT(freq_)=freq_ inside {[1:200]}
+
+# UVM utility macros (simplified versions)
+uvm_info(id_,msg_,lvl_)=$display("[%s] %s", id_, msg_)
+uvm_warning(id_,msg_)=$warning("[%s] %s", id_, msg_)
+uvm_error(id_,msg_)=$error("[%s] %s", id_, msg_)
+uvm_fatal(id_,msg_)=$fatal(1, "[%s] %s", id_, msg_)
+gfn=get_full_name()
+
+# UVM object macros (simplified)
+uvm_object_utils(T)=/* uvm_object_utils */
+uvm_component_utils(T)=/* uvm_component_utils */
+uvm_field_int(ARG,FLAG)=/* uvm_field_int */
+uvm_field_object(ARG,FLAG)=/* uvm_field_object */
+
+# Common test macros
+TEST_INFO(msg_)=$display("[TEST] %s", msg_)
+TEST_ERROR(msg_)=$error("[TEST] %s", msg_)
+
