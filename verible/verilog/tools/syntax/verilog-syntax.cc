@@ -146,11 +146,35 @@ ABSL_FLAG(bool, package_context_disable_includes, false,
           "Use this if package includes cause parsing issues.\n"
           "Macros from the package file itself will still be extracted.");
 
+ABSL_FLAG(bool, auto_wrap_includes, false,
+          "Automatically wrap include snippets in a module context.\n"
+          "Useful for parsing standalone include files (e.g., tb__xbar_connect.sv)\n"
+          "that are meant to be included within a larger module.\n"
+          "When enabled, wraps the file content in a generated module with common signals.");
+
 using nlohmann::json;
 using verible::ConcreteSyntaxTree;
 using verible::ParserVerifier;
 using verible::TextStructureView;
 using verilog::VerilogAnalyzer;
+
+// Helper function to wrap content in a module for auto-wrap mode
+static std::shared_ptr<verible::MemBlock> WrapContentInModule(
+    const std::shared_ptr<verible::MemBlock> &original_content) {
+  std::string wrapped;
+  wrapped += "// Auto-generated wrapper for include snippet\n";
+  wrapped += "module __verible_auto_wrapper;\n";
+  wrapped += "  // Common signals for testbenches\n";
+  wrapped += "  wire clk, rst_n, clk_i, rst_ni;\n";
+  wrapped += "  wire clk_main, clk_peri, clk_dbg, clk_mbx;\n";
+  wrapped += "\n";
+  wrapped += "  // Original content\n";
+  wrapped += original_content->AsStringView();
+  wrapped += "\n";
+  wrapped += "endmodule\n";
+  
+  return std::make_shared<verible::StringMemBlock>(std::move(wrapped));
+}
 
 static std::unique_ptr<VerilogAnalyzer> ParseWithLanguageMode(
     const std::shared_ptr<verible::MemBlock> &content,
@@ -416,6 +440,12 @@ int main(int argc, char **argv) {
       continue;
     }
     std::shared_ptr<verible::MemBlock> content = std::move(*content_status);
+
+    // Feature 3 (v5.4.1): Auto-wrap include snippets if flag is set
+    const bool auto_wrap = absl::GetFlag(FLAGS_auto_wrap_includes);
+    if (auto_wrap) {
+      content = WrapContentInModule(content);
+    }
 
     // Configure preprocessing based on flags
     // expand_macros can work standalone or with include_files
