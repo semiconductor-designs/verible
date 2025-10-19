@@ -87,14 +87,10 @@ DV_FILES=(
     "${OPENTITAN_ROOT}/hw/dv/sv/dv_lib/dv_base_env_cfg.sv"
 )
 
-# Common flags for DV files
+# Common flags for DV files - now using macro library!
+MACRO_LIBRARY="./verible/verilog/tools/syntax/opentitan_dv.macros"
 COMMON_FLAGS=(
-    "--include_paths=${UVM_ROOT}"
-    "--include_paths=${OPENTITAN_ROOT}/hw/dv/sv"
-    "--pre_include=${UVM_ROOT}/uvm_macros.svh"
-    "--package_context=${OPENTITAN_ROOT}/hw/dv/sv/dv_utils/dv_utils_pkg.sv"
-    "--package_context=${OPENTITAN_ROOT}/hw/dv/sv/cip_lib/cip_base_pkg.sv"
-    "--package_context_disable_includes"
+    "--macro_library=${MACRO_LIBRARY}"
 )
 
 for file in "${DV_FILES[@]}"; do

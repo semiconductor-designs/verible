@@ -324,6 +324,23 @@ absl::Status VerilogPreprocess::HandleMacroIdentifier(
   // Note: since this function is called we know that config_.expand_macros is
   // true.
 
+  // Check recursion depth to prevent infinite loops (v5.4.1 bug fix)
+  if (macro_expansion_depth_ >= kMaxMacroExpansionDepth) {
+    const std::string error_msg = absl::StrCat(
+        "Macro expansion exceeded maximum recursion depth (",
+        kMaxMacroExpansionDepth, "). Possible infinite macro expansion loop.");
+    preprocess_data_.errors.emplace_back(**iter, error_msg);
+    return absl::ResourceExhaustedError(error_msg);
+  }
+  
+  // RAII guard to ensure depth counter is decremented on exit
+  struct DepthGuard {
+    int& depth;
+    explicit DepthGuard(int& d) : depth(d) { ++depth; }
+    ~DepthGuard() { --depth; }
+  };
+  DepthGuard guard(macro_expansion_depth_);
+
   // Finding the macro definition.
   const std::string_view sv = (*iter)->text();
   const std::string_view macro_name = sv.substr(1);

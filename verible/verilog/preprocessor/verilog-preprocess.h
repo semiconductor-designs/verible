@@ -151,6 +151,12 @@ class VerilogPreprocess {
   using StreamIteratorGenerator =
       std::function<TokenStreamView::const_iterator()>;
 
+  // Maximum macro expansion recursion depth to prevent infinite loops
+  static constexpr int kMaxMacroExpansionDepth = 100;
+  
+  // Current macro expansion recursion depth
+  int macro_expansion_depth_ = 0;
+
   // Extract macro name after `define, `ifdef, `elsif ... and returns
   // iterator of macro name or a failure status.
   // Updates error messages on failure.
