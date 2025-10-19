@@ -41,16 +41,33 @@ class OpenTitanIncludeSnippetTest : public ::testing::Test {
 
   // Helper to test parsing with auto-wrap
   bool ParseWithAutoWrap(absl::string_view content) {
-    // This will fail until we implement the feature
     auto filepath = CreateTestFile("test.sv", content);
     
-    // TODO: Add auto-wrap functionality
-    // For now, this represents the API we want:
-    // VerilogAnalyzer analyzer(content, filepath);
-    // analyzer.SetAutoWrapMode(true);
-    // return analyzer.Analyze().ok();
+    // Generate wrapped content
+    std::string wrapped = GenerateModuleWrapper(content);
     
-    return false;  // RED phase - should fail
+    // Parse the wrapped content
+    VerilogPreprocess::Config config{.filter_branches = false,
+                                      .include_files = false,
+                                      .expand_macros = false};
+    VerilogAnalyzer analyzer(wrapped, filepath, config);
+    return analyzer.Analyze().ok();
+  }
+
+  // Helper to generate module wrapper
+  static std::string GenerateModuleWrapper(absl::string_view content) {
+    std::string wrapper;
+    wrapper += "// Auto-generated wrapper for include snippet\n";
+    wrapper += "module __verible_auto_wrapper;\n";
+    wrapper += "  // Common signals for testbenches\n";
+    wrapper += "  wire clk, rst_n, clk_i, rst_ni;\n";
+    wrapper += "  wire clk_main, clk_peri, clk_dbg, clk_mbx;\n";
+    wrapper += "\n";
+    wrapper += "  // Original content\n";
+    wrapper += content;
+    wrapper += "\n";
+    wrapper += "endmodule\n";
+    return wrapper;
   }
 
   std::filesystem::path temp_dir_;

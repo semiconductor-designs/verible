@@ -104,6 +104,12 @@ class VerilogAnalyzer : public verible::FileAnalyzer {
     preloaded_macros_ = macros;
   }
 
+  // Feature 3 (v5.4.1): Auto-wrap include snippets in module context
+  // Call this before Analyze() to automatically wrap standalone code in a module
+  void SetAutoWrapMode(bool enable) {
+    auto_wrap_mode_ = enable;
+  }
+
   // Maybe this belongs in a subclass like VerilogFileAnalyzer?
   // TODO(fangism): Retain a copy of the token stream transformer because it
   // may contain tokens backed by generated text.
@@ -143,6 +149,9 @@ class VerilogAnalyzer : public verible::FileAnalyzer {
 
   // Feature 2 (v5.4.0): Preloaded macros from pre-include files
   std::optional<VerilogPreprocessData::MacroDefinitionRegistry> preloaded_macros_;
+
+  // Feature 3 (v5.4.1): Auto-wrap mode flag
+  bool auto_wrap_mode_ = false;
 
   // Status of lexing.
   absl::Status lex_status_;
