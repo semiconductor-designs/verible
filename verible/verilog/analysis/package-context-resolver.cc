@@ -56,11 +56,10 @@ absl::StatusOr<PackageContext> PackageContextResolver::ParsePackage(
   }
 
   // Create analyzer for the package
-  // Note: include_files temporarily disabled for v5.4.0
-  // Will be enabled in future version after resolving include directive handling
+  // Include processing enabled to capture macros from include files
   VerilogPreprocess::Config preprocess_config{
       .filter_branches = false,
-      .include_files = false,  // TODO(v5.5.0): Re-enable after fixing include resolution
+      .include_files = true,  // Enable to process `include directives in packages
       .expand_macros = false
   };
 
@@ -81,9 +80,23 @@ absl::StatusOr<PackageContext> PackageContextResolver::ParsePackage(
 
   auto status = analyzer->Analyze();
   if (!status.ok()) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Failed to parse package file: ", package_file,
-                     " - ", status.message()));
+    // Check if it's a preprocessor error (fatal) or syntax error (can continue)
+    const auto& preprocess_data = analyzer->PreprocessorData();
+    bool has_preprocessor_errors = !preprocess_data.errors.empty();
+    
+    if (has_preprocessor_errors) {
+      // Preprocessor errors are fatal - can't extract macros
+      for (const auto& error : preprocess_data.errors) {
+        std::cerr << "Preprocessor error: " << error.error_message << std::endl;
+      }
+      return absl::InvalidArgumentError(
+          absl::StrCat("Failed to parse package file: ", package_file,
+                       " - Preprocessor error"));
+    }
+    
+    // Syntax errors: Package parsed enough to extract macros, continue
+    std::cerr << "Warning: Package " << package_file 
+              << " has syntax errors, but macros will be extracted" << std::endl;
   }
 
   // Extract package name
