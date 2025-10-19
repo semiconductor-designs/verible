@@ -43,9 +43,12 @@ usage: verible-verilog-syntax [options] <file(s)...>
 ### Preprocessing Support
 
 The tool supports SystemVerilog preprocessing including:
-- **Macro expansion**: `` `define`` macros are expanded
+- **Macro preservation** (default): `` `define`` macros are kept as-is for knowledge graph building
+- **Macro expansion** (optional): Use `--expand_macros=true` to expand macro bodies
 - **Include files**: `` `include`` directives are resolved
 - **Conditional compilation**: `` `ifdef``, `` `ifndef``, `` `else``, `` `endif``
+
+**IMPORTANT for Knowledge Graph Users**: By default (v5.3.0+), macros are **NOT expanded**. This preserves macro calls in the syntax tree, allowing you to build accurate knowledge graphs that capture macro usage. Use `--expand_macros=true` if you need to see expanded macro bodies.
 
 **Usage with include files**:
 ```bash
@@ -61,7 +64,7 @@ verible-verilog-syntax \
   file.sv
 ```
 
-**Example**:
+**Example - Default behavior (macros preserved)**:
 ```systemverilog
 // macros.svh
 `define CLK_CONSTRAINT(freq) freq inside {[24:100]};
@@ -72,9 +75,19 @@ verible-verilog-syntax \
 class my_config;
   rand int clk_freq;
   constraint clk_c {
-    `CLK_CONSTRAINT(clk_freq)  // ← Macro expanded from include
+    `CLK_CONSTRAINT(clk_freq)  // ← Macro call preserved in AST
   }
 endclass
+```
+
+```bash
+# Default: macros NOT expanded (good for knowledge graphs)
+verible-verilog-syntax --include_paths=. main.sv
+# AST will show MacroCallId token: `CLK_CONSTRAINT(clk_freq)
+
+# With expansion: macros ARE expanded (good for seeing final code)
+verible-verilog-syntax --include_paths=. --expand_macros=true main.sv
+# AST will show expanded: freq inside {[24:100]}
 ```
 
 **Known Limitations**:

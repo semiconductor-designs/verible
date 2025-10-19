@@ -120,8 +120,13 @@ ABSL_FLAG(std::vector<std::string>, include_paths, {},
           "Example: --include_paths=/path/to/includes,/other/path");
 
 ABSL_FLAG(bool, preprocess, true,
-          "Enable full preprocessing (macro expansion + include files).\n"
+          "Enable preprocessing (include file resolution).\n"
           "Set to false for syntax-only checking without preprocessing.");
+
+ABSL_FLAG(bool, expand_macros, false,
+          "Enable macro expansion during preprocessing.\n"
+          "Default is false to preserve macros for knowledge graph building.\n"
+          "Set to true if you want to see expanded macro bodies.");
 
 using nlohmann::json;
 using verible::ConcreteSyntaxTree;
@@ -331,10 +336,11 @@ int main(int argc, char **argv) {
     // Configure preprocessing based on flags
     // expand_macros can work standalone or with include_files
     // include_files requires include_resolver (for resolving paths)
+    const bool should_expand_macros = absl::GetFlag(FLAGS_expand_macros);
     const verilog::VerilogPreprocess::Config preprocess_config{
         .filter_branches = true,
         .include_files = enable_preprocessing && include_resolver != nullptr,
-        .expand_macros = enable_preprocessing,  // Enable macro expansion when preprocessing
+        .expand_macros = should_expand_macros,  // Controlled by --expand_macros flag (default: false)
     };
     
     // Create file_opener lambda if include resolver available

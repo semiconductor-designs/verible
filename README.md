@@ -68,13 +68,21 @@ Features:
 - ✅ Deep nesting macro propagation (3+ include levels)
 - ✅ UVM library integrated (v2020.3.1 - IEEE 1800.2-2017)
 - ✅ 99.3% OpenTitan testbench success rate (2,094/2,108 files)
+- ✅ Macro preservation for knowledge graphs (default: macros NOT expanded)
 - ✅ Zero performance overhead
 
 Quick Start:
 ```bash
 # Parse UVM testbench with included UVM library
+# Default: macros preserved (good for knowledge graphs)
 verible-verilog-syntax \
   --include_paths=third_party/uvm/src \
+  my_uvm_testbench.sv
+
+# Optional: expand macros to see final code
+verible-verilog-syntax \
+  --include_paths=third_party/uvm/src \
+  --expand_macros=true \
   my_uvm_testbench.sv
 ```
 
