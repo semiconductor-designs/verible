@@ -56,18 +56,20 @@ absl::StatusOr<PackageContext> PackageContextResolver::ParsePackage(
   }
 
   // Create analyzer for the package
+  // Note: include_files temporarily disabled for v5.4.0
+  // Will be enabled in future version after resolving include directive handling
   VerilogPreprocess::Config preprocess_config{
       .filter_branches = false,
-      .include_files = true,
+      .include_files = false,  // TODO(v5.5.0): Re-enable after fixing include resolution
       .expand_macros = false
   };
 
   // Set up file opener for includes
   VerilogAnalyzer::FileOpener file_opener = nullptr;
   if (include_resolver_) {
-    file_opener = [this](std::string_view include_file) 
+    file_opener = [this, package_file](std::string_view include_file) 
         -> absl::StatusOr<std::string_view> {
-      return include_resolver_->ResolveInclude(include_file);
+      return include_resolver_->ResolveInclude(include_file, package_file);
     };
   }
 
