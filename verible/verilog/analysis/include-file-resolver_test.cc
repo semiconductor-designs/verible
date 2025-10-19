@@ -221,6 +221,158 @@ TEST_F(IncludeFileResolverTest, AbsolutePath) {
   EXPECT_TRUE(result->find("ABS_TEST") != std::string_view::npos);
 }
 
+// ============================================================================
+// Feature 2: Pre-Include Support Tests (TDD Red Phase)
+// ============================================================================
+
+TEST_F(IncludeFileResolverTest, PreloadSingleInclude) {
+  // Create a file with macro definition
+  std::filesystem::path macro_file = test_dir_ / "preload_macro.svh";
+  std::ofstream out(macro_file);
+  out << "`define PRELOADED_MACRO 123\n";
+  out.close();
+
+  std::vector<std::string> search_paths = {test_dir_.string()};
+  IncludeFileResolver resolver(search_paths);
+
+  // Pre-load the include file
+  std::vector<std::string> pre_includes = {"preload_macro.svh"};
+  auto status = resolver.PreloadIncludes(pre_includes);
+  
+  EXPECT_TRUE(status.ok()) << status.message();
+  
+  // Verify macro is available
+  auto macros = resolver.GetPreloadedMacros();
+  EXPECT_TRUE(macros.find("PRELOADED_MACRO") != macros.end());
+}
+
+TEST_F(IncludeFileResolverTest, PreloadMultipleIncludesInOrder) {
+  // Create first macro file
+  std::filesystem::path macro1 = test_dir_ / "macro1.svh";
+  std::ofstream out1(macro1);
+  out1 << "`define FIRST_MACRO 1\n";
+  out1.close();
+
+  // Create second macro file
+  std::filesystem::path macro2 = test_dir_ / "macro2.svh";
+  std::ofstream out2(macro2);
+  out2 << "`define SECOND_MACRO 2\n";
+  out2.close();
+
+  std::vector<std::string> search_paths = {test_dir_.string()};
+  IncludeFileResolver resolver(search_paths);
+
+  // Pre-load both files in order
+  std::vector<std::string> pre_includes = {"macro1.svh", "macro2.svh"};
+  auto status = resolver.PreloadIncludes(pre_includes);
+  
+  EXPECT_TRUE(status.ok()) << status.message();
+  
+  // Verify both macros are available
+  auto macros = resolver.GetPreloadedMacros();
+  EXPECT_TRUE(macros.find("FIRST_MACRO") != macros.end());
+  EXPECT_TRUE(macros.find("SECOND_MACRO") != macros.end());
+}
+
+TEST_F(IncludeFileResolverTest, PreIncludeWithNestedIncludes) {
+  // Create nested include file
+  std::filesystem::path nested = test_dir_ / "nested.svh";
+  std::ofstream out_nested(nested);
+  out_nested << "`define NESTED_MACRO 999\n";
+  out_nested.close();
+
+  // Create parent include file that includes the nested one
+  std::filesystem::path parent = test_dir_ / "parent.svh";
+  std::ofstream out_parent(parent);
+  out_parent << "`include \"nested.svh\"\n";
+  out_parent << "`define PARENT_MACRO 111\n";
+  out_parent.close();
+
+  std::vector<std::string> search_paths = {test_dir_.string()};
+  IncludeFileResolver resolver(search_paths);
+
+  // Pre-load parent (should also process nested)
+  std::vector<std::string> pre_includes = {"parent.svh"};
+  auto status = resolver.PreloadIncludes(pre_includes);
+  
+  EXPECT_TRUE(status.ok()) << status.message();
+  
+  // Verify both parent and nested macros are available
+  auto macros = resolver.GetPreloadedMacros();
+  EXPECT_TRUE(macros.find("PARENT_MACRO") != macros.end());
+  EXPECT_TRUE(macros.find("NESTED_MACRO") != macros.end());
+}
+
+TEST_F(IncludeFileResolverTest, MacroFromPreIncludeAvailableInMainFile) {
+  // Create pre-include with macro
+  std::filesystem::path prelude = test_dir_ / "prelude.svh";
+  std::ofstream out_prelude(prelude);
+  out_prelude << "`define PRELUDE_VALUE 42\n";
+  out_prelude.close();
+
+  // Create main file that uses the macro
+  std::filesystem::path main_file = test_dir_ / "main.sv";
+  std::ofstream out_main(main_file);
+  out_main << "module test;\n";
+  out_main << "  int x = `PRELUDE_VALUE;\n";
+  out_main << "endmodule\n";
+  out_main.close();
+
+  std::vector<std::string> search_paths = {test_dir_.string()};
+  IncludeFileResolver resolver(search_paths);
+
+  // Pre-load prelude
+  std::vector<std::string> pre_includes = {"prelude.svh"};
+  auto status = resolver.PreloadIncludes(pre_includes);
+  
+  EXPECT_TRUE(status.ok()) << status.message();
+  
+  // Verify PRELUDE_VALUE macro is available
+  auto macros = resolver.GetPreloadedMacros();
+  EXPECT_TRUE(macros.find("PRELUDE_VALUE") != macros.end());
+}
+
+TEST_F(IncludeFileResolverTest, PreIncludeFileNotFound) {
+  std::vector<std::string> search_paths = {test_dir_.string()};
+  IncludeFileResolver resolver(search_paths);
+
+  // Try to pre-load non-existent file
+  std::vector<std::string> pre_includes = {"nonexistent.svh"};
+  auto status = resolver.PreloadIncludes(pre_includes);
+  
+  EXPECT_FALSE(status.ok());
+  EXPECT_TRUE(absl::IsNotFound(status));
+}
+
+TEST_F(IncludeFileResolverTest, PreIncludeWithCircularDependency) {
+  // Create file A that includes B
+  std::filesystem::path fileA = test_dir_ / "circular_a.svh";
+  std::ofstream outA(fileA);
+  outA << "`include \"circular_b.svh\"\n";
+  outA << "`define MACRO_A 1\n";
+  outA.close();
+
+  // Create file B that includes A (circular!)
+  std::filesystem::path fileB = test_dir_ / "circular_b.svh";
+  std::ofstream outB(fileB);
+  outB << "`include \"circular_a.svh\"\n";
+  outB << "`define MACRO_B 2\n";
+  outB.close();
+
+  std::vector<std::string> search_paths = {test_dir_.string()};
+  IncludeFileResolver resolver(search_paths);
+
+  // Try to pre-load circular include
+  std::vector<std::string> pre_includes = {"circular_a.svh"};
+  auto status = resolver.PreloadIncludes(pre_includes);
+  
+  // Should detect circular dependency and return error
+  EXPECT_FALSE(status.ok());
+  EXPECT_TRUE(absl::IsInvalidArgument(status) || absl::IsFailedPrecondition(status));
+  EXPECT_TRUE(status.message().find("circular") != std::string::npos || 
+              status.message().find("Circular") != std::string::npos);
+}
+
 }  // namespace
 }  // namespace verilog
 
