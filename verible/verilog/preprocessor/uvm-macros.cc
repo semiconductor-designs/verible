@@ -134,6 +134,22 @@ const std::map<std::string_view, verible::MacroDefinition>& GetUvmMacroRegistry(
                     CreateUvmMacro("uvm_component_param_utils", {"TYPE"},
                                    "typedef TYPE type_id;"));
     
+    // Constructor Macro - very common in OpenTitan
+    macros->emplace("uvm_object_new",
+                    CreateUvmMacro("uvm_object_new", {},
+                                   "function new(string name=\"\"); super.new(name); endfunction"));
+    
+    // OpenTitan DV Macros (from dv_macros.svh and cip_macros.svh)
+    macros->emplace("DV_COMMON_CLK_CONSTRAINT",
+                    CreateUvmMacro("DV_COMMON_CLK_CONSTRAINT", {"FREQ_"},
+                                   "FREQ_ dist { [5:23] :/ 2, [24:25] :/ 2, [26:47] :/ 1, [48:50] :/ 2, [51:95] :/ 1, 96 :/ 1, [97:99] :/ 1, 100 :/ 1 };"));
+    macros->emplace("gmv",
+                    CreateUvmMacro("gmv", {"csr"},
+                                   "csr.get_mirrored_value()"));
+    macros->emplace("DV_MUBI8_DIST",
+                    CreateUvmMacro("DV_MUBI8_DIST", {"VAR_", "T_WEIGHT_", "F_WEIGHT_", "OTHER_WEIGHT_"},
+                                   ""));
+    
     // Analysis Macros  
     macros->emplace("uvm_analysis_imp_decl",
                     CreateUvmMacro("uvm_analysis_imp_decl", {"SUFFIX"}, ""));

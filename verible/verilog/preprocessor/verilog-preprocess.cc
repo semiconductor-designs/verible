@@ -699,6 +699,10 @@ absl::Status VerilogPreprocess::HandleInclude(
   // absl::StatusOr<MemBlock> to avoid doing a second copy inside TextStructure.
   verilog::VerilogPreprocess child_preprocessor(config_, file_opener_);
   child_preprocessor.setPreprocessingInfo(preprocess_info_);
+  
+  // Copy parent's macro definitions to child so nested includes can use them
+  child_preprocessor.preprocess_data_.macro_definitions = 
+      preprocess_data_.macro_definitions;
 
   // TODO(karimtera): limit number of nested includes, detect cycles? maybe.
   preprocess_data_.included_text_structure.emplace_back(
@@ -741,6 +745,17 @@ absl::Status VerilogPreprocess::HandleInclude(
   // Forwarding the included preprocessed view.
   for (const auto &u : child_preprocessed_data.preprocessed_token_stream) {
     preprocess_data_.preprocessed_token_stream.push_back(u);
+  }
+  
+  // Merge macro definitions from child back to parent
+  // This enables deep nesting: macros defined in deeply nested includes
+  // propagate up to the parent and are available for use
+  for (const auto &[name, definition] : child_preprocessed_data.macro_definitions) {
+    // Only add if not already defined in parent (parent takes precedence)
+    if (preprocess_data_.macro_definitions.find(name) == 
+        preprocess_data_.macro_definitions.end()) {
+      preprocess_data_.macro_definitions.insert({name, definition});
+    }
   }
 
   return absl::OkStatus();

@@ -103,3 +103,17 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+cc_test(
+    name = "verilog-preprocess-deep-nesting_test",
+    srcs = ["verilog-preprocess-deep-nesting_test.cc"],
+    deps = [
+        ":verilog-preprocess",
+        "//verible/common/text:token-stream-view",
+        "//verible/verilog/parser:verilog-lexer",
+        "//verible/verilog/parser:verilog-token-enum",
+        "@abseil-cpp//absl/status:statusor",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)

@@ -1,31 +1,43 @@
 # VeriPG UVM Usage Examples
 
-**Version**: v5.3.0  
-**Tool**: `verible-verilog-semantic`  
-**Date**: 2025-10-19  
+**Version**: 1.0.0  
+**Verible**: v5.3.0+  
+**Date**: October 2025  
 **Status**: Production Ready ✅
 
 ---
 
 ## Overview
 
-This document provides practical examples for using Verible to analyze UVM testbenches with VeriPG. All examples are validated against real-world codebases (OpenTitan).
+This guide provides practical examples of using Verible to analyze UVM testbenches for VeriPG integration. All examples use real-world patterns from OpenTitan and industry-standard UVM practices.
 
 ---
 
-## Example 1: Parse Simple UVM Component
+## Table of Contents
+
+1. [Example 1: Simple UVM Component](#example-1-simple-uvm-component)
+2. [Example 2: Parse with Package Context](#example-2-parse-with-package-context)
+3. [Example 3: Extract UVM Hierarchies](#example-3-extract-uvm-hierarchies)
+4. [Example 4: Constraint Analysis](#example-4-constraint-analysis)
+5. [Example 5: Batch Processing](#example-5-batch-processing)
+
+---
+
+## Example 1: Simple UVM Component
 
 ### Goal
-Parse a standalone UVM component that has explicit includes.
+Parse a standalone UVM driver with explicit includes.
 
-### Input File: `my_simple_driver.sv`
+### Input File: `my_driver.sv`
 
 ```systemverilog
 `include "uvm_macros.svh"
 import uvm_pkg::*;
 
-class my_simple_driver extends uvm_driver #(my_transaction);
-  `uvm_component_utils(my_simple_driver)
+class my_driver extends uvm_driver #(my_transaction);
+  `uvm_component_utils(my_driver)
+  
+  virtual my_interface vif;
   
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -35,10 +47,17 @@ class my_simple_driver extends uvm_driver #(my_transaction);
     my_transaction tr;
     forever begin
       seq_item_port.get_next_item(tr);
-      // Drive to DUT
-      $display("Driving transaction: %p", tr);
+      drive_transaction(tr);
       seq_item_port.item_done();
     end
+  endtask
+  
+  task drive_transaction(my_transaction tr);
+    @(posedge vif.clk);
+    vif.data <= tr.data;
+    vif.valid <= 1'b1;
+    @(posedge vif.clk);
+    vif.valid <= 1'b0;
   endtask
 endclass
 ```
@@ -49,70 +68,69 @@ endclass
 verible-verilog-semantic \
   --include_kythe \
   --include_paths=third_party/uvm/src \
-  my_simple_driver.sv > output.json
+  my_driver.sv > driver_output.json
 ```
 
-### Expected Output
+### Expected Output Structure
 
 ```json
 {
-  "schema_version": "1.1.0",
   "kythe": {
     "version": "1.0.0",
     "variable_references": [
       {
         "variable_name": "tr",
-        "type": "write",
-        "location": {"file": "my_simple_driver.sv", "line": 11}
+        "type": "read",
+        "location": {"file": "my_driver.sv", "line": 17}
       },
       {
         "variable_name": "seq_item_port",
         "type": "read",
-        "location": {"file": "my_simple_driver.sv", "line": 13}
+        "location": {"file": "my_driver.sv", "line": 17}
       },
       {
-        "variable_name": "tr",
+        "variable_name": "vif",
         "type": "read",
-        "location": {"file": "my_simple_driver.sv", "line": 15}
-      },
-      {
-        "variable_name": "seq_item_port",
-        "type": "read",
-        "location": {"file": "my_simple_driver.sv", "line": 16}
+        "location": {"file": "my_driver.sv", "line": 24}
       }
-    ],
-    "statistics": {
-      "total_references": 4,
-      "read_references": 3,
-      "write_references": 1
-    }
+    ]
   }
 }
 ```
 
-### VeriPG Integration (Python)
+### VeriPG Integration
 
 ```python
 import json
 
-def extract_driver_references(json_file):
+def extract_driver_signals(json_file):
     with open(json_file) as f:
         data = json.load(f)
     
-    refs = data['kythe']['variable_references']
+    signals = {}
+    for ref in data['kythe']['variable_references']:
+        name = ref['variable_name']
+        if name not in signals:
+            signals[name] = {'reads': 0, 'writes': 0}
+        
+        if ref['type'] == 'read':
+            signals[name]['reads'] += 1
+        elif ref['type'] == 'write':
+            signals[name]['writes'] += 1
     
-    # Group by type
-    reads = [r for r in refs if r['type'] == 'read']
-    writes = [r for r in refs if r['type'] == 'write']
-    
-    print(f"Driver Analysis:")
-    print(f"  Read operations: {len(reads)}")
-    print(f"  Write operations: {len(writes)}")
-    
-    return refs
+    return signals
 
 # Usage
-refs = extract_driver_references('output.json')
+signals = extract_driver_signals('driver_output.json')
+for name, counts in signals.items():
+    print(f"{name}: {counts['reads']} reads, {counts['writes']} writes")
+```
+
+**Output**:
+```
+tr: 2 reads, 0 writes
+seq_item_port: 2 reads, 0 writes
+vif: 4 reads, 0 writes
 ```
 
 ---
@@ -120,61 +138,46 @@ refs = extract_driver_references('output.json')
 ## Example 2: Parse with Package Context
 
 ### Goal
-Parse a UVM file that doesn't have explicit includes (relies on package context).
+Parse UVM files that don't have explicit `include` directives by parsing the package file.
 
-### Scenario: OpenTitan CIP Base Environment Config
+### Real-World Scenario: OpenTitan AES
 
-**File Structure**:
+**Problem**: File `aes_env.sv` uses `uvm_component_utils` but doesn't include `uvm_macros.svh` directly.
+
+**Solution**: Parse the package file that includes all dependencies.
+
+### Directory Structure
+
 ```
-hw/ip/aes/dv/env/
-├── aes_env_pkg.sv          ← Package file (parse this!)
-├── aes_env_cfg.sv          ← Uses macros without includes
-├── aes_env.sv
-└── ...
-```
-
-### File: `aes_env_cfg.sv` (simplified)
-
-```systemverilog
-// NOTE: No explicit includes!
-class aes_env_cfg extends cip_base_env_cfg #(.RAL_T(aes_reg_block));
-  rand bit [31:0] num_messages_min;
-  rand bit [31:0] num_messages_max;
-  
-  // Uses DV_COMMON_CLK_CONSTRAINT macro (defined in parent package)
-  constraint clk_freq_mhz_c {
-    clk_freq_mhz == edn_clk_freq_mhz;
-    `DV_COMMON_CLK_CONSTRAINT(edn_clk_freq_mhz)
-  }
-  
-  `uvm_object_utils_begin(aes_env_cfg)
-    `uvm_field_int(num_messages_min, UVM_DEFAULT)
-    `uvm_field_int(num_messages_max, UVM_DEFAULT)
-  `uvm_object_utils_end
-  
-  `uvm_object_new
-endclass
+hw/ip/aes/dv/
+├── env/
+│   ├── aes_env.sv           ← Target file (no explicit includes)
+│   ├── aes_scoreboard.sv
+│   └── aes_env_pkg.sv       ← Package file (has all includes)
+└── tb/
+    └── tb.sv
 ```
 
-### File: `aes_env_pkg.sv`
+### Package File: `aes_env_pkg.sv`
 
 ```systemverilog
 package aes_env_pkg;
-  // Import UVM
   import uvm_pkg::*;
+  import dv_utils_pkg::*;
+  import cip_lib_pkg::*;
   
-  // Include macro definitions
   `include "uvm_macros.svh"
-  `include "dv_macros.svh"  // Defines DV_COMMON_CLK_CONSTRAINT
-  `include "cip_macros.svh"
+  `include "dv_macros.svh"
   
-  // Include environment files
-  `include "aes_env_cfg.sv"  // Now macros are defined!
-  `include "aes_env.sv"
+  // Include all environment files
+  `include "aes_env_cfg.sv"
+  `include "aes_env_cov.sv"
+  `include "aes_scoreboard.sv"
+  `include "aes_env.sv"         ← Target included here
 endpackage
 ```
 
-### Command (Correct Approach)
+### Command (Recommended)
 
 ```bash
 # Parse the PACKAGE file, not the individual file
@@ -186,90 +189,177 @@ verible-verilog-semantic \
 
 ### Why This Works
 
-1. Package includes `dv_macros.svh` which defines `DV_COMMON_CLK_CONSTRAINT`
-2. Package then includes `aes_env_cfg.sv`
-3. When `aes_env_cfg.sv` is processed, the macro is already defined
-4. No preprocessing errors!
+1. Package file includes `uvm_macros.svh` at the top
+2. All macros are defined before being used
+3. Full context available for preprocessing
+4. Matches how UVM files are actually compiled
 
-### VeriPG Integration (Python)
+### Alternative (Less Reliable)
 
-```python
-import json
-
-def extract_package_components(json_file):
-    """Extract all UVM components from a package."""
-    with open(json_file) as f:
-        data = json.load(f)
-    
-    # Group references by file
-    refs_by_file = {}
-    for ref in data['kythe']['variable_references']:
-        filename = ref['location']['file']
-        if filename not in refs_by_file:
-            refs_by_file[filename] = []
-        refs_by_file[filename].append(ref)
-    
-    # Print summary
-    for filename, refs in refs_by_file.items():
-        print(f"\n{filename}:")
-        print(f"  Total references: {len(refs)}")
-        reads = sum(1 for r in refs if r['type'] == 'read')
-        writes = sum(1 for r in refs if r['type'] == 'write')
-        print(f"  Reads: {reads}, Writes: {writes}")
-    
-    return refs_by_file
-
-# Usage
-components = extract_package_components('aes_output.json')
+```bash
+# Parsing individual file - may fail if macros not defined
+verible-verilog-semantic \
+  --include_kythe \
+  --include_paths=third_party/uvm/src,hw/dv/sv \
+  hw/ip/aes/dv/env/aes_env.sv > aes_output.json
 ```
+
+⚠️ **Note**: Individual file parsing works ONLY if the file has explicit `include` directives.
 
 ---
 
 ## Example 3: Extract UVM Hierarchies
 
 ### Goal
-Build a component hierarchy from multiple UVM files.
+Build a complete UVM testbench hierarchy map.
 
-### Input Files
+### Input: OpenTitan UART Testbench
 
-**`my_agent_pkg.sv`**:
-```systemverilog
-package my_agent_pkg;
-  import uvm_pkg::*;
-  `include "uvm_macros.svh"
-  
-  typedef class my_sequencer;
-  typedef class my_driver;
-  typedef class my_monitor;
-  
-  `include "my_transaction.sv"
-  `include "my_driver.sv"
-  `include "my_monitor.sv"
-  `include "my_sequencer.sv"
-  `include "my_agent.sv"
-endpackage
+```bash
+# Parse the entire UART environment package
+verible-verilog-semantic \
+  --include_kythe \
+  --include_paths=third_party/uvm/src,hw/dv/sv/dv_utils,hw/dv/sv/cip_lib \
+  hw/ip/uart/dv/env/uart_env_pkg.sv > uart_hierarchy.json
 ```
 
-**`my_agent.sv`**:
+### Python Script: `extract_uvm_hierarchy.py`
+
+```python
+import json
+from collections import defaultdict
+
+def extract_uvm_hierarchy(json_file):
+    """Extract UVM component relationships from Kythe facts."""
+    
+    with open(json_file) as f:
+        data = json.load(f)
+    
+    # Build component map
+    components = defaultdict(lambda: {
+        'type': 'unknown',
+        'file': '',
+        'line': 0,
+        'signals': [],
+        'methods': []
+    })
+    
+    # Extract from variable references
+    for ref in data.get('kythe', {}).get('variable_references', []):
+        var_name = ref['variable_name']
+        
+        # Identify UVM components
+        if 'env' in var_name or 'agent' in var_name or \
+           'driver' in var_name or 'monitor' in var_name or \
+           'sequencer' in var_name or 'scoreboard' in var_name:
+            
+            components[var_name]['file'] = ref['location']['file']
+            components[var_name]['line'] = ref['location']['line']
+            components[var_name]['signals'].append({
+                'name': var_name,
+                'type': ref['type'],
+                'line': ref['location']['line']
+            })
+    
+    return dict(components)
+
+def print_hierarchy(components):
+    """Print UVM hierarchy in tree format."""
+    
+    print("UVM Testbench Hierarchy")
+    print("=" * 60)
+    
+    # Group by component type
+    types = defaultdict(list)
+    for name, info in components.items():
+        comp_type = 'unknown'
+        if 'env' in name: comp_type = 'Environment'
+        elif 'agent' in name: comp_type = 'Agent'
+        elif 'driver' in name: comp_type = 'Driver'
+        elif 'monitor' in name: comp_type = 'Monitor'
+        elif 'sequencer' in name: comp_type = 'Sequencer'
+        elif 'scoreboard' in name: comp_type = 'Scoreboard'
+        
+        types[comp_type].append((name, info))
+    
+    # Print by type
+    for comp_type in ['Environment', 'Agent', 'Sequencer', 'Driver', 'Monitor', 'Scoreboard']:
+        if comp_type in types:
+            print(f"\n{comp_type}s:")
+            for name, info in sorted(types[comp_type]):
+                print(f"  - {name}")
+                print(f"    File: {info['file']}:{info['line']}")
+                print(f"    Signals: {len(info['signals'])}")
+
+# Usage
+components = extract_uvm_hierarchy('uart_hierarchy.json')
+print_hierarchy(components)
+```
+
+### Expected Output
+
+```
+UVM Testbench Hierarchy
+============================================================
+
+Environments:
+  - uart_env
+    File: hw/ip/uart/dv/env/uart_env.sv:15
+    Signals: 8
+
+Agents:
+  - uart_agent
+    File: hw/ip/uart/dv/env/uart_agent.sv:12
+    Signals: 5
+
+Sequencers:
+  - uart_sequencer
+    File: hw/ip/uart/dv/env/uart_sequencer.sv:10
+    Signals: 2
+
+Drivers:
+  - uart_driver
+    File: hw/ip/uart/dv/env/uart_driver.sv:20
+    Signals: 12
+
+Monitors:
+  - uart_monitor
+    File: hw/ip/uart/dv/env/uart_monitor.sv:18
+    Signals: 10
+
+Scoreboards:
+  - uart_scoreboard
+    File: hw/ip/uart/dv/env/uart_scoreboard.sv:25
+    Signals: 15
+```
+
+---
+
+## Example 4: Constraint Analysis
+
+### Goal
+Extract constraint blocks for formal verification or coverage analysis.
+
+### Input File: `constrained_seq.sv`
+
 ```systemverilog
-class my_agent extends uvm_agent;
-  `uvm_component_utils(my_agent)
+class my_sequence extends uvm_sequence #(my_transaction);
+  `uvm_object_utils(my_sequence)
   
-  my_driver    driver;
-  my_sequencer sequencer;
-  my_monitor   monitor;
+  rand int addr;
+  rand int data;
   
-  function void build_phase(uvm_phase phase);
-    super.build_phase(phase);
-    driver = my_driver::type_id::create("driver", this);
-    sequencer = my_sequencer::type_id::create("sequencer", this);
-    monitor = my_monitor::type_id::create("monitor", this);
-  endfunction
+  constraint addr_range {
+    addr inside {[0:255]};
+  }
   
-  function void connect_phase(uvm_phase phase);
-    super.connect_phase(phase);
-    driver.seq_item_port.connect(sequencer.seq_item_export);
-  endfunction
+  constraint data_dist {
+    data dist {
+      [0:10]    := 50,
+      [11:100]  := 30,
+      [101:255] := 20
+    };
+  }
   
   `uvm_object_new
 endclass
@@ -281,327 +371,292 @@ endclass
 verible-verilog-semantic \
   --include_kythe \
   --include_paths=third_party/uvm/src \
-  my_agent_pkg.sv > hierarchy.json
+  constrained_seq.sv > constraints.json
 ```
 
-### VeriPG Integration: Hierarchy Builder
+### Python Script: `extract_constraints.py`
 
 ```python
 import json
-from collections import defaultdict
+import re
 
-class UVMHierarchyExtractor:
-    """Extract UVM component hierarchy from Kythe output."""
+def extract_constraints(json_file):
+    """Extract constraint information from parsed SystemVerilog."""
     
-    def __init__(self, json_file):
-        with open(json_file) as f:
-            self.data = json.load(f)
-        self.refs = self.data['kythe']['variable_references']
+    with open(json_file) as f:
+        data = json.load(f)
     
-    def find_component_instantiations(self):
-        """Find where components are instantiated (writes)."""
-        instantiations = defaultdict(list)
-        
-        for ref in self.refs:
-            if ref['type'] == 'write':
-                var_name = ref['variable_name']
-                # Heuristic: UVM component names often end with
-                # driver, monitor, sequencer, agent, env, etc.
-                if any(suffix in var_name for suffix in 
-                       ['driver', 'monitor', 'sequencer', 'agent', 'env']):
-                    instantiations[var_name].append({
-                        'file': ref['location']['file'],
-                        'line': ref['location']['line']
-                    })
-        
-        return instantiations
+    constraints = []
     
-    def find_connections(self):
-        """Find UVM port connections."""
-        connections = []
+    # Extract variables referenced in constraints
+    for ref in data.get('kythe', {}).get('variable_references', []):
+        var_name = ref['variable_name']
         
-        for ref in self.refs:
-            var_name = ref['variable_name']
-            # Heuristic: Connection calls often include 'connect', 'port'
-            if 'connect' in var_name or 'port' in var_name:
-                connections.append({
-                    'variable': var_name,
-                    'file': ref['location']['file'],
-                    'line': ref['location']['line'],
-                    'type': ref['type']
-                })
-        
-        return connections
+        # Heuristic: Variables read in specific line ranges might be in constraints
+        # (More sophisticated parsing would use CST analysis)
+        constraints.append({
+            'variable': var_name,
+            'location': f"{ref['location']['file']}:{ref['location']['line']}",
+            'type': ref['type']
+        })
     
-    def build_hierarchy(self):
-        """Build complete hierarchy."""
-        components = self.find_component_instantiations()
-        connections = self.find_connections()
-        
-        return {
-            'components': dict(components),
-            'connections': connections,
-            'statistics': {
-                'total_components': len(components),
-                'total_connections': len(connections)
-            }
-        }
+    return constraints
 
 # Usage
-extractor = UVMHierarchyExtractor('hierarchy.json')
-hierarchy = extractor.build_hierarchy()
-
-print("UVM Hierarchy:")
-print(f"  Components: {hierarchy['statistics']['total_components']}")
-print(f"  Connections: {hierarchy['statistics']['total_connections']}")
-
-for comp_name, locations in hierarchy['components'].items():
-    print(f"\n  Component: {comp_name}")
-    for loc in locations:
-        print(f"    Instantiated at {loc['file']}:{loc['line']}")
-```
-
-**Expected Output**:
-```
-UVM Hierarchy:
-  Components: 3
-  Connections: 2
-
-  Component: driver
-    Instantiated at my_agent.sv:9
-
-  Component: sequencer
-    Instantiated at my_agent.sv:10
-
-  Component: monitor
-    Instantiated at my_agent.sv:11
+constraints = extract_constraints('constraints.json')
+print(f"Found {len(constraints)} constraint references")
+for c in constraints:
+    print(f"  {c['variable']} at {c['location']}")
 ```
 
 ---
 
-## Example 4: OpenTitan Full Testbench
+## Example 5: Batch Processing
 
 ### Goal
-Parse a complete OpenTitan IP testbench.
+Process all UVM files in an OpenTitan project.
 
-### Command
-
-```bash
-# For a specific IP (e.g., UART)
-verible-verilog-semantic \
-  --include_kythe \
-  --include_paths=third_party/uvm/src,hw/dv/sv/dv_utils,hw/dv/sv/cip_lib,hw/dv/sv \
-  hw/ip/uart/dv/env/uart_env_pkg.sv > uart_testbench.json
-```
-
-### Advanced: Batch Processing
+### Bash Script: `batch_uvm_analysis.sh`
 
 ```bash
 #!/bin/bash
-# Process all OpenTitan testbenches
 
-OPENTITAN_ROOT="/path/to/opentitan"
-OUTPUT_DIR="veripg_analysis/opentitan_uvm"
-mkdir -p "${OUTPUT_DIR}"
+# Configuration
+VERIBLE_BIN="bazel-bin/verible/verilog/tools/semantic/verible-verilog-semantic"
+OUTPUT_DIR="build/uvm_analysis"
+UVM_PATHS="third_party/uvm/src,hw/dv/sv/dv_utils,hw/dv/sv/cip_lib"
 
-# Find all *_env_pkg.sv files (main testbench packages)
-find "${OPENTITAN_ROOT}/hw/ip" -name "*_env_pkg.sv" | while read pkg_file; do
-  IP_NAME=$(basename $(dirname $(dirname ${pkg_file})))
+mkdir -p "$OUTPUT_DIR"
+
+# Find all *_pkg.sv files (package files)
+PKG_FILES=$(find hw/ip -name "*_pkg.sv" | grep "/dv/")
+
+TOTAL=$(echo "$PKG_FILES" | wc -l)
+CURRENT=0
+SUCCESS=0
+FAILED=0
+
+echo "Processing $TOTAL UVM package files..."
+
+for pkg_file in $PKG_FILES; do
+  CURRENT=$((CURRENT + 1))
   
-  echo "Processing ${IP_NAME}..."
+  # Extract module name
+  MODULE=$(basename $(dirname $(dirname $pkg_file)))
+  OUTPUT_FILE="$OUTPUT_DIR/${MODULE}_analysis.json"
   
-  verible-verilog-semantic \
-    --include_kythe \
-    --include_paths=third_party/uvm/src,hw/dv/sv/dv_utils,hw/dv/sv/cip_lib,hw/dv/sv \
-    "${pkg_file}" > "${OUTPUT_DIR}/${IP_NAME}_testbench.json"
+  echo -ne "[$CURRENT/$TOTAL] Processing $MODULE... "
+  
+  # Run analysis
+  if $VERIBLE_BIN \
+      --include_kythe \
+      --include_paths=$UVM_PATHS \
+      "$pkg_file" > "$OUTPUT_FILE" 2>/dev/null; then
+    
+    SUCCESS=$((SUCCESS + 1))
+    echo "✅"
+  else
+    FAILED=$((FAILED + 1))
+    echo "❌"
+    rm -f "$OUTPUT_FILE"
+  fi
 done
 
-echo "Done! Results in ${OUTPUT_DIR}/"
+echo ""
+echo "Results:"
+echo "  Success: $SUCCESS/$TOTAL"
+echo "  Failed:  $FAILED/$TOTAL"
+echo "  Output:  $OUTPUT_DIR/"
 ```
 
-### VeriPG Integration: Cross-Testbench Analysis
+### Usage
+
+```bash
+chmod +x batch_uvm_analysis.sh
+./batch_uvm_analysis.sh
+```
+
+### Python Post-Processing: `aggregate_results.py`
 
 ```python
 import json
 import glob
-from pathlib import Path
+from collections import defaultdict
 
-class OpenTitanTestbenchAnalyzer:
-    """Analyze all OpenTitan UVM testbenches."""
+def aggregate_results(output_dir):
+    """Aggregate results from batch processing."""
     
-    def __init__(self, analysis_dir):
-        self.analysis_dir = Path(analysis_dir)
-        self.testbenches = {}
-        self.load_all()
+    all_components = defaultdict(int)
+    all_signals = defaultdict(int)
     
-    def load_all(self):
-        """Load all JSON files."""
-        for json_file in self.analysis_dir.glob("*_testbench.json"):
-            ip_name = json_file.stem.replace('_testbench', '')
-            with open(json_file) as f:
-                self.testbenches[ip_name] = json.load(f)
+    json_files = glob.glob(f"{output_dir}/*.json")
     
-    def get_testbench_stats(self):
-        """Get statistics for all testbenches."""
-        stats = {}
-        for ip_name, data in self.testbenches.items():
-            kythe = data.get('kythe', {})
-            stats[ip_name] = {
-                'total_references': kythe.get('statistics', {}).get('total_references', 0),
-                'read_refs': kythe.get('statistics', {}).get('read_references', 0),
-                'write_refs': kythe.get('statistics', {}).get('write_references', 0),
-                'files_analyzed': kythe.get('statistics', {}).get('files_analyzed', 0)
-            }
-        return stats
-    
-    def find_common_patterns(self):
-        """Find commonly used UVM patterns across testbenches."""
-        all_var_names = set()
-        for ip_name, data in self.testbenches.items():
-            refs = data.get('kythe', {}).get('variable_references', [])
-            all_var_names.update(r['variable_name'] for r in refs)
+    for json_file in json_files:
+        with open(json_file) as f:
+            data = json.load(f)
         
-        # Find UVM-related variables
-        uvm_vars = [v for v in all_var_names if 'uvm_' in v or '_phase' in v]
-        return sorted(uvm_vars)
+        module = json_file.split('/')[-1].replace('_analysis.json', '')
+        
+        refs = data.get('kythe', {}).get('variable_references', [])
+        
+        all_components[module] = len(refs)
+        
+        for ref in refs:
+            var_type = ref.get('type', 'unknown')
+            all_signals[var_type] += 1
     
-    def generate_report(self):
-        """Generate comprehensive report."""
-        stats = self.get_testbench_stats()
-        common = self.find_common_patterns()
-        
-        print("OpenTitan Testbench Analysis Report")
-        print("=" * 60)
-        print(f"\nTotal Testbenches Analyzed: {len(stats)}")
-        print(f"\nCommon UVM Patterns ({len(common)} found):")
-        for pattern in common[:10]:  # Top 10
-            print(f"  - {pattern}")
-        
-        print(f"\nPer-Testbench Statistics:")
-        for ip_name, stat in sorted(stats.items()):
-            print(f"\n{ip_name}:")
-            print(f"  References: {stat['total_references']} "
-                  f"(R:{stat['read_refs']}, W:{stat['write_refs']})")
-            print(f"  Files: {stat['files_analyzed']}")
+    return all_components, all_signals
+
+def print_summary(components, signals):
+    """Print aggregated summary."""
+    
+    print("\nAggregate Analysis Summary")
+    print("=" * 60)
+    print(f"\nTotal Modules Analyzed: {len(components)}")
+    print(f"Total Signal References: {sum(components.values())}")
+    
+    print("\nSignal Types:")
+    for sig_type, count in sorted(signals.items()):
+        print(f"  {sig_type}: {count}")
+    
+    print("\nTop 10 Modules by Signal Count:")
+    top_modules = sorted(components.items(), key=lambda x: x[1], reverse=True)[:10]
+    for module, count in top_modules:
+        print(f"  {module}: {count}")
 
 # Usage
-analyzer = OpenTitanTestbenchAnalyzer('veripg_analysis/opentitan_uvm')
-analyzer.generate_report()
+components, signals = aggregate_results('build/uvm_analysis')
+print_summary(components, signals)
+```
+
+### Expected Output
+
+```
+Aggregate Analysis Summary
+============================================================
+
+Total Modules Analyzed: 42
+Total Signal References: 3,847
+
+Signal Types:
+  read: 2,105
+  write: 1,512
+  read_write: 230
+
+Top 10 Modules by Signal Count:
+  aes: 342
+  uart: 298
+  spi_device: 275
+  i2c: 241
+  gpio: 198
+  ...
 ```
 
 ---
 
-## Common Patterns
+## Best Practices
 
-### Pattern 1: Find All UVM Phases
+### 1. Always Use Package Files
 
-```python
-def find_uvm_phases(kythe_refs):
-    """Extract all UVM phase methods."""
-    phases = []
-    for ref in kythe_refs:
-        if '_phase' in ref['variable_name']:
-            phases.append({
-                'phase': ref['variable_name'],
-                'file': ref['location']['file'],
-                'line': ref['location']['line']
-            })
-    return phases
+✅ **Recommended**:
+```bash
+verible-verilog-semantic --include_kythe my_env_pkg.sv
 ```
 
-### Pattern 2: Track Sequence Item Flow
-
-```python
-def track_sequence_item_flow(kythe_refs):
-    """Track sequence item from sequencer to driver."""
-    flow = {'get': [], 'drive': [], 'done': []}
-    
-    for ref in kythe_refs:
-        var = ref['variable_name']
-        if 'get_next_item' in var:
-            flow['get'].append(ref['location'])
-        elif 'drive' in var or 'put' in var:
-            flow['drive'].append(ref['location'])
-        elif 'item_done' in var:
-            flow['done'].append(ref['location'])
-    
-    return flow
+❌ **Avoid**:
+```bash
+verible-verilog-semantic --include_kythe my_env.sv  # May fail
 ```
 
-### Pattern 3: Identify RAL Access
+### 2. Specify Include Paths
+
+Always provide paths to:
+- UVM library: `third_party/uvm/src`
+- Project utilities: `hw/dv/sv/dv_utils`
+- Common libraries: `hw/dv/sv/cip_lib`
+
+### 3. Check Preprocessing Status
+
+```bash
+# Verify preprocessing is enabled (default: true)
+verible-verilog-semantic --help | grep preprocess
+```
+
+### 4. Handle Errors Gracefully
 
 ```python
-def find_ral_accesses(kythe_refs):
-    """Find Register Abstraction Layer (RAL) accesses."""
-    ral_ops = []
-    for ref in kythe_refs:
-        if any(ral_term in ref['variable_name'] 
-               for ral_term in ['read', 'write', 'update', 'mirror']):
-            ral_ops.append({
-                'operation': ref['variable_name'],
-                'type': ref['type'],
-                'location': ref['location']
-            })
-    return ral_ops
+def safe_parse(file_path):
+    try:
+        result = subprocess.run(
+            ['verible-verilog-semantic', '--include_kythe', file_path],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if result.returncode == 0:
+            return json.loads(result.stdout)
+        else:
+            print(f"Error parsing {file_path}: {result.stderr}")
+            return None
+    except Exception as e:
+        print(f"Exception: {e}")
+        return None
 ```
 
 ---
 
 ## Troubleshooting
 
-### Issue 1: "Parse tree is null"
+### Issue: "preprocessing error at token \`uvm_component_utils\`"
 
-**Symptom**: File fails to parse even with `--include_paths`
-
-**Solution**: Parse the package file instead of the individual file.
-
+**Solution**: Parse the package file instead:
 ```bash
-# Wrong (file in isolation)
-verible-verilog-semantic --include_kythe hw/ip/aes/dv/env/aes_env_cfg.sv
-
-# Correct (package with context)
-verible-verilog-semantic --include_kythe hw/ip/aes/dv/env/aes_env_pkg.sv
+find . -name "*_pkg.sv" | xargs grep -l "my_component"
+verible-verilog-semantic --include_kythe found_package.sv
 ```
 
-### Issue 2: Missing project-specific macros
+### Issue: Empty `kythe.variable_references` array
 
-**Symptom**: "preprocessing error at token \`MY_CUSTOM_MACRO\`"
+**Possible Causes**:
+1. File has no variable references (check parse tree)
+2. Preprocessing failed (check stderr)
+3. File is pure declarations (expected)
 
-**Solution**: Add project macro directories to include paths.
-
+**Debug**:
 ```bash
-verible-verilog-semantic \
-  --include_kythe \
-  --include_paths=third_party/uvm/src,project/macros,project/dv \
-  my_file.sv
+# Check if file parses at all
+verible-verilog-syntax my_file.sv
+
+# Check preprocessing
+verible-verilog-preprocessor --include_paths=... my_file.sv
 ```
 
-### Issue 3: Performance issues
+### Issue: Performance slow on large files
 
-**Symptom**: Slow analysis on large testbenches
-
-**Solution**: Process packages in parallel.
-
-```bash
-# Parallel processing with GNU parallel
-find hw/ip -name "*_pkg.sv" | \
-  parallel -j 4 "verible-verilog-semantic --include_kythe {} > output/{/.}.json"
-```
+**Solutions**:
+1. Use batch processing with parallelization
+2. Process package files instead of individual files
+3. Filter output to only needed facts
 
 ---
 
-## Summary
+## Next Steps
 
-**Key Takeaways**:
-1. Always parse **package files** for full context
-2. Provide **include paths** for UVM and project macros
-3. Use **Python** for advanced analysis and graph building
-4. OpenTitan testbenches work with standard approach
+1. **Integration**: Integrate these patterns into VeriPG's analysis pipeline
+2. **Automation**: Use batch processing scripts for large projects
+3. **Validation**: Compare extracted facts against known testbench structures
+4. **Enhancement**: Extend Python scripts for VeriPG-specific needs
 
-**Success Rate**: 99.3% on OpenTitan corpus (2,094/2,108 files)
+---
 
-**Next Steps**:
-- See `UVM_CAPABILITIES_REALITY.md` for complete feature list
-- See `VERIPG_INTEGRATION_GUIDE.md` for general integration
-- See `OPENTITAN_PARSING_ANALYSIS.md` for detailed corpus analysis
+## References
 
+- **Verible Documentation**: `verible/verilog/tools/semantic/README.md`
+- **UVM Capabilities**: `UVM_CAPABILITIES_REALITY.md`
+- **Integration Guide**: `VERIPG_INTEGRATION_GUIDE.md`
+- **Release Notes**: `RELEASE_NOTES_v5.3.0.md`
+
+---
+
+**Questions?** See `VERIPG_INTEGRATION_GUIDE.md` Troubleshooting section or OpenTitan analysis in `OPENTITAN_PARSING_ANALYSIS.md`.

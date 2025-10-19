@@ -329,11 +329,12 @@ int main(int argc, char **argv) {
     std::shared_ptr<verible::MemBlock> content = std::move(*content_status);
 
     // Configure preprocessing based on flags
-    // NOTE: expand_macros only works properly with include_files support
+    // expand_macros can work standalone or with include_files
+    // include_files requires include_resolver (for resolving paths)
     const verilog::VerilogPreprocess::Config preprocess_config{
         .filter_branches = true,
         .include_files = enable_preprocessing && include_resolver != nullptr,
-        .expand_macros = enable_preprocessing && include_resolver != nullptr,
+        .expand_macros = enable_preprocessing,  // Enable macro expansion when preprocessing
     };
     
     // Create file_opener lambda if include resolver available
