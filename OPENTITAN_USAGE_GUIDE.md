@@ -235,3 +235,52 @@ For OpenTitan-specific questions:
 - [OpenTitan Documentation](https://opentitan.org/book/doc/)
 - [OpenTitan GitHub](https://github.com/lowRISC/opentitan)
 
+## Known Limitations and Workarounds (v5.4.2+)
+
+### Event Trigger Operator Heuristic
+
+Verible v5.4.2+ uses a heuristic approach to disambiguate the `->` operator. While this works for 100% of tested OpenTitan files, understanding the mechanism helps with debugging.
+
+#### How It Works
+The parser uses the previous token to determine context:
+- If previous token is an identifier, `=`, `||`, `&&`, `(`, or `[`: interprets `->` as logical implication
+- Otherwise in task/function bodies: interprets `->` as event trigger
+
+#### Known Edge Cases
+None currently identified in OpenTitan codebase. If you encounter issues:
+
+1. **Check if your code matches standard patterns:**
+   ```systemverilog
+   // Standard event trigger (works) ✅
+   task example();
+     `uvm_info("ID", "msg", UVM_LOW)
+     -> my_event;  // Correctly parsed
+   endtask
+   
+   // Logical implication (works) ✅
+   task check();
+     result = condition_a -> condition_b;  // Correctly parsed
+   endtask
+   ```
+
+2. **Enable diagnostic logging:**
+   ```bash
+   GLOG_v=1 verible-verilog-syntax your_file.sv
+   ```
+
+3. **Report issues:** https://github.com/semiconductor-designs/verible/issues
+
+### Monitoring Your Usage (v5.5.0+)
+
+Track parse statistics with the `--show_stats` flag:
+
+```bash
+verible-verilog-syntax --show_stats <files>
+```
+
+**Reports:**
+- Success/failure rates
+- Arrow token disambiguation counts
+- Parse timing
+- Error patterns
+

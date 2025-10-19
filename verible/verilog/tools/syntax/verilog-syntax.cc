@@ -19,9 +19,11 @@
 // verilog_syntax --verilog_trace_parser files...
 
 #include <algorithm>
+#include <chrono>
 #include <functional>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <sstream>  // IWYU pragma: keep  // for ostringstream, istringstream
 #include <string>   // for string, allocator, etc
@@ -157,6 +159,88 @@ ABSL_FLAG(std::string, macro_library, "",
           "Format: MACRO_NAME(args)=definition (one per line, # for comments).\n"
           "Useful for loading common DV/UVM macros without full file includes.\n"
           "Example: --macro_library=opentitan_dv.macros");
+
+ABSL_FLAG(bool, show_stats, false,
+          "Show parse statistics at program exit.\n"
+          "Includes success/failure rates, arrow token disambiguation counts,\n"
+          "parse timing, and error patterns.");
+
+// Parse statistics tracking structure
+struct ParseStats {
+  int total_files = 0;
+  int successful_parses = 0;
+  int failed_parses = 0;
+  int arrow_tokens_processed = 0;
+  int arrow_as_trigger = 0;
+  int arrow_as_logical_implies = 0;
+  std::map<std::string, int> error_patterns;
+  std::chrono::milliseconds total_parse_time{0};
+  
+  void RecordSuccess() {
+    total_files++;
+    successful_parses++;
+  }
+  
+  void RecordFailure(const std::string& error_msg) {
+    total_files++;
+    failed_parses++;
+    
+    // Categorize error patterns
+    if (error_msg.find("syntax error at token \"->\"") != std::string::npos) {
+      error_patterns["arrow_syntax_error"]++;
+    } else if (error_msg.find("syntax error") != std::string::npos) {
+      error_patterns["general_syntax_error"]++;
+    } else if (error_msg.find("Include file not found") != std::string::npos) {
+      error_patterns["include_not_found"]++;
+    } else if (error_msg.find("macro") != std::string::npos) {
+      error_patterns["macro_error"]++;
+    } else {
+      error_patterns["other_error"]++;
+    }
+  }
+  
+  void RecordParseTime(std::chrono::milliseconds duration) {
+    total_parse_time += duration;
+  }
+  
+  void PrintReport() const {
+    std::cout << "\n=== Parse Statistics ===" << std::endl;
+    std::cout << "Total files: " << total_files << std::endl;
+    if (total_files > 0) {
+      std::cout << "Successful: " << successful_parses 
+                << " (" << std::fixed << std::setprecision(1)
+                << (100.0 * successful_parses / total_files) << "%)" << std::endl;
+      std::cout << "Failed: " << failed_parses 
+                << " (" << std::fixed << std::setprecision(1)
+                << (100.0 * failed_parses / total_files) << "%)" << std::endl;
+      
+      if (arrow_tokens_processed > 0) {
+        std::cout << "\nArrow token (->) disambiguation:" << std::endl;
+        std::cout << "  Total processed: " << arrow_tokens_processed << std::endl;
+        std::cout << "  As trigger: " << arrow_as_trigger 
+                  << " (" << std::fixed << std::setprecision(1)
+                  << (100.0 * arrow_as_trigger / arrow_tokens_processed) << "%)" << std::endl;
+        std::cout << "  As logical implies: " << arrow_as_logical_implies 
+                  << " (" << std::fixed << std::setprecision(1)
+                  << (100.0 * arrow_as_logical_implies / arrow_tokens_processed) << "%)" << std::endl;
+      }
+      
+      std::cout << "\nParse timing:" << std::endl;
+      std::cout << "  Total: " << total_parse_time.count() << "ms" << std::endl;
+      std::cout << "  Average: " << (total_parse_time.count() / total_files) << "ms per file" << std::endl;
+      
+      if (!error_patterns.empty()) {
+        std::cout << "\nError patterns:" << std::endl;
+        for (const auto& [pattern, count] : error_patterns) {
+          std::cout << "  " << pattern << ": " << count << std::endl;
+        }
+      }
+    }
+    std::cout << "========================\n" << std::endl;
+  }
+};
+
+static ParseStats global_stats;
 
 using nlohmann::json;
 using verible::ConcreteSyntaxTree;
@@ -319,10 +403,24 @@ static int AnalyzeOneFile(
     const verilog::VerilogPreprocessData* preloaded_data,
     json *json_out) {
   int exit_status = 0;
+  
+  // Start timing
+  auto start_time = std::chrono::high_resolution_clock::now();
+  
   const auto analyzer =
       ParseWithLanguageMode(content, filename, preprocess_config, file_opener, preloaded_data);
   const auto lex_status = ABSL_DIE_IF_NULL(analyzer)->LexStatus();
   const auto parse_status = analyzer->ParseStatus();
+
+  // Record parse time
+  auto end_time = std::chrono::high_resolution_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+  global_stats.RecordParseTime(duration);
+  
+  // Log slow parses
+  if (duration.count() > 1000) {
+    LOG(WARNING) << "Slow parse: " << filename << " took " << duration.count() << "ms";
+  }
 
   if (!lex_status.ok() || !parse_status.ok()) {
     const std::vector<std::string> syntax_error_messages(
@@ -330,11 +428,15 @@ static int AnalyzeOneFile(
             absl::GetFlag(FLAGS_show_diagnostic_context)));
     const int error_limit = absl::GetFlag(FLAGS_error_limit);
     int error_count = 0;
+    
+    // Record failure with error message for pattern detection
+    std::string first_error;
     if (!absl::GetFlag(FLAGS_export_json)) {
       const std::vector<std::string> syntax_error_messages(
           analyzer->LinterTokenErrorMessages(
               absl::GetFlag(FLAGS_show_diagnostic_context)));
       for (const auto &message : syntax_error_messages) {
+        if (first_error.empty()) first_error = message;
         std::cout << message << std::endl;
         ++error_count;
         if (error_limit != 0 && error_count >= error_limit) break;
@@ -342,8 +444,16 @@ static int AnalyzeOneFile(
     } else {
       (*json_out)["errors"] =
           verilog::GetLinterTokenErrorsAsJson(analyzer.get(), error_limit);
+      if (!syntax_error_messages.empty()) {
+        first_error = syntax_error_messages[0];
+      }
     }
+    
+    global_stats.RecordFailure(first_error);
     exit_status = 1;
+  } else {
+    // Record success
+    global_stats.RecordSuccess();
   }
   const bool parse_ok = parse_status.ok();
 
@@ -582,6 +692,11 @@ int main(int argc, char **argv) {
 
   if (absl::GetFlag(FLAGS_export_json)) {
     std::cout << std::setw(2) << json_out << std::endl;
+  }
+
+  // Print statistics if requested
+  if (absl::GetFlag(FLAGS_show_stats)) {
+    global_stats.PrintReport();
   }
 
   return exit_status;
