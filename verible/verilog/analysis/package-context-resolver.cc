@@ -35,6 +35,9 @@
 #include "verible/common/util/file-util.h"
 #include "verible/verilog/CST/verilog-matchers.h"  // IWYU pragma: keep
 #include "verible/verilog/CST/verilog-nonterminals.h"
+#include "verible/verilog/CST/package.h"
+#include "verible/verilog/CST/class.h"
+#include "verible/verilog/CST/type.h"
 #include "verible/verilog/analysis/verilog-analyzer.h"
 #include "verible/verilog/preprocessor/verilog-preprocess.h"
 
@@ -104,6 +107,9 @@ absl::StatusOr<PackageContext> PackageContextResolver::ParsePackage(
   if (!extract_status.ok()) {
     return extract_status;
   }
+
+  // Store analyzer to keep memory alive for string_views in macro_definitions
+  context.analyzer = std::move(analyzer);
 
   return context;
 }
@@ -200,19 +206,22 @@ absl::Status PackageContextResolver::ExtractTypes(
   auto class_nodes = SearchSyntaxTree(*syntax_tree, NodekClassDeclaration());
   
   for (const auto& match : class_nodes) {
-    // Extract class name (simplified - would need proper CST traversal)
-    // For now, mark that we found a class
-    // TODO: Proper name extraction in next iteration
+    // Extract class name using CST helper
+    const auto* class_name_leaf = GetClassName(*match.match);
+    if (class_name_leaf) {
+      context->type_names.push_back(std::string(class_name_leaf->get().text()));
+    }
   }
 
   // Search for typedef declarations
   auto typedef_nodes = SearchSyntaxTree(*syntax_tree, NodekTypeDeclaration());
 
-  // For v5.4.0: Just track that types exist
-  // Full implementation will extract actual names
-  if (!class_nodes.empty() || !typedef_nodes.empty()) {
-    // Placeholder: Will extract actual names in refinement
-    context->type_names.push_back("placeholder_type");
+  for (const auto& match : typedef_nodes) {
+    // Extract typedef name - child 2 of kTypeDeclaration
+    const auto* name_symbol = verible::GetSubtreeAsLeaf(*match.match, NodeEnum::kTypeDeclaration, 2);
+    if (name_symbol) {
+      context->type_names.push_back(std::string(name_symbol->get().text()));
+    }
   }
 
   return absl::OkStatus();
@@ -226,13 +235,25 @@ absl::Status PackageContextResolver::ExtractImports(
     return absl::OkStatus();
   }
 
-  // Search for import statements
-  auto import_nodes = SearchSyntaxTree(*syntax_tree, NodekPackageImportDeclaration());
+  // Search for package import items (not just declarations)
+  auto import_items = SearchSyntaxTree(*syntax_tree, NodekPackageImportItem());
 
-  // For v5.4.0: Just track that imports exist
-  // Full implementation will extract package names
-  for (size_t i = 0; i < import_nodes.size(); ++i) {
-    context->imports.push_back("import_placeholder");
+  for (const auto& match : import_items) {
+    // Extract imported package name using CST helper
+    const auto* package_name_leaf = GetImportedPackageName(*match.match);
+    if (package_name_leaf) {
+      std::string pkg_name(package_name_leaf->get().text());
+      
+      // Check if we're importing a specific item or wildcard
+      const auto* item_name = GeImportedItemNameFromPackageImportItem(*match.match);
+      if (item_name) {
+        // Specific import: "pkg::item"
+        context->imports.push_back(pkg_name + "::" + std::string(item_name->get().text()));
+      } else {
+        // Wildcard import: "pkg::*"
+        context->imports.push_back(pkg_name + "::*");
+      }
+    }
   }
 
   return absl::OkStatus();
@@ -252,9 +273,13 @@ absl::StatusOr<std::string> PackageContextResolver::ExtractPackageName(
     return absl::NotFoundError("No package declaration found");
   }
 
-  // For v5.4.0: Return placeholder
-  // Full implementation will extract actual package name from CST
-  return std::string("package_name");
+  // Extract package name using CST helper
+  const auto* package_name_token = GetPackageNameToken(*package_nodes[0].match);
+  if (!package_name_token) {
+    return absl::NotFoundError("Could not extract package name from declaration");
+  }
+
+  return std::string(package_name_token->text());
 }
 
 }  // namespace verilog

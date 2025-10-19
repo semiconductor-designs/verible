@@ -40,10 +40,12 @@
 #define VERIBLE_VERILOG_ANALYSIS_PACKAGE_CONTEXT_H_
 
 #include <map>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "verible/verilog/analysis/verilog-analyzer.h"
 #include "verible/verilog/preprocessor/verilog-preprocess.h"
 
 namespace verilog {
@@ -54,6 +56,8 @@ struct PackageContext {
   std::string package_name;
 
   // Macro definitions from the package (including from `include directives)
+  // NOTE: These MacroDefinitions contain string_views pointing to memory
+  // owned by the analyzer below. Do not use these after analyzer is destroyed!
   VerilogPreprocessData::MacroDefinitionRegistry macro_definitions;
 
   // Type definitions (class names, typedefs, enums)
@@ -66,6 +70,10 @@ struct PackageContext {
 
   // Source file path
   std::string source_file;
+
+  // Analyzer must be kept alive because macro_definitions contain string_views
+  // pointing to memory owned by the analyzer
+  std::unique_ptr<VerilogAnalyzer> analyzer;
 };
 
 // Combined context from multiple packages
