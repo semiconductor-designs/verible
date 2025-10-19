@@ -58,3 +58,16 @@ sh_test_with_runfiles_lib(
     data = [":verible-verilog-syntax"],
     deps = [],
 )
+
+cc_test(
+    name = "verilog-syntax-unit_test",
+    size = "small",
+    srcs = ["verilog-syntax_test.cc"],
+    deps = [
+        "//verible/common/util:file-util",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
