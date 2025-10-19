@@ -1,0 +1,46 @@
+================================================================
+OpenTitan Validation with Proper Context - v5.4.0
+Testing 28 previously-failing files with correct configuration
+================================================================
+
+================================================================
+Category 1: Files with Missing UVM Macros (4 files)
+Fix: Add --pre_include=uvm_macros.svh
+================================================================
+Testing: hw/ip/aon_timer/dv/env/aon_timer_scoreboard.sv ... [0;31mFAIL[0m (-> operator after uvm_info)
+Testing: hw/dv/sv/spi_agent/spi_monitor.sv ... [0;31mFAIL[0m (-> operator after uvm_info)
+Testing: hw/top_darjeeling/dv/env/seq_lib/chip_sw_pwrmgr_deep_sleep_all_wake_ups_vseq.sv ... [0;31mFAIL[0m (-> operator)
+
+================================================================
+Category 2: Files with Missing DV Package Macros (15 files)
+Fix: Add --package_context with dv_utils_pkg.sv and cip_base_pkg.sv
+================================================================
+Testing: hw/dv/sv/cip_lib/cip_base_env_cfg.sv ... [0;31mFAIL[0m (DV_CHECK macros)
+Testing: hw/dv/sv/dv_lib/dv_base_env_cfg.sv ... [0;31mFAIL[0m (foreach in constraint)
+Testing: hw/ip/csrng/dv/env/csrng_env_cfg.sv ... [0;31mFAIL[0m (constraint macros)
+Testing: hw/ip/edn/dv/env/edn_env_cfg.sv ... [0;31mFAIL[0m (for in constraint)
+Testing: hw/ip/entropy_src/dv/env/entropy_src_env_cfg.sv ... [0;31mFAIL[0m (constraint macros)
+Testing: hw/ip/otbn/dv/uvm/env/otbn_env_cfg.sv ... [0;31mFAIL[0m (constraint macros)
+Testing: hw/ip/sram_ctrl/dv/env/sram_ctrl_env_cfg.sv ... [0;31mFAIL[0m (constraint macros)
+Testing: hw/top_darjeeling/ip_autogen/otp_ctrl/dv/env/otp_ctrl_env_cfg.sv ... [0;31mFAIL[0m (foreach in constraint)
+Testing: hw/top_earlgrey/ip_autogen/otp_ctrl/dv/env/otp_ctrl_env_cfg.sv ... [0;31mFAIL[0m (foreach in constraint)
+
+================================================================
+Category 3: Files with Custom Macros (3 files)
+Fix: Add --package_context with specific package files
+================================================================
+Testing: hw/ip/kmac/dv/env/kmac_env_cov.sv ... [0;31mFAIL[0m (XOF_CROSS_CG macro)
+Testing: hw/ip/spi_device/dv/env/spi_device_scoreboard.sv ... [0;31mFAIL[0m (CREATE_TPM_CASE_STMT macro)
+
+================================================================
+SUMMARY
+================================================================
+Passed:  0
+Failed:  14
+Skipped: 0
+
+[0;31m❌ NEEDS WORK: Only 0 files fixed[0m
+
+================================================================
+Validation complete!
+================================================================
