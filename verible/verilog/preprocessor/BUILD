@@ -33,6 +33,15 @@ cc_library(
 )
 
 cc_library(
+    name = "macro-error-suggestions",
+    srcs = ["macro-error-suggestions.cc"],
+    hdrs = ["macro-error-suggestions.h"],
+    deps = [
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_library(
     name = "verilog-preprocess",
     srcs = ["verilog-preprocess.cc"],
     hdrs = ["verilog-preprocess.h"],
@@ -63,6 +72,16 @@ cc_test(
     srcs = ["uvm-macros_test.cc"],
     deps = [
         ":uvm-macros",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "macro-error-suggestions_test",
+    srcs = ["macro-error-suggestions_test.cc"],
+    deps = [
+        ":macro-error-suggestions",
         "@googletest//:gtest",
         "@googletest//:gtest_main",
     ],
