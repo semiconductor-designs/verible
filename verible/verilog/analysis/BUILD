@@ -993,3 +993,44 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+# Feature 3 (v5.4.0): Package Context Mode
+cc_library(
+    name = "package-context",
+    hdrs = ["package-context.h"],
+    deps = [
+        "//verible/verilog/preprocessor:verilog-preprocess",
+    ],
+)
+
+cc_library(
+    name = "package-context-resolver",
+    srcs = ["package-context-resolver.cc"],
+    hdrs = ["package-context-resolver.h"],
+    deps = [
+        ":include-file-resolver",
+        ":package-context",
+        ":verilog-analyzer",
+        "//verible/common/text:concrete-syntax-tree",
+        "//verible/common/text:symbol",
+        "//verible/common/text:tree-utils",
+        "//verible/verilog/CST:verilog-nonterminals",
+        "//verible/verilog/preprocessor:verilog-preprocess",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/status:statusor",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "package-context-resolver_test",
+    srcs = ["package-context-resolver_test.cc"],
+    deps = [
+        ":include-file-resolver",
+        ":package-context-resolver",
+        "@abseil-cpp//absl/status",
+        "@abseil-cpp//absl/strings",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
