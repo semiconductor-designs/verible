@@ -33,6 +33,7 @@
 #include "verible/common/text/symbol.h"
 #include "verible/common/text/tree-utils.h"
 #include "verible/common/util/file-util.h"
+#include "verible/verilog/CST/verilog-matchers.h"  // IWYU pragma: keep
 #include "verible/verilog/CST/verilog-nonterminals.h"
 #include "verible/verilog/analysis/verilog-analyzer.h"
 #include "verible/verilog/preprocessor/verilog-preprocess.h"
@@ -117,12 +118,17 @@ absl::StatusOr<CombinedPackageContext> PackageContextResolver::ParsePackages(
       return context_or.status();
     }
 
-    PackageContext context = *context_or;
+    PackageContext& context = *context_or;
 
-    // Merge macros into combined context
-    for (const auto& [name, definition] : context.macro_definitions) {
+    // Merge macros into combined context  
+    // Move macros directly to avoid copy issues with MacroDefinition
+    for (auto& [name, definition] : context.macro_definitions) {
       // Later packages override earlier ones
-      combined.all_macros[name] = definition;
+      auto it = combined.all_macros.find(name);
+      if (it != combined.all_macros.end()) {
+        combined.all_macros.erase(it);
+      }
+      combined.all_macros.emplace(name, std::move(definition));
     }
 
     // Merge types
@@ -176,7 +182,7 @@ absl::Status PackageContextResolver::ExtractMacros(
   
   // Copy all macro definitions
   for (const auto& [name, definition] : preprocess_data.macro_definitions) {
-    context->macro_definitions[name] = definition;
+    context->macro_definitions.insert({name, definition});
   }
 
   return absl::OkStatus();

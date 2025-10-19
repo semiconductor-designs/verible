@@ -1016,6 +1016,7 @@ cc_library(
         "//verible/common/text:symbol",
         "//verible/common/text:tree-utils",
         "//verible/common/util:file-util",
+        "//verible/verilog/CST:verilog-matchers",
         "//verible/verilog/CST:verilog-nonterminals",
         "//verible/verilog/preprocessor:verilog-preprocess",
         "@abseil-cpp//absl/status",
