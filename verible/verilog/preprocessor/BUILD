@@ -46,6 +46,7 @@ cc_library(
     srcs = ["verilog-preprocess.cc"],
     hdrs = ["verilog-preprocess.h"],
     deps = [
+        ":macro-error-suggestions",
         ":uvm-macros",
         ":verilog-preprocess-expr",
         "//verible/common/lexer:token-generator",

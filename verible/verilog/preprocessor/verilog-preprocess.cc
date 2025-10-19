@@ -38,6 +38,7 @@
 #include "verible/verilog/analysis/verilog-filelist.h"
 #include "verible/verilog/parser/verilog-lexer.h"
 #include "verible/verilog/parser/verilog-parser.h"  // for verilog_symbol_name()
+#include "verible/verilog/preprocessor/macro-error-suggestions.h"
 #include "verible/verilog/parser/verilog-token-enum.h"
 #include "verible/verilog/preprocessor/uvm-macros.h"
 #include "verible/verilog/preprocessor/verilog-preprocess-expr.h"
@@ -336,13 +337,18 @@ absl::Status VerilogPreprocess::HandleMacroIdentifier(
     found = FindOrNull(preprocessor::GetUvmMacroRegistry(), macro_name);
   }
   
-  // 3. If still not found, report error
+  // 3. If still not found, report error with suggestions
   if (!found) {
-    preprocess_data_.errors.emplace_back(
-        **iter,
-        "Error expanding macro identifier, might not be defined before.");
-    return absl::InvalidArgumentError(
-        "Error expanding macro identifier, might not be defined before.");
+    // Generate enhanced error message with actionable suggestions
+    std::vector<std::string> include_paths_vec;
+    // TODO: Extract include paths from preprocess_info_ if available
+    std::string error_msg = GetMacroErrorWithSuggestions(
+        macro_name, 
+        "", // current_file - would need to be passed from analyzer
+        include_paths_vec);
+    
+    preprocess_data_.errors.emplace_back(**iter, error_msg);
+    return absl::InvalidArgumentError(error_msg);
   }
 
   if (config_.expand_macros) {

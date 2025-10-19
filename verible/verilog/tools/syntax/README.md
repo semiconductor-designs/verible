@@ -90,6 +90,58 @@ verible-verilog-syntax --include_paths=. --expand_macros=true main.sv
 # AST will show expanded: freq inside {[24:100]}
 ```
 
+### Better Error Messages (v5.4.0+)
+
+When a macro is not defined, Verible now provides **actionable suggestions** instead of generic errors:
+
+**Example 1: UVM Macro Not Found**
+```bash
+$ verible-verilog-syntax --expand_macros=true test.sv
+test.sv:3:3-20: preprocessing error at token "`uvm_info" : Error expanding macro `uvm_info': macro not defined.
+
+  This appears to be a UVM macro. Solutions:
+  1. Add UVM include path:
+     --include_paths=third_party/uvm/src
+
+  2. Or parse the package file that includes UVM macros:
+     verible-verilog-syntax --include_paths=third_party/uvm/src your_pkg.sv
+```
+
+**Example 2: OpenTitan DV Macro**
+```bash
+$ verible-verilog-syntax --expand_macros=true dv_test.sv
+dv_test.sv:5:7-15: preprocessing error at token "`DV_CHECK" : Error expanding macro `DV_CHECK': macro not defined.
+
+  This appears to be an OpenTitan DV macro. Solutions:
+  1. Add include paths:
+     --include_paths=hw/dv/sv/dv_utils
+
+  2. Parse the package file:
+     verible-verilog-syntax --include_paths=hw/dv/sv/dv_utils your_dv_pkg.sv
+```
+
+**Example 3: Package File Suggestion**
+```bash
+$ verible-verilog-syntax my_file.sv
+my_file.sv:10:5-18: preprocessing error at token "`CUSTOM_MACRO" : Error expanding macro `CUSTOM_MACRO': macro not defined.
+
+  Possible solutions:
+  1. Check if the macro is defined in an include file
+     Add: --include_paths=/path/to/includes
+
+  2. This file may be part of a package. Try parsing the package file:
+     my_pkg.sv
+
+  3. Define the macro on command line (v5.4.0+):
+     --define=CUSTOM_MACRO=value
+```
+
+These error messages help you quickly identify:
+- Whether the macro is from UVM or OpenTitan
+- What include paths to add
+- What package file to parse instead
+- How to define the macro on command line (v5.4.0+)
+
 **Known Limitations**:
 - **Deep nesting** (3+ levels of includes) may not fully resolve all macros
   - Works: `file.sv` → `include a.svh` → `include b.svh` (2 levels)

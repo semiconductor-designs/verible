@@ -92,6 +92,33 @@ Documentation:
 - [UVM Usage Examples](./VERIPG_UVM_USAGE_EXAMPLES.md) - 5 practical examples
 - [Release Notes v5.3.0](./RELEASE_NOTES_v5.3.0.md) - Deep nesting fix details
 
+### v5.4.0 New Features
+
+**Better Error Messages for Missing Macros**
+
+Verible now provides **actionable suggestions** when macros are not defined:
+
+```bash
+$ verible-verilog-syntax --expand_macros=true test.sv
+test.sv:3:3-20: preprocessing error at token "`uvm_info" : Error expanding macro `uvm_info': macro not defined.
+
+  This appears to be a UVM macro. Solutions:
+  1. Add UVM include path:
+     --include_paths=third_party/uvm/src
+
+  2. Or parse the package file that includes UVM macros:
+     verible-verilog-syntax --include_paths=third_party/uvm/src your_pkg.sv
+```
+
+Features:
+- Detects UVM macros (`uvm_*`, `uvm_component_utils`, etc.)
+- Detects OpenTitan macros (`DV_*`, `gmv`, etc.)
+- Suggests appropriate include paths
+- Recommends package file parsing
+- Provides command-line define syntax (coming in v5.4.0)
+
+See [verible-verilog-syntax README](./verible/verilog/tools/syntax/README.md) for more examples.
+
 ### Style Linter
 
 [`verible-verilog-lint`](./verible/verilog/tools/lint) identifies constructs or patterns
