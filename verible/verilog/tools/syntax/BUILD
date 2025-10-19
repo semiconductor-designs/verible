@@ -71,3 +71,14 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+cc_test(
+    name = "verilog-syntax-monitoring_test",
+    size = "small",
+    srcs = ["verilog-syntax-monitoring_test.cc"],
+    deps = [
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
