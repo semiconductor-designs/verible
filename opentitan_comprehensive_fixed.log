@@ -1,0 +1,17 @@
+=== Comprehensive OpenTitan Testing ===
+Date: Sun Oct 19 15:09:41 PDT 2025
+
+Testing RTL files...
+RTL: 100 / 100 tested (9% of 1030 total) - 100% success
+
+Testing DV files (with context)...
+./scripts/test_opentitan_comprehensive.sh: line 54: 15111 Abort trap: 6           $SYNTAX_TOOL --pre_include="$OPENTITAN_ROOT/hw/dv/sv/dv_utils/dv_macros.svh" --include_paths="third_party/uvm/src,$OPENTITAN_ROOT/hw/dv/sv/dv_utils" "$file" >&/dev/null 2>&1
+./scripts/test_opentitan_comprehensive.sh: line 54: 15139 Abort trap: 6           $SYNTAX_TOOL --pre_include="$OPENTITAN_ROOT/hw/dv/sv/dv_utils/dv_macros.svh" --include_paths="third_party/uvm/src,$OPENTITAN_ROOT/hw/dv/sv/dv_utils" "$file" >&/dev/null 2>&1
+./scripts/test_opentitan_comprehensive.sh: line 54: 15179 Abort trap: 6           $SYNTAX_TOOL --pre_include="$OPENTITAN_ROOT/hw/dv/sv/dv_utils/dv_macros.svh" --include_paths="third_party/uvm/src,$OPENTITAN_ROOT/hw/dv/sv/dv_utils" "$file" >&/dev/null 2>&1
+DV: 90 / 100 tested (3% of 2649 total) - 90% success
+
+=== Summary ===
+Total: 190 / 200 passed (95%)
+🟢 Good: Success rate >= 95%
+
+Results saved to: opentitan_comprehensive_results.txt

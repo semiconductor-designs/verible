@@ -24,17 +24,21 @@ echo "" | tee -a "$RESULTS_LOG"
 
 # Test RTL files (no special context needed)
 echo "Testing RTL files..." | tee -a "$RESULTS_LOG"
-RTL_FILES=$(find "$OPENTITAN_ROOT/hw" -path "*/rtl/*.sv" -o -path "*/ip*/rtl/*.sv" 2>/dev/null | wc -l | tr -d ' ')
+RTL_FILES_TOTAL=$(find "$OPENTITAN_ROOT/hw" -path "*/rtl/*.sv" -o -path "*/ip*/rtl/*.sv" 2>/dev/null | wc -l | tr -d ' ')
+RTL_FILES=0
 RTL_PASS=0
 
-if [ "$RTL_FILES" -gt 0 ]; then
+if [ "$RTL_FILES_TOTAL" -gt 0 ]; then
   for file in $(find "$OPENTITAN_ROOT/hw" -path "*/rtl/*.sv" -o -path "*/ip*/rtl/*.sv" 2>/dev/null | head -100); do
+    ((RTL_FILES++))
     if $SYNTAX_TOOL "$file" &>/dev/null; then
       ((RTL_PASS++))
     fi
   done
-  RTL_PCT=$((100 * RTL_PASS / RTL_FILES))
-  echo "RTL: $RTL_PASS / $RTL_FILES passed ($RTL_PCT%)" | tee -a "$RESULTS_LOG"
+  if [ "$RTL_FILES" -gt 0 ]; then
+    RTL_PCT=$((100 * RTL_PASS / RTL_FILES))
+    echo "RTL: $RTL_PASS / $RTL_FILES tested ($(( 100 * RTL_FILES / RTL_FILES_TOTAL))% of $RTL_FILES_TOTAL total) - $RTL_PCT% success" | tee -a "$RESULTS_LOG"
+  fi
 else
   echo "RTL: No files found" | tee -a "$RESULTS_LOG"
 fi
@@ -42,22 +46,24 @@ fi
 # Test DV files (with proper context)
 echo "" | tee -a "$RESULTS_LOG"
 echo "Testing DV files (with context)..." | tee -a "$RESULTS_LOG"
-DV_FILES=$(find "$OPENTITAN_ROOT/hw" -path "*/dv/*.sv" 2>/dev/null | wc -l | tr -d ' ')
+DV_FILES_TOTAL=$(find "$OPENTITAN_ROOT/hw" -path "*/dv/*.sv" 2>/dev/null | wc -l | tr -d ' ')
+DV_FILES=0
 DV_PASS=0
 
-if [ "$DV_FILES" -gt 0 ]; then
+if [ "$DV_FILES_TOTAL" -gt 0 ]; then
   for file in $(find "$OPENTITAN_ROOT/hw" -path "*/dv/*.sv" 2>/dev/null | head -100); do
+    ((DV_FILES++))
     if $SYNTAX_TOOL \
       --pre_include="$OPENTITAN_ROOT/hw/dv/sv/dv_utils/dv_macros.svh" \
       --include_paths="third_party/uvm/src,$OPENTITAN_ROOT/hw/dv/sv/dv_utils" \
-      "$file" &>/dev/null; then
+      "$file" &>/dev/null 2>&1; then
       ((DV_PASS++))
     fi
   done
   
   if [ "$DV_FILES" -gt 0 ]; then
     DV_PCT=$((100 * DV_PASS / DV_FILES))
-    echo "DV: $DV_PASS / $DV_FILES passed ($DV_PCT%)" | tee -a "$RESULTS_LOG"
+    echo "DV: $DV_PASS / $DV_FILES tested ($(( 100 * DV_FILES / DV_FILES_TOTAL))% of $DV_FILES_TOTAL total) - $DV_PCT% success" | tee -a "$RESULTS_LOG"
   fi
 else
   echo "DV: No files found" | tee -a "$RESULTS_LOG"
