@@ -338,7 +338,9 @@ static std::unique_ptr<VerilogAnalyzer> ParseWithLanguageMode(
     std::string_view filename,
     const verilog::VerilogPreprocess::Config &preprocess_config,
     VerilogAnalyzer::FileOpener file_opener = nullptr,
-    const verilog::VerilogPreprocessData* preloaded_data = nullptr) {
+    const verilog::VerilogPreprocessData* preloaded_data = nullptr,
+    verilog::LexicalContext::DisambiguationMode arrow_mode = 
+        verilog::LexicalContext::DisambiguationMode::kMacroAware) {
   switch (absl::GetFlag(FLAGS_lang)) {
     case LanguageMode::kAutoDetect: {
       // Feature 2 (v5.4.0): If we have preloaded data, use explicit SV mode
@@ -348,6 +350,8 @@ static std::unique_ptr<VerilogAnalyzer> ParseWithLanguageMode(
                                                           preprocess_config,
                                                           file_opener);
         analyzer->SetPreloadedMacros(preloaded_data->macro_definitions);
+        // v5.6.0 Week 7-8: Set disambiguation mode
+        analyzer->SetArrowDisambiguationMode(arrow_mode);
         const auto status = ABSL_DIE_IF_NULL(analyzer)->Analyze();
         if (!status.ok()) std::cerr << status.message() << std::endl;
         return analyzer;
@@ -363,6 +367,8 @@ static std::unique_ptr<VerilogAnalyzer> ParseWithLanguageMode(
       if (preloaded_data) {
         analyzer->SetPreloadedMacros(preloaded_data->macro_definitions);
       }
+      // v5.6.0 Week 7-8: Set disambiguation mode
+      analyzer->SetArrowDisambiguationMode(arrow_mode);
       const auto status = ABSL_DIE_IF_NULL(analyzer)->Analyze();
       if (!status.ok()) std::cerr << status.message() << std::endl;
       return analyzer;
@@ -411,6 +417,7 @@ static int AnalyzeOneFile(
     const verilog::VerilogPreprocess::Config &preprocess_config,
     VerilogAnalyzer::FileOpener file_opener,
     const verilog::VerilogPreprocessData* preloaded_data,
+    verilog::LexicalContext::DisambiguationMode arrow_mode,
     json *json_out) {
   int exit_status = 0;
   
@@ -418,7 +425,7 @@ static int AnalyzeOneFile(
   auto start_time = std::chrono::high_resolution_clock::now();
   
   const auto analyzer =
-      ParseWithLanguageMode(content, filename, preprocess_config, file_opener, preloaded_data);
+      ParseWithLanguageMode(content, filename, preprocess_config, file_opener, preloaded_data, arrow_mode);
   const auto lex_status = ABSL_DIE_IF_NULL(analyzer)->LexStatus();
   const auto parse_status = analyzer->ParseStatus();
 
@@ -586,6 +593,22 @@ int main(int argc, char **argv) {
     }
   }
 
+  // v5.6.0 Week 7-8: Parse arrow disambiguation mode
+  const std::string mode_str = absl::GetFlag(FLAGS_arrow_disambiguation_mode);
+  verilog::LexicalContext::DisambiguationMode arrow_mode = 
+      verilog::LexicalContext::DisambiguationMode::kMacroAware;
+  
+  if (mode_str == "enhanced_heuristic") {
+    arrow_mode = verilog::LexicalContext::DisambiguationMode::kEnhancedHeuristic;
+    std::cerr << "Using enhanced heuristic mode for arrow disambiguation" << std::endl;
+  } else if (mode_str == "both") {
+    arrow_mode = verilog::LexicalContext::DisambiguationMode::kBoth;
+    std::cerr << "Using A/B testing mode (comparing both strategies)" << std::endl;
+  } else if (mode_str != "macro_aware") {
+    std::cerr << "Warning: Unknown arrow_disambiguation_mode '" << mode_str 
+              << "', defaulting to 'macro_aware'" << std::endl;
+  }
+
   // Feature 3 (v5.4.0): Process package context files if specified
   std::unique_ptr<verilog::CombinedPackageContext> package_context;
   const auto package_files = absl::GetFlag(FLAGS_package_context);
@@ -694,7 +717,7 @@ int main(int argc, char **argv) {
     
     json file_json;
     int file_status =
-        AnalyzeOneFile(content, filename, preprocess_config, file_opener, final_preload_data, &file_json);
+        AnalyzeOneFile(content, filename, preprocess_config, file_opener, final_preload_data, arrow_mode, &file_json);
     exit_status = std::max(exit_status, file_status);
     if (absl::GetFlag(FLAGS_export_json)) {
       json_out[std::string{filename.begin(), filename.end()}] =
