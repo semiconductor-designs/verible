@@ -34,6 +34,38 @@ function strip_error() {
   sed -e 's| (syntax-error).||'
 }
 
+# v5.7.0: Strip version metadata fields from JSON for backward-compatible testing
+# Removes: verible_version, cst_schema_version, export_format, timestamp
+# Also removes v5.7.0 additions: status, tree_status, partial_tree
+# Then canonicalizes JSON for comparison (sorted keys, normalized whitespace)
+function strip_version_metadata() {
+  python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+# Remove v5.7.0 metadata fields
+for key in ['verible_version', 'cst_schema_version', 'export_format', 'timestamp']:
+    data.pop(key, None)
+# Also strip v5.7.0 addition fields from file entries
+for file_key in list(data.keys()):
+    if isinstance(data[file_key], dict):
+        for v570_field in ['status', 'tree_status', 'partial_tree']:
+            data[file_key].pop(v570_field, None)
+# Output canonicalized JSON (sorted keys, compact format)
+json.dump(data, sys.stdout, sort_keys=True, separators=(',', ':'))
+"
+}
+
+# v5.7.0: Python-based JSON canonicalizer (replaces bash json_canonicalize)
+# Takes JSON from stdin, outputs canonicalized compact JSON
+function json_canonicalize_py() {
+  python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+# Output canonicalized JSON (sorted keys, compact format)
+json.dump(data, sys.stdout, sort_keys=True, separators=(',', ':'))
+"
+}
+
 # Takes some json input from stdin and creates a string that has all
 # dictionaries sorted and all whitespace canonicalized.
 # Very simplistic, and output is not necessarily parseable as json, but goal
@@ -167,7 +199,7 @@ status="$?"
   exit 1
 }
 
-json_canonicalize > "$MY_EXPECT_FILE" <<EOF
+json_canonicalize_py > "$MY_EXPECT_FILE" <<EOF
 {"-":{
   "errors": [
       {"line": 0, "column": 7, "phase": "parse", "text": "1" },
@@ -176,7 +208,7 @@ json_canonicalize > "$MY_EXPECT_FILE" <<EOF
   ]}}
 EOF
 
-tr '\r\n' '\n' < $MY_OUTPUT_FILE | json_canonicalize > "${MY_OUTPUT_FILE}.1"
+tr '\r\n' '\n' < $MY_OUTPUT_FILE | strip_version_metadata > "${MY_OUTPUT_FILE}.1"
 diff --strip-trailing-cr -u "$MY_EXPECT_FILE" "${MY_OUTPUT_FILE}.1" || \
   { echo "stderr differs." ; exit 1 ;}
 
@@ -221,14 +253,14 @@ status="$?"
   exit 1
 }
 
-json_canonicalize > "$MY_EXPECT_FILE" <<EOF
+json_canonicalize_py > "$MY_EXPECT_FILE" <<EOF
 {"-":{
   "errors": [
       {"line": 0, "column": 7, "phase": "parse", "text": "1" }
   ]}}
 EOF
 
-tr '\r\n' '\n' < $MY_OUTPUT_FILE | json_canonicalize > "${MY_OUTPUT_FILE}.1"
+tr '\r\n' '\n' < $MY_OUTPUT_FILE | strip_version_metadata > "${MY_OUTPUT_FILE}.1"
 diff --strip-trailing-cr -u "$MY_EXPECT_FILE" "${MY_OUTPUT_FILE}.1" || \
   { echo "stderr differs." ; exit 1 ;}
 
@@ -272,7 +304,7 @@ status="$?"
   exit 1
 }
 
-json_canonicalize > "$MY_EXPECT_FILE" <<EOF
+json_canonicalize_py > "$MY_EXPECT_FILE" <<EOF
 { "-":{
    "tokens": [
      {"start":  0, "end":  6,"tag": "module" },
@@ -283,7 +315,7 @@ json_canonicalize > "$MY_EXPECT_FILE" <<EOF
    ]}}
 EOF
 
-tr '\r\n' '\n' < $MY_OUTPUT_FILE | json_canonicalize > "${MY_OUTPUT_FILE}.1"
+tr '\r\n' '\n' < $MY_OUTPUT_FILE | strip_version_metadata > "${MY_OUTPUT_FILE}.1"
 diff --strip-trailing-cr -u "$MY_EXPECT_FILE" "${MY_OUTPUT_FILE}.1" || { echo "stdout differs." ; exit 1 ;}
 
 ################################################################################
@@ -329,7 +361,7 @@ status="$?"
   exit 1
 }
 
-json_canonicalize > "$MY_EXPECT_FILE" <<EOF
+json_canonicalize_py > "$MY_EXPECT_FILE" <<EOF
 { "-": { "rawtokens":  [
            { "start":  0, "end":  6, "tag": "module"},
            { "start":  6, "end":  7, "tag": "TK_SPACE", "text": " "},
@@ -343,7 +375,7 @@ json_canonicalize > "$MY_EXPECT_FILE" <<EOF
        }}
 EOF
 
-tr '\r\n' '\n' < $MY_OUTPUT_FILE | json_canonicalize > "${MY_OUTPUT_FILE}.1"
+tr '\r\n' '\n' < $MY_OUTPUT_FILE | strip_version_metadata > "${MY_OUTPUT_FILE}.1"
 diff --strip-trailing-cr -u "$MY_EXPECT_FILE" "${MY_OUTPUT_FILE}.1" || { echo "stdout differs." ; exit 1 ;}
 
 ################################################################################
@@ -393,7 +425,7 @@ status="$?"
   exit 1
 }
 
-json_canonicalize > "$MY_EXPECT_FILE" <<EOF
+json_canonicalize_py > "$MY_EXPECT_FILE" <<EOF
 { "-": {
 "tree": {
   "children": [
@@ -423,7 +455,7 @@ json_canonicalize > "$MY_EXPECT_FILE" <<EOF
 }}}
 EOF
 
-tr '\r\n' '\n' < $MY_OUTPUT_FILE | json_canonicalize > "${MY_OUTPUT_FILE}.1"
+tr '\r\n' '\n' < $MY_OUTPUT_FILE | strip_version_metadata > "${MY_OUTPUT_FILE}.1"
 diff --strip-trailing-cr -u "$MY_EXPECT_FILE" "${MY_OUTPUT_FILE}.1" || { echo "stdout differs." ; exit 1 ;}
 
 ################################################################################
