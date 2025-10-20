@@ -57,6 +57,7 @@
 #include "verible/verilog/parser/verilog-token-classifications.h"
 #include "verible/verilog/parser/verilog-token-enum.h"
 #include "verible/verilog/parser/verilog-token.h"
+#include "verible/verilog/tools/syntax/file-index-tracker.h"  // v5.7.0
 
 // Controls parser selection behavior
 enum class LanguageMode {
@@ -102,6 +103,21 @@ ABSL_FLAG(
 ABSL_FLAG(
     bool, export_json, false,
     "Uses JSON for output. Intended to be used as an input for other tools.");
+
+// v5.7.0: VeriPG enhancements - file index tracking and error recovery
+ABSL_FLAG(bool, export_indexed_json, false,
+          "v5.7.0: Export JSON with file index mapping for multi-file batch processing.\n"
+          "Includes 'file_index' mapping <indexed> placeholders to actual paths.\n"
+          "Output format: {\"file_index\": {\"0\": \"/path/file1.sv\", ...}, \"cst\": {...}}.\n"
+          "This is an alternative to --export_json with additional file tracking.\n"
+          "Mutually exclusive with --export_json.");
+
+ABSL_FLAG(bool, continue_on_error, false,
+          "v5.7.0: Continue processing remaining files even if some fail to parse.\n"
+          "Useful for batch processing large repositories (e.g., OpenTitan: 3,659 files).\n"
+          "Exit code: 1 if any errors occurred, 0 if all succeeded.\n"
+          "Works with both --export_json and --export_indexed_json.");
+
 ABSL_FLAG(bool, printtree, false, "Whether or not to print the tree");
 ABSL_FLAG(bool, printtokens, false, "Prints all lexed and filtered tokens");
 ABSL_FLAG(bool, printrawtokens, false,
@@ -130,6 +146,16 @@ ABSL_FLAG(bool, expand_macros, false,
           "Enable macro expansion during preprocessing.\n"
           "Default is false to preserve macros for knowledge graph building.\n"
           "Set to true if you want to see expanded macro bodies.");
+
+ABSL_FLAG(bool, inject_macro_markers, false,
+          "v5.6.0: Inject macro boundary markers for context preservation.\n"
+          "Experimental feature for improved context tracking across macro expansions.\n"
+          "Only active when expand_macros=true. Default is false.");
+
+ABSL_FLAG(std::string, arrow_disambiguation_mode, "macro_aware",
+          "v5.6.0 Week 7-8: Arrow operator disambiguation strategy.\n"
+          "Options: 'macro_aware' (use macro markers), 'enhanced_heuristic' (multi-token lookahead), 'both' (A/B test).\n"
+          "Default is 'macro_aware' which preserves context across macros.");
 
 ABSL_FLAG(std::vector<std::string>, pre_include, {},
           "List of files to include before parsing the main file.\n"
@@ -328,7 +354,9 @@ static std::unique_ptr<VerilogAnalyzer> ParseWithLanguageMode(
     std::string_view filename,
     const verilog::VerilogPreprocess::Config &preprocess_config,
     VerilogAnalyzer::FileOpener file_opener = nullptr,
-    const verilog::VerilogPreprocessData* preloaded_data = nullptr) {
+    const verilog::VerilogPreprocessData* preloaded_data = nullptr,
+    verilog::LexicalContext::DisambiguationMode arrow_mode = 
+        verilog::LexicalContext::DisambiguationMode::kMacroAware) {
   switch (absl::GetFlag(FLAGS_lang)) {
     case LanguageMode::kAutoDetect: {
       // Feature 2 (v5.4.0): If we have preloaded data, use explicit SV mode
@@ -338,6 +366,8 @@ static std::unique_ptr<VerilogAnalyzer> ParseWithLanguageMode(
                                                           preprocess_config,
                                                           file_opener);
         analyzer->SetPreloadedMacros(preloaded_data->macro_definitions);
+        // v5.6.0 Week 7-8: Set disambiguation mode
+        analyzer->SetArrowDisambiguationMode(arrow_mode);
         const auto status = ABSL_DIE_IF_NULL(analyzer)->Analyze();
         if (!status.ok()) std::cerr << status.message() << std::endl;
         return analyzer;
@@ -353,6 +383,8 @@ static std::unique_ptr<VerilogAnalyzer> ParseWithLanguageMode(
       if (preloaded_data) {
         analyzer->SetPreloadedMacros(preloaded_data->macro_definitions);
       }
+      // v5.6.0 Week 7-8: Set disambiguation mode
+      analyzer->SetArrowDisambiguationMode(arrow_mode);
       const auto status = ABSL_DIE_IF_NULL(analyzer)->Analyze();
       if (!status.ok()) std::cerr << status.message() << std::endl;
       return analyzer;
@@ -401,6 +433,8 @@ static int AnalyzeOneFile(
     const verilog::VerilogPreprocess::Config &preprocess_config,
     VerilogAnalyzer::FileOpener file_opener,
     const verilog::VerilogPreprocessData* preloaded_data,
+    verilog::LexicalContext::DisambiguationMode arrow_mode,
+    const std::string& file_index_id,  // v5.7.0: For indexed JSON mode
     json *json_out) {
   int exit_status = 0;
   
@@ -408,7 +442,7 @@ static int AnalyzeOneFile(
   auto start_time = std::chrono::high_resolution_clock::now();
   
   const auto analyzer =
-      ParseWithLanguageMode(content, filename, preprocess_config, file_opener, preloaded_data);
+      ParseWithLanguageMode(content, filename, preprocess_config, file_opener, preloaded_data, arrow_mode);
   const auto lex_status = ABSL_DIE_IF_NULL(analyzer)->LexStatus();
   const auto parse_status = analyzer->ParseStatus();
 
@@ -516,8 +550,21 @@ static int AnalyzeOneFile(
       verilog::PrettyPrintVerilogTree(*syntax_tree, analyzer->Data().Contents(),
                                       &std::cout);
     } else {
-      (*json_out)["tree"] = verilog::ConvertVerilogTreeToJson(
-          *syntax_tree, analyzer->Data().Contents());
+      // v5.7.0: For JSON output, distinguish complete vs partial CST
+      if (parse_ok) {
+        (*json_out)["tree"] = verilog::ConvertVerilogTreeToJson(
+            *syntax_tree, analyzer->Data().Contents(), file_index_id);
+      } else {
+        // Partial CST due to syntax errors
+        (*json_out)["partial_tree"] = verilog::ConvertVerilogTreeToJson(
+            *syntax_tree, analyzer->Data().Contents(), file_index_id);
+        (*json_out)["tree_status"] = "partial";
+      }
+    }
+  } else if (!parse_ok && syntax_tree == nullptr) {
+    // v5.7.0: No tree at all (complete parse failure)
+    if (absl::GetFlag(FLAGS_export_json)) {
+      (*json_out)["tree_status"] = "none";
     }
   }
 
@@ -540,7 +587,22 @@ int main(int argc, char **argv) {
       absl::StrCat("usage: ", argv[0], " [options] <file> [<file>...]");
   const auto args = verible::InitCommandLine(usage, &argc, &argv);
 
+  // v5.7.0: Validate mutually exclusive flags
+  if (absl::GetFlag(FLAGS_export_json) && 
+      absl::GetFlag(FLAGS_export_indexed_json)) {
+    std::cerr << "Error: --export_json and --export_indexed_json are mutually exclusive.\n"
+              << "Use --export_json for standard output (v5.6.0 compatible), or\n"
+              << "    --export_indexed_json for indexed output with file_index mapping (v5.7.0)."
+              << std::endl;
+    return 1;
+  }
+
   json json_out;
+
+  // v5.7.0: Initialize file index tracker for indexed JSON mode
+  verilog::FileIndexTracker file_index_tracker;
+  const bool using_indexed_json = absl::GetFlag(FLAGS_export_indexed_json);
+  const bool continue_on_error = absl::GetFlag(FLAGS_continue_on_error);
 
   // Create include file resolver if paths provided
   const auto include_paths = absl::GetFlag(FLAGS_include_paths);
@@ -576,6 +638,22 @@ int main(int argc, char **argv) {
     }
   }
 
+  // v5.6.0 Week 7-8: Parse arrow disambiguation mode
+  const std::string mode_str = absl::GetFlag(FLAGS_arrow_disambiguation_mode);
+  verilog::LexicalContext::DisambiguationMode arrow_mode = 
+      verilog::LexicalContext::DisambiguationMode::kMacroAware;
+  
+  if (mode_str == "enhanced_heuristic") {
+    arrow_mode = verilog::LexicalContext::DisambiguationMode::kEnhancedHeuristic;
+    std::cerr << "Using enhanced heuristic mode for arrow disambiguation" << std::endl;
+  } else if (mode_str == "both") {
+    arrow_mode = verilog::LexicalContext::DisambiguationMode::kBoth;
+    std::cerr << "Using A/B testing mode (comparing both strategies)" << std::endl;
+  } else if (mode_str != "macro_aware") {
+    std::cerr << "Warning: Unknown arrow_disambiguation_mode '" << mode_str 
+              << "', defaulting to 'macro_aware'" << std::endl;
+  }
+
   // Feature 3 (v5.4.0): Process package context files if specified
   std::unique_ptr<verilog::CombinedPackageContext> package_context;
   const auto package_files = absl::GetFlag(FLAGS_package_context);
@@ -603,9 +681,17 @@ int main(int argc, char **argv) {
   }
 
   int exit_status = 0;
+  
   // All positional arguments are file names.  Exclude program name.
   for (std::string_view filename :
        verible::make_range(args.begin() + 1, args.end())) {
+    // v5.7.0: Track file index for indexed JSON mode
+    std::string file_index_id;
+    if (using_indexed_json) {
+      file_index_id = file_index_tracker.AddFile(filename);
+    }
+    
+
     auto content_status = verible::file::GetContentAsMemBlock(filename);
     if (!content_status.status().ok()) {
       std::cerr << content_status.status().message() << std::endl;
@@ -641,10 +727,12 @@ int main(int argc, char **argv) {
     // expand_macros can work standalone or with include_files
     // include_files requires include_resolver (for resolving paths)
     const bool should_expand_macros = absl::GetFlag(FLAGS_expand_macros);
+    const bool should_inject_markers = absl::GetFlag(FLAGS_inject_macro_markers);
     const verilog::VerilogPreprocess::Config preprocess_config{
         .filter_branches = true,
         .include_files = enable_preprocessing && include_resolver != nullptr,
         .expand_macros = should_expand_macros,  // Controlled by --expand_macros flag (default: false)
+        .inject_macro_markers = should_inject_markers && should_expand_macros,  // v5.6.0: Only when expanding
     };
     
     // Create file_opener lambda if include resolver available
@@ -682,16 +770,70 @@ int main(int argc, char **argv) {
     
     json file_json;
     int file_status =
-        AnalyzeOneFile(content, filename, preprocess_config, file_opener, final_preload_data, &file_json);
-    exit_status = std::max(exit_status, file_status);
-    if (absl::GetFlag(FLAGS_export_json)) {
+        AnalyzeOneFile(content, filename, preprocess_config, file_opener, final_preload_data, arrow_mode, file_index_id, &file_json);
+    
+    // v5.7.0: Handle errors based on continue_on_error flag
+    if (file_status != 0) {
+      // File failed to parse
+      if (continue_on_error) {
+        // Log error but continue processing remaining files
+        std::cerr << "Error processing " << filename 
+                  << " (continuing with remaining files)" << std::endl;
+        exit_status = 1;  // Remember there was an error
+        
+        // Add status marker to JSON
+        file_json["status"] = "failed";
+      } else {
+        // Stop immediately (v5.6.0 behavior - backward compatible)
+        exit_status = file_status;
+        // For non-JSON modes, exit early
+        if (!absl::GetFlag(FLAGS_export_json) && !using_indexed_json) {
+          return exit_status;
+        }
+        file_json["status"] = "failed";
+      }
+    } else {
+      // File parsed successfully
+      file_json["status"] = "success";
+      exit_status = std::max(exit_status, file_status);
+    }
+    
+    // v5.7.0: Store file JSON for both export modes
+    if (absl::GetFlag(FLAGS_export_json) || using_indexed_json) {
       json_out[std::string{filename.begin(), filename.end()}] =
           std::move(file_json);
     }
   }
 
-  if (absl::GetFlag(FLAGS_export_json)) {
-    std::cout << std::setw(2) << json_out << std::endl;
+  // v5.7.0: Add version metadata and restructure for indexed mode
+  if (absl::GetFlag(FLAGS_export_json) || using_indexed_json) {
+    // Create final output with version metadata
+    json final_output;
+    
+    // Add version metadata at top level
+    final_output["verible_version"] = verible::GetRepositoryVersion();
+    final_output["cst_schema_version"] = "1.0";
+    final_output["export_format"] = using_indexed_json ? "indexed" : "standard";
+    
+    // Add ISO 8601 timestamp
+    auto now = std::chrono::system_clock::now();
+    auto time_t_val = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::gmtime(&time_t_val), "%Y-%m-%dT%H:%M:%SZ");
+    final_output["timestamp"] = ss.str();
+    
+    if (using_indexed_json) {
+      // Indexed mode: add file_index and wrap CSTs under "cst"
+      final_output["file_index"] = file_index_tracker.ExportAsJson();
+      final_output["cst"] = json_out;
+    } else {
+      // Standard mode: merge file CSTs directly into output
+      for (auto& [key, value] : json_out.items()) {
+        final_output[key] = std::move(value);
+      }
+    }
+    
+    std::cout << std::setw(2) << final_output << std::endl;
   }
 
   // Print statistics if requested

@@ -10,12 +10,23 @@ package(
     features = ["layering_check"],
 )
 
+# v5.7.0: File index tracker for --export_indexed_json
+cc_library(
+    name = "file-index-tracker",
+    srcs = ["file-index-tracker.cc"],
+    hdrs = ["file-index-tracker.h"],
+    deps = [
+        "@nlohmann_json//:singleheader-json",
+    ],
+)
+
 cc_binary(
     name = "verible-verilog-syntax",
     srcs = ["verilog-syntax.cc"],
     features = STATIC_EXECUTABLES_FEATURE,
     visibility = ["//visibility:public"],  # for verilog_style_lint.bzl
     deps = [
+        ":file-index-tracker",  # v5.7.0: For --export_indexed_json
         "//verible/common/strings:mem-block",
         "//verible/common/text:concrete-syntax-tree",
         "//verible/common/text:parser-verifier",
@@ -80,5 +91,31 @@ cc_test(
         "//verible/verilog/analysis:verilog-analyzer",
         "@googletest//:gtest",
         "@googletest//:gtest_main",
+    ],
+)
+
+# v5.7.0: File index tracker tests
+cc_test(
+    name = "file-index-tracker_test",
+    size = "small",
+    srcs = ["file-index-tracker_test.cc"],
+    deps = [
+        ":file-index-tracker",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+        "@nlohmann_json//:singleheader-json",
+    ],
+)
+
+# v5.7.0: Version metadata tests
+cc_test(
+    name = "version-metadata_test",
+    size = "small",
+    srcs = ["version-metadata_test.cc"],
+    deps = [
+        "//verible/common/util:init-command-line",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+        "@nlohmann_json//:singleheader-json",
     ],
 )

@@ -474,6 +474,12 @@ void LexicalContext::AdvanceToken(TokenInfo *token) {
 
   // Maintain one token look-back.
   previous_token_ = token;
+  
+  // v5.6.0 Week 7-8: Feed token history for enhanced heuristic
+  if (disambiguation_mode_ == DisambiguationMode::kEnhancedHeuristic ||
+      disambiguation_mode_ == DisambiguationMode::kBoth) {
+    token_history_.AddToken(token);
+  }
 }
 
 void LexicalContext::UpdateState(const TokenInfo &token) {
@@ -648,11 +654,56 @@ int LexicalContext::InterpretToken(int token_enum) const {
   // that must be transformed into a disambiguated enumeration (TK_*).
   // All other tokens pass through unmodified.
   switch (token_enum) {
+    // v5.6.0: Handle macro boundary markers for context preservation
+    case TK_MACRO_BOUNDARY_START: {
+      VLOG(2) << "==> MACRO_START (depth " << macro_depth_
+              << " → " << (macro_depth_ + 1) << ")";
+      
+      // Save context before entering macro (non-const operation)
+      // Note: This violates const-correctness but is necessary for context tracking
+      // We cast away const here - this is a known limitation that will be refactored
+      auto *mutable_this = const_cast<LexicalContext *>(this);
+      ContextState state = SaveCurrentContext();
+      mutable_this->saved_context_stack_.push(state);
+      mutable_this->macro_depth_++;
+      
+      // Log saved state
+      VLOG(2) << "    Saved: task=" << state.in_task_body
+              << " function=" << state.in_function_body
+              << " expecting=" << state.expecting_statement;
+      
+      return token_enum;  // Pass through
+    }
+    
+    case TK_MACRO_BOUNDARY_END: {
+      VLOG(2) << "==> MACRO_END (depth " << macro_depth_
+              << " → " << (macro_depth_ - 1) << ")";
+      
+      // Restore context after exiting macro (non-const operation)
+      auto *mutable_this = const_cast<LexicalContext *>(this);
+      if (!saved_context_stack_.empty()) {
+        ContextState state = saved_context_stack_.top();
+        mutable_this->saved_context_stack_.pop();
+        mutable_this->RestoreContext(state);
+        
+        VLOG(2) << "    Restored: task=" << in_task_body_
+                << " function=" << in_function_body_;
+      } else {
+        LOG(WARNING) << "Context stack underflow at MACRO_END";
+      }
+      
+      mutable_this->macro_depth_--;
+      return token_enum;  // Pass through
+    }
+
     // '->' can be interpreted as logical implication, constraint implication,
     // or event-trigger.
     case _TK_RARROW: {
+      // v5.6.0 Week 7-8: Mode-based disambiguation
+      VLOG(1) << "InterpretToken: _TK_RARROW (mode=" 
+              << static_cast<int>(disambiguation_mode_) << ")";
+      
       // Diagnostic logging for event trigger disambiguation
-      VLOG(1) << "InterpretToken: _TK_RARROW";
       VLOG(1) << "  randomize_active=" << randomize_call_tracker_.IsActive();
       VLOG(1) << "  constraint_active=" << constraint_declaration_tracker_.IsActive();
       const bool expecting_stmt = ExpectingStatement();
@@ -684,6 +735,54 @@ int LexicalContext::InterpretToken(int token_enum) const {
         VLOG(1) << "  -> Interpreted as: TK_CONSTRAINT_IMPLIES (constraint context)";
         return constraint_declaration_tracker_.InterpretToken(token_enum);
       }
+      // v5.6.0 Week 7-8: Mode-based disambiguation dispatch
+      if (disambiguation_mode_ == DisambiguationMode::kEnhancedHeuristic) {
+        VLOG(1) << "  Using EnhancedHeuristic mode";
+        return InterpretArrowEnhancedHeuristic();
+      }
+      
+      if (disambiguation_mode_ == DisambiguationMode::kBoth) {
+        // A/B testing: Run both modes and compare results
+        VLOG(1) << "  A/B Testing: Running both disambiguation modes";
+        
+        // Run enhanced heuristic
+        int heuristic_result = InterpretArrowEnhancedHeuristic();
+        
+        // Run macro-aware logic (inline for comparison)
+        int macro_aware_result;
+        if (expecting_stmt) {
+          macro_aware_result = TK_TRIGGER;
+        } else if ((in_task_body_ || in_function_body_) && previous_token_ != nullptr) {
+          const int prev_enum = previous_token_->token_enum();
+          if (prev_enum == SymbolIdentifier || prev_enum == '=' ||
+              prev_enum == TK_LOR || prev_enum == TK_LAND ||
+              prev_enum == '(' || prev_enum == '[') {
+            macro_aware_result = TK_LOGICAL_IMPLIES;
+          } else {
+            macro_aware_result = TK_TRIGGER;
+          }
+        } else {
+          macro_aware_result = TK_LOGICAL_IMPLIES;
+        }
+        
+        // Compare and log
+        if (heuristic_result != macro_aware_result) {
+          LOG(INFO) << "A/B MISMATCH: Enhanced=" 
+                    << (heuristic_result == TK_TRIGGER ? "TRIGGER" : "IMPLIES")
+                    << " MacroAware=" 
+                    << (macro_aware_result == TK_TRIGGER ? "TRIGGER" : "IMPLIES")
+                    << " context: task=" << in_task_body_
+                    << " func=" << in_function_body_
+                    << " expecting=" << expecting_stmt;
+        }
+        
+        // For A/B testing, prefer macro-aware result (it's the baseline)
+        return macro_aware_result;
+      }
+      
+      // kMacroAware mode (default): Use context-based disambiguation
+      // This is the Week 5-6 implementation with macro boundary markers
+      
       if (expecting_stmt) {
         // e.g.
         //   task foo();
@@ -807,6 +906,80 @@ WithReason<bool> LexicalContext::ExpectingBodyItemStart() const {
     return {true, "seen a delay value, expecting another statement"};
   }
   return {false, "all other cases (default)"};
+}
+
+// v5.6.0: Macro-aware context tracking helpers
+LexicalContext::ContextState LexicalContext::SaveCurrentContext() const {
+  ContextState state;
+  state.expecting_statement = ExpectingStatement();
+  state.in_task_body = in_task_body_;
+  state.in_function_body = in_function_body_;
+  state.in_initial_always_final_construct = in_initial_always_final_construct_;
+  state.balance_depth = static_cast<int>(balance_stack_.size());
+  state.previous_token = previous_token_;
+  return state;
+}
+
+void LexicalContext::RestoreContext(const ContextState &state) {
+  in_task_body_ = state.in_task_body;
+  in_function_body_ = state.in_function_body;
+  in_initial_always_final_construct_ = state.in_initial_always_final_construct;
+  previous_token_ = state.previous_token;
+  // Note: balance_depth is informational only, we don't restore balance_stack_
+  // as it may have changed during macro expansion
+}
+
+// v5.6.0 Week 7-8: Enhanced heuristic for arrow disambiguation
+// Uses multi-token lookahead to improve accuracy
+int LexicalContext::InterpretArrowEnhancedHeuristic() const {
+  VLOG(2) << "==> EnhancedHeuristic for arrow operator";
+  
+  if (previous_token_ == nullptr) {
+    VLOG(2) << "    No previous token, default to LOGICAL_IMPLIES";
+    return TK_LOGICAL_IMPLIES;
+  }
+  
+  const int prev_enum = previous_token_->token_enum();
+  
+  // Check for statement-ending pattern: ); \n ->
+  // This is a strong indicator that -> is an event trigger
+  if (prev_enum == ')') {
+    // Look back 2 tokens to see if we had a semicolon before the )
+    const verible::TokenInfo* prev2 = token_history_.GetPreviousToken(2);
+    if (prev2 && prev2->token_enum() == ';') {
+      VLOG(2) << "    Pattern: ;) -> detected, likely event trigger";
+      return TK_TRIGGER;
+    }
+  }
+  
+  // Check for closing bracket followed by arrow
+  if (prev_enum == ']') {
+    // Array access followed by arrow is likely event trigger
+    // unless we're clearly in an expression context
+    const verible::TokenInfo* prev2 = token_history_.GetPreviousToken(2);
+    if (prev2 && prev2->token_enum() == ';') {
+      VLOG(2) << "    Pattern: ;]-> detected, likely event trigger";
+      return TK_TRIGGER;
+    }
+  }
+  
+  // If previous token is clearly part of an expression, use LOGICAL_IMPLIES
+  if (prev_enum == SymbolIdentifier || prev_enum == '=' ||
+      prev_enum == TK_LOR || prev_enum == TK_LAND ||
+      prev_enum == '(' || prev_enum == '[') {
+    VLOG(2) << "    Expression context detected, using LOGICAL_IMPLIES";
+    return TK_LOGICAL_IMPLIES;
+  }
+  
+  // In statement context (task/function body), prefer TK_TRIGGER
+  if (in_task_body_ || in_function_body_) {
+    VLOG(2) << "    Procedural context, prefer TK_TRIGGER";
+    return TK_TRIGGER;
+  }
+  
+  // Default to logical implication
+  VLOG(2) << "    Default: LOGICAL_IMPLIES";
+  return TK_LOGICAL_IMPLIES;
 }
 
 }  // namespace verilog

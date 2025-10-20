@@ -681,6 +681,10 @@ is not locally defined, so the grammar here uses only generic identifiers.
 %token PD_LIBRARY_SYNTAX_BEGIN "`____verible_verilog_library_begin____"
 %token PD_LIBRARY_SYNTAX_END "`____verible_verilog_library_end____"
 
+/* v5.6.0: Macro boundary markers for context preservation */
+%token TK_MACRO_BOUNDARY_START "<MACRO_START>"
+%token TK_MACRO_BOUNDARY_END "<MACRO_END>"
+
 /* most likely a lexical error */
 %token TK_OTHER
 // LINT.ThenChange(../formatting/verilog_token.cc)
@@ -1273,6 +1277,11 @@ class_item
   | preprocessor_action
     { $$ = std::move($1); }
     /* error-recovery rules */
+  /* v5.6.0: Macro boundary markers for context preservation */
+  | TK_MACRO_BOUNDARY_START
+    { $$ = std::move($1); }
+  | TK_MACRO_BOUNDARY_END
+    { $$ = std::move($1); }
   | error ';'
     { yyerrok; $$ = Recover(); }
   | error TK_endfunction
@@ -3096,6 +3105,10 @@ module_item_directive
   : DR_protect
     { $$ = std::move($1); }
   | DR_endprotect
+    { $$ = std::move($1); }
+  | TK_MACRO_BOUNDARY_START
+    { $$ = std::move($1); }
+  | TK_MACRO_BOUNDARY_END
     { $$ = std::move($1); }
   ;
 port_direction
@@ -7207,6 +7220,11 @@ statement_item
   | preprocessor_balanced_statements
     { $$ = std::move($1); }
   | preprocessor_action
+    { $$ = std::move($1); }
+  /* v5.6.0: Macro boundary markers for context preservation */
+  | TK_MACRO_BOUNDARY_START
+    { $$ = std::move($1); }
+  | TK_MACRO_BOUNDARY_END
     { $$ = std::move($1); }
   ;
 

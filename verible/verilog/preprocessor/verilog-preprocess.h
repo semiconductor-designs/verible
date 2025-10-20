@@ -35,6 +35,7 @@
 #ifndef VERIBLE_VERILOG_PREPROCESSOR_VERILOG_PREPROCESS_H_
 #define VERIBLE_VERILOG_PREPROCESSOR_VERILOG_PREPROCESS_H_
 
+#include <deque>
 #include <functional>
 #include <map>
 #include <memory>
@@ -87,6 +88,10 @@ struct VerilogPreprocessData {
   // are two separate vectors.
   std::vector<VerilogPreprocessError> errors;
   std::vector<VerilogPreprocessError> warnings;
+  
+  // v5.6.0: Storage for macro boundary marker text strings.
+  // Deque ensures pointers/string_views remain valid when container grows.
+  std::deque<std::string> marker_text_storage;
 };
 
 // VerilogPreprocess transforms a TokenStreamView.
@@ -115,6 +120,13 @@ class VerilogPreprocess {
 
     // Expand macro definition bodies, this will relexes the macro body.
     bool expand_macros = false;
+
+    // v5.6.0: Inject macro boundary markers during expansion for context preservation
+    // When enabled, inserts <MACRO_START:name> before and <MACRO_END:name> after
+    // macro expansion to help parser maintain context across macro boundaries.
+    // Only has effect when expand_macros = true.
+    bool inject_macro_markers = false;
+    
     // TODO(hzeller): Provide a map of command-line provided +define+'s
   };
 
@@ -186,6 +198,10 @@ class VerilogPreprocess {
   static absl::Status ConsumeAndParseMacroCall(
       TokenStreamView::const_iterator, const StreamIteratorGenerator &,
       verible::MacroCall *, const verible::MacroDefinition &);
+
+  // v5.6.0: Helper to create macro boundary marker tokens
+  verible::TokenInfo CreateMacroMarkerToken(
+      bool is_start, std::string_view macro_name);
 
   // The following functions return nullptr when there is no error:
   absl::Status ConsumeMacroDefinition(const StreamIteratorGenerator &,

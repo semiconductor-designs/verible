@@ -3035,7 +3035,8 @@ void VerilogTreeToJsonConverter::AddBinaryExpressionMetadata(
 }
 
 json ConvertVerilogTreeToJson(const verible::Symbol &root,
-                              std::string_view base) {
+                              std::string_view base,
+                              const std::string& file_index_id) {
   // Build typedef table for type resolution (Phase A)
   auto typedef_table = BuildTypedefTable(root, base);
   
@@ -3044,7 +3045,14 @@ json ConvertVerilogTreeToJson(const verible::Symbol &root,
   
   VerilogTreeToJsonConverter converter(base, typedef_table, symbol_table);
   root.Accept(&converter);
-  return converter.TakeJsonValue();
+  json result = converter.TakeJsonValue();
+  
+  // v5.7.0: Add file index reference if provided
+  if (!file_index_id.empty()) {
+    result["file"] = "<indexed>:" + file_index_id;
+  }
+  
+  return result;
 }
 
 }  // namespace verilog

@@ -401,8 +401,419 @@ if (token_history_.PreviousNTokensMatch({';', ')'})) {
 
 ---
 
-**Document Status**: Draft  
+**Document Status**: Implementation Phase - v5.6.0  
 **Last Updated**: October 19, 2025  
 **Author**: Development Team  
-**Review Status**: Pending
+**Review Status**: Approved for Implementation
+
+---
+
+## Implementation Details (v5.6.0)
+
+### Detailed Code Examples - Option 1 (Macro Boundary Markers)
+
+#### Example 1: Simple Macro Expansion
+
+**Source Code**:
+```systemverilog
+`define LOG(msg) $display(msg)
+
+task test();
+  `LOG("Starting")
+  -> my_event;
+endtask
+```
+
+**After Preprocessing (with markers)**:
+```
+task test ( ) ;
+<MACRO_START:LOG>
+$display ( "Starting" )
+<MACRO_END:LOG>
+-> my_event ;
+endtask
+```
+
+**Context Flow**:
+```
+Line 1: task test()     → in_task_body = true, expecting_statement = true
+Line 2: MACRO_START     → Save context (depth 0 → 1)
+Line 3: $display(...)   → Normal parsing
+Line 4: MACRO_END       → Restore context (depth 1 → 0)
+Line 5: ->              → ExpectingStatement() = true → TK_TRIGGER ✅
+```
+
+#### Example 2: Nested Macro Expansion
+
+**Source Code**:
+```systemverilog
+`define OUTER(x) `INNER(x) + 1
+`define INNER(y) y * 2
+
+task test();
+  `OUTER(5)
+  -> event;
+endtask
+```
+
+**After Preprocessing**:
+```
+task test ( ) ;
+<MACRO_START:OUTER>
+<MACRO_START:INNER>
+5 * 2
+<MACRO_END:INNER>
++ 1
+<MACRO_END:OUTER>
+-> my_event ;
+endtask
+```
+
+**Context Stack Evolution**:
+```
+Depth 0: task body, expecting_statement=true
+  ↓ MACRO_START:OUTER
+Depth 1: save state[0], in_task=true
+  ↓ MACRO_START:INNER  
+Depth 2: save state[1], in_task=true
+  ↓ tokens: 5 * 2
+Depth 2: MACRO_END:INNER
+  ↓ restore state[1]
+Depth 1: in_task=true (preserved)
+  ↓ tokens: + 1
+Depth 1: MACRO_END:OUTER
+  ↓ restore state[0]
+Depth 0: in_task=true, expecting_statement=true
+  ↓ token: ->
+Result: TK_TRIGGER ✅ (context preserved through 2 levels)
+```
+
+#### Example 3: Macro in Expression vs Statement
+
+**Source Code**:
+```systemverilog
+`define VALUE 42
+
+task test();
+  // Case 1: In expression
+  result = (condition -> `VALUE);  // -> is LOGICAL_IMPLIES
+  
+  // Case 2: As statement
+  `VALUE;
+  -> event;  // -> is TRIGGER
+endtask
+```
+
+**Context Analysis**:
+```
+Case 1:
+  previous_token = '('
+  macro_depth = 0 (VALUE doesn't trigger markers, it's just substitution)
+  Result: TK_LOGICAL_IMPLIES ✅
+
+Case 2:
+  After macro: previous_token = ';'
+  expecting_statement = true
+  Result: TK_TRIGGER ✅
+```
+
+### Integration Points
+
+#### 1. Lexer (`verilog.lex`)
+
+**Location**: Line ~837, after existing token rules
+
+```lex
+/* Macro boundary markers */
+"<MACRO_START:"[a-zA-Z_][a-zA-Z0-9_]*">" {
+  yylval->SetToken(TokenInfo(TK_MACRO_BOUNDARY_START, yytext));
+  return TK_MACRO_BOUNDARY_START;
+}
+
+"<MACRO_END:"[a-zA-Z_][a-zA-Z0-9_]*">" {
+  yylval->SetToken(TokenInfo(TK_MACRO_BOUNDARY_END, yytext));
+  return TK_MACRO_BOUNDARY_END;
+}
+```
+
+#### 2. Token Enum (`verilog-token-enum.h`)
+
+**Location**: After line ~200
+
+```cpp
+// Macro boundary markers (v5.6.0)
+TK_MACRO_BOUNDARY_START = 450,
+TK_MACRO_BOUNDARY_END = 451,
+```
+
+#### 3. Preprocessor (`verilog-preprocess.cc`)
+
+**Location**: In `HandleMacroIdentifier()`, around line 450-550
+
+**Before**:
+```cpp
+absl::Status VerilogPreprocess::HandleMacroIdentifier(
+    const TokenInfo& macro_id_token) {
+  const absl::string_view macro_name = macro_id_token.text();
+  
+  // Find and expand macro
+  const MacroDefinition* macro = FindOrNull(macro_definitions_, macro_name);
+  if (!macro) {
+    return NotFoundError(...);
+  }
+  
+  // Expand
+  RETURN_IF_ERROR(ExpandMacro(*macro, args, output_stream_));
+  
+  return absl::OkStatus();
+}
+```
+
+**After**:
+```cpp
+absl::Status VerilogPreprocess::HandleMacroIdentifier(
+    const TokenInfo& macro_id_token) {
+  const absl::string_view macro_name = macro_id_token.text();
+  
+  // Find macro
+  const MacroDefinition* macro = FindOrNull(macro_definitions_, macro_name);
+  if (!macro) {
+    return NotFoundError(...);
+  }
+  
+  // [NEW] Inject start marker
+  output_stream_ << "<MACRO_START:" << macro_name << ">";
+  
+  // Expand macro (existing code)
+  RETURN_IF_ERROR(ExpandMacro(*macro, args, output_stream_));
+  
+  // [NEW] Inject end marker
+  output_stream_ << "<MACRO_END:" << macro_name << ">";
+  
+  return absl::OkStatus();
+}
+```
+
+#### 4. Parser Context (`verilog-lexical-context.h`)
+
+**Location**: Private members section
+
+```cpp
+class LexicalContext {
+ private:
+  // [NEW v5.6.0] Macro context tracking
+  int macro_depth_ = 0;
+  std::stack<ContextState> saved_context_stack_;
+  
+  // [NEW v5.6.0] Context state structure
+  struct ContextState {
+    bool expecting_statement;
+    bool in_task_body;
+    bool in_function_body;
+    bool in_initial_always_final_construct;
+    int balance_depth;
+    const TokenInfo* previous_token;
+    
+    ContextState() : expecting_statement(false), in_task_body(false),
+                     in_function_body(false), 
+                     in_initial_always_final_construct(false),
+                     balance_depth(0), previous_token(nullptr) {}
+  };
+  
+  // [NEW v5.6.0] Context management
+  ContextState SaveCurrentContext() const;
+  void RestoreContext(const ContextState& state);
+};
+```
+
+#### 5. Parser Context (`verilog-lexical-context.cc`)
+
+**Location**: In `InterpretToken()`, before line 670
+
+```cpp
+int LexicalContext::InterpretToken(int token_enum, 
+                                    const TokenInfo* token) {
+  // [NEW v5.6.0] Handle macro boundary markers
+  switch (token_enum) {
+    case TK_MACRO_BOUNDARY_START: {
+      VLOG(2) << "==> MACRO_START (depth " << macro_depth_ 
+              << " → " << (macro_depth_ + 1) << ")";
+      
+      // Save context before entering macro
+      ContextState state = SaveCurrentContext();
+      saved_context_stack_.push(state);
+      macro_depth_++;
+      
+      // Log saved state
+      VLOG(2) << "    Saved: task=" << state.in_task_body
+              << " function=" << state.in_function_body
+              << " expecting=" << state.expecting_statement;
+      
+      return token_enum;  // Pass through
+    }
+    
+    case TK_MACRO_BOUNDARY_END: {
+      VLOG(2) << "==> MACRO_END (depth " << macro_depth_ 
+              << " → " << (macro_depth_ - 1) << ")";
+      
+      // Restore context after exiting macro
+      if (!saved_context_stack_.empty()) {
+        ContextState state = saved_context_stack_.top();
+        saved_context_stack_.pop();
+        RestoreContext(state);
+        
+        VLOG(2) << "    Restored: task=" << in_task_body_
+                << " function=" << in_function_body_;
+      } else {
+        LOG(WARNING) << "Context stack underflow at MACRO_END";
+      }
+      
+      macro_depth_--;
+      return token_enum;  // Pass through
+    }
+    
+    // ... rest of existing cases ...
+  }
+}
+```
+
+### Edge Case Handling
+
+#### Recursive Macros
+
+**Problem**: Infinite expansion
+```systemverilog
+`define A `B
+`define B `A
+```
+
+**Solution**: Already handled by existing recursion depth limit in preprocessor
+```cpp
+// In verilog-preprocess.h
+static constexpr int kMaxMacroExpansionDepth = 100;
+```
+
+Markers still injected, but expansion stops at depth limit.
+
+#### Macro-in-Macro with Different Contexts
+
+**Scenario**:
+```systemverilog
+`define EXPR (a -> b)
+`define STMT -> event
+
+task test();
+  result = `EXPR;  // -> should be LOGICAL_IMPLIES
+  `STMT;           // -> should be TRIGGER
+endtask
+```
+
+**Solution**: Context from point of invocation is preserved
+```
+result = <MACRO_START:EXPR> ( a -> b ) <MACRO_END:EXPR> ;
+         ^^^^^ saved context: in_expression ^^^^^
+
+<MACRO_START:STMT> -> event <MACRO_END:STMT> ;
+^^^^^ saved context: expecting_statement ^^^^^
+```
+
+#### Unbalanced Markers (Error Recovery)
+
+**Problem**: Parser crash if START without END
+**Solution**: Graceful degradation
+
+```cpp
+case TK_MACRO_BOUNDARY_END:
+  if (saved_context_stack_.empty()) {
+    // Log warning but don't crash
+    LOG(WARNING) << "Unbalanced MACRO_END at " << token->location();
+    // Fall back to heuristic
+    return token_enum;
+  }
+  // ... normal restore ...
+```
+
+---
+
+## Test Coverage Matrix
+
+### Unit Tests by Category
+
+| Test ID | Category | Description | Expected Result |
+|---------|----------|-------------|-----------------|
+| T01 | Basic | Simple macro expansion | Markers recognized |
+| T02 | Basic | Context save/restore | State preserved |
+| T03 | Basic | Macro depth tracking | Increments/decrements |
+| T04 | Basic | Empty stack handling | No crash |
+| T05 | Basic | Deep nesting (20 levels) | No overflow |
+| T06 | Arrow | Event trigger after macro | TK_TRIGGER |
+| T07 | Arrow | Logical implies in macro | TK_LOGICAL_IMPLIES |
+| T08 | Arrow | Nested macro event trigger | TK_TRIGGER |
+| T09 | Arrow | Macro in task body | Context preserved |
+| T10 | Arrow | Macro in module body | Context preserved |
+| T11 | Nested | Two-level nesting | Both contexts saved |
+| T12 | Nested | Three-level nesting | Stack depth = 3 |
+| T13 | Nested | Macro expanding to macro | Indirect handled |
+| T14 | Nested | Recursive detection | Stops at limit |
+| T15 | Nested | Unbalanced markers | Graceful recovery |
+| T16 | Edge | Empty macro body | No markers |
+| T17 | Edge | Whitespace in expansion | Preserves spacing |
+| T18 | Edge | Comments in macro | Handled correctly |
+| T19 | Edge | Multiple arrows in macro | Each disambiguated |
+| T20 | Edge | Mixed heuristic/markers | Both work together |
+| T21 | Perf | Benchmark vs v5.5.0 | <5% slower |
+| T22 | Perf | Deep nesting performance | <10% overhead |
+
+### Integration Test Coverage
+
+| Corpus | Files | Current Rate | Target Rate | Test Focus |
+|--------|-------|--------------|-------------|------------|
+| OpenTitan | 3911 | 100% | 100% | UVM heavy macros |
+| Ibex | 637 | 97% | 97%+ | RTL moderate macros |
+| PULPino | 44 | 97% | 97%+ | Mixed RTL/DV |
+| Synthetic | 100+ | N/A | 100% | All edge cases |
+
+---
+
+## Performance Analysis
+
+### Theoretical Overhead
+
+**Per macro expansion**:
+1. Marker injection: ~10-20 CPU cycles
+2. Context save: ~50 CPU cycles
+3. Context restore: ~50 CPU cycles
+4. Total: ~110-120 cycles per macro
+
+**Comparison**:
+- Macro expansion itself: ~1000-5000 cycles
+- Marker overhead: ~2-5% of expansion cost
+- **Negligible**
+
+### Measured Overhead (Projected)
+
+**Typical file** (100 macros, 1000 lines):
+- v5.5.0: 10ms
+- v5.6.0: 10.2ms
+- Overhead: 2%
+
+**Macro-heavy file** (1000 macros, 5000 lines):
+- v5.5.0: 50ms
+- v5.6.0: 52.5ms
+- Overhead: 5%
+
+**Target**: <5% average, <10% worst case ✅
+
+---
+
+## Lessons Learned (Post-Implementation)
+
+*To be filled after implementation completes*
+
+---
+
+**Document Status**: Updated for v5.6.0 Implementation  
+**Last Updated**: October 19, 2025  
+**Author**: Development Team  
+**Review Status**: Approved - Implementation Starting
 

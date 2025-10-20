@@ -242,6 +242,8 @@ void VerilogAnalyzer::FilterTokensForSyntaxTree() {
 
 void VerilogAnalyzer::ContextualizeTokens() {
   LexicalContext context;
+  // v5.6.0 Week 7-8: Set disambiguation mode before token processing
+  context.SetDisambiguationMode(arrow_disambiguation_mode_);
   context.TransformVerilogSymbols(MutableData().MakeTokenStreamReferenceView());
 }
 
@@ -296,6 +298,23 @@ absl::Status VerilogAnalyzer::Analyze() {
     MutableData().MutableTokenStreamView() =
         preprocessor_data_.preprocessed_token_stream;  // copy
     // TODO(fangism): could we just move, swap, or directly reference?
+  }
+
+  // v5.6.0: Re-contextualize tokens after preprocessing to handle macro markers
+  // This allows LexicalContext to process injected macro boundary markers
+  // for context preservation across macro expansions
+  if (preprocess_config_.inject_macro_markers) {
+    ContextualizeTokens();
+    
+    // Filter out macro markers before parsing - they're transparent to parser
+    verible::TokenStreamView filtered_stream;
+    for (const auto& token_ref : Data().GetTokenStreamView()) {
+      if (token_ref->token_enum() != TK_MACRO_BOUNDARY_START &&
+          token_ref->token_enum() != TK_MACRO_BOUNDARY_END) {
+        filtered_stream.push_back(token_ref);
+      }
+    }
+    MutableData().MutableTokenStreamView() = filtered_stream;
   }
 
   auto generator = MakeTokenViewer(Data().GetTokenStreamView());

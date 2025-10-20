@@ -119,6 +119,75 @@ Features:
 
 See [verible-verilog-syntax README](./verible/verilog/tools/syntax/README.md) for more examples.
 
+### v5.7.0 New Features: VeriPG Enhancements
+
+**Indexed JSON Export for Large-Scale Batch Processing**
+
+Verible v5.7.0 adds robust support for processing thousands of files with explicit file index tracking:
+
+```bash
+# Process entire OpenTitan repository (3,659 files) with file tracking
+verible-verilog-syntax --export_indexed_json --continue_on_error \
+  $(find opentitan -name "*.sv") > output.json
+```
+
+**New Flags**:
+
+1. **`--export_indexed_json`** - Export with file index mapping
+   - Maps `<indexed>:N` placeholders to actual file paths
+   - Automatic path normalization (relative → absolute)
+   - Designed for large repositories (1000+ files)
+   - Output: `{"file_index": {"0": "/path/file1.sv", ...}, "cst": {...}}`
+
+2. **`--continue_on_error`** - Robust batch processing
+   - Continues processing remaining files even if some fail
+   - Collects all errors in one pass
+   - Exit code: 1 if any errors, 0 if all succeeded
+   - **Transforms**: all-or-nothing → best-effort always
+
+**Version Metadata** (both `--export_json` and `--export_indexed_json`):
+
+All JSON outputs now include top-level metadata:
+```json
+{
+  "verible_version": "v5.7.0-...",
+  "cst_schema_version": "1.0",
+  "export_format": "indexed",
+  "timestamp": "2025-10-20T14:30:00Z",
+  ...
+}
+```
+
+**Use Cases**:
+- ✅ Large repository processing (OpenTitan: 3,659 files)
+- ✅ Multi-variant projects (4+ chip configurations)
+- ✅ File traceability and deduplication
+- ✅ Production pipelines with audit trails
+- ✅ Schema version validation (avoid silent failures)
+
+**Backward Compatibility**: 100% maintained! 
+- `--export_json` works identically to v5.6.0 (plus metadata)
+- New features are opt-in via new flags
+- No breaking changes to existing workflows
+
+**Documentation**:
+- [Export Formats Guide](./docs/EXPORT_FORMATS_v5.7.0.md) - Complete format documentation
+- [v5.7.0 Release Notes](./V5.7.0_RELEASE_NOTES.md) - Detailed feature descriptions
+- [v5.7.0 Migration Guide](./V5.7.0_MIGRATION_GUIDE.md) - Upgrade instructions
+
+**Quick Examples**:
+
+```bash
+# Standard JSON (v5.6.0 compatible)
+verible-verilog-syntax --export_json file.sv
+
+# Indexed JSON for batch processing
+verible-verilog-syntax --export_indexed_json file1.sv file2.sv file3.sv
+
+# Large-scale with error recovery
+verible-verilog-syntax --export_indexed_json --continue_on_error *.sv
+```
+
 ### Style Linter
 
 [`verible-verilog-lint`](./verible/verilog/tools/lint) identifies constructs or patterns

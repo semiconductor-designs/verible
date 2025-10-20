@@ -23,8 +23,10 @@
 namespace verilog {
 
 // Returns a JSON representation of tree contained at root.
+// v5.7.0: Optional file_index_id for indexed JSON mode
 nlohmann::json ConvertVerilogTreeToJson(const verible::Symbol &root,
-                                        std::string_view base);
+                                        std::string_view base,
+                                        const std::string& file_index_id = "");
 
 }  // namespace verilog
 

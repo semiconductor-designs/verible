@@ -25,6 +25,7 @@
 #include "verible/common/analysis/file-analyzer.h"
 #include "verible/common/strings/mem-block.h"
 #include "verible/common/text/token-stream-view.h"
+#include "verible/verilog/parser/verilog-lexical-context.h"
 #include "verible/verilog/preprocessor/verilog-preprocess.h"
 
 namespace verilog {
@@ -110,6 +111,13 @@ class VerilogAnalyzer : public verible::FileAnalyzer {
     auto_wrap_mode_ = enable;
   }
 
+  // v5.6.0 Week 7-8: Set arrow disambiguation mode
+  // Call this before Analyze() to select disambiguation strategy
+  void SetArrowDisambiguationMode(
+      verilog::LexicalContext::DisambiguationMode mode) {
+    arrow_disambiguation_mode_ = mode;
+  }
+
   // Maybe this belongs in a subclass like VerilogFileAnalyzer?
   // TODO(fangism): Retain a copy of the token stream transformer because it
   // may contain tokens backed by generated text.
@@ -152,6 +160,10 @@ class VerilogAnalyzer : public verible::FileAnalyzer {
 
   // Feature 3 (v5.4.1): Auto-wrap mode flag
   bool auto_wrap_mode_ = false;
+
+  // v5.6.0 Week 7-8: Arrow disambiguation mode
+  verilog::LexicalContext::DisambiguationMode arrow_disambiguation_mode_ = 
+      verilog::LexicalContext::DisambiguationMode::kMacroAware;
 
   // Status of lexing.
   absl::Status lex_status_;

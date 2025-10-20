@@ -258,6 +258,23 @@ std::unique_ptr<VerilogPreprocessError> VerilogPreprocess::ParseMacroDefinition(
   return nullptr;
 }
 
+// v5.6.0: Creates a macro boundary marker token
+// Format: <MACRO_START:name> or <MACRO_END:name>
+verible::TokenInfo VerilogPreprocess::CreateMacroMarkerToken(
+    bool is_start, std::string_view macro_name) {
+  // Build marker text: <MACRO_START:name> or <MACRO_END:name>
+  const std::string marker_text = absl::StrCat(
+      is_start ? "<MACRO_START:" : "<MACRO_END:",
+      macro_name,
+      ">");
+  
+  // Store in deque for stable addresses (deque doesn't reallocate on push_back)
+  preprocess_data_.marker_text_storage.push_back(marker_text);
+  
+  const int token_enum = is_start ? TK_MACRO_BOUNDARY_START : TK_MACRO_BOUNDARY_END;
+  return verible::TokenInfo(token_enum, preprocess_data_.marker_text_storage.back());
+}
+
 // Parses a callable macro actual parameters, and saves it into a MacroCall
 absl::Status VerilogPreprocess::ConsumeAndParseMacroCall(
     TokenStreamView::const_iterator iter,
@@ -372,7 +389,28 @@ absl::Status VerilogPreprocess::HandleMacroIdentifier(
     verible::MacroCall macro_call;
     RETURN_IF_ERROR(
         ConsumeAndParseMacroCall(iter, generator, &macro_call, *found));
+    
     RETURN_IF_ERROR(ExpandMacro(macro_call, found));
+    
+    // v5.6.0: Inject markers around expanded content if enabled
+    if (config_.inject_macro_markers) {
+      auto &expanded = preprocess_data_.lexed_macros_backup.back();
+      
+      // Insert start marker at the beginning
+      verible::TokenSequence new_sequence;
+      new_sequence.push_back(CreateMacroMarkerToken(true, macro_name));
+      
+      // Copy expanded content
+      for (auto &token : expanded) {
+        new_sequence.push_back(token);
+      }
+      
+      // Add end marker at the end
+      new_sequence.push_back(CreateMacroMarkerToken(false, macro_name));
+      
+      // Replace with new sequence that has markers
+      expanded = std::move(new_sequence);
+    }
   }
   auto &lexed = preprocess_data_.lexed_macros_backup.back();
   if (!forward) return absl::OkStatus();
