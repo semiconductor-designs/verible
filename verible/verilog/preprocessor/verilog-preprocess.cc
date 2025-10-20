@@ -393,18 +393,26 @@ absl::Status VerilogPreprocess::HandleMacroIdentifier(
     RETURN_IF_ERROR(
         ConsumeAndParseMacroCall(iter, generator, &macro_call, *found));
     
-    // v5.6.0: Inject start marker if enabled
-    if (config_.inject_macro_markers) {
-      preprocess_data_.lexed_macros_backup.back().push_back(
-          CreateMacroMarkerToken(true, macro_name));
-    }
-    
     RETURN_IF_ERROR(ExpandMacro(macro_call, found));
     
-    // v5.6.0: Inject end marker if enabled
+    // v5.6.0: Inject markers around expanded content if enabled
     if (config_.inject_macro_markers) {
-      preprocess_data_.lexed_macros_backup.back().push_back(
-          CreateMacroMarkerToken(false, macro_name));
+      auto &expanded = preprocess_data_.lexed_macros_backup.back();
+      
+      // Insert start marker at the beginning
+      verible::TokenSequence new_sequence;
+      new_sequence.push_back(CreateMacroMarkerToken(true, macro_name));
+      
+      // Copy expanded content
+      for (auto &token : expanded) {
+        new_sequence.push_back(token);
+      }
+      
+      // Add end marker at the end
+      new_sequence.push_back(CreateMacroMarkerToken(false, macro_name));
+      
+      // Replace with new sequence that has markers
+      expanded = std::move(new_sequence);
     }
   }
   auto &lexed = preprocess_data_.lexed_macros_backup.back();
