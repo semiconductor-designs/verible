@@ -35,6 +35,7 @@
 #ifndef VERIBLE_VERILOG_PREPROCESSOR_VERILOG_PREPROCESS_H_
 #define VERIBLE_VERILOG_PREPROCESSOR_VERILOG_PREPROCESS_H_
 
+#include <deque>
 #include <functional>
 #include <map>
 #include <memory>
@@ -87,6 +88,10 @@ struct VerilogPreprocessData {
   // are two separate vectors.
   std::vector<VerilogPreprocessError> errors;
   std::vector<VerilogPreprocessError> warnings;
+  
+  // v5.6.0: Storage for macro boundary marker text strings.
+  // Deque ensures pointers/string_views remain valid when container grows.
+  std::deque<std::string> marker_text_storage;
 };
 
 // VerilogPreprocess transforms a TokenStreamView.

@@ -44,7 +44,7 @@ TEST(PreprocessMacroMarkersTest, ConfigFlagControlsMarkerInjection) {
     
     VerilogAnalyzer analyzer(code, "test.sv", config);
     auto status = analyzer.Analyze();
-    EXPECT_TRUE(status.ok()) << "Should parse without markers (default)";
+    EXPECT_TRUE(status.ok()) << "Should parse without markers (default). Error: " << status.message();
   }
   
   // Test with markers enabled

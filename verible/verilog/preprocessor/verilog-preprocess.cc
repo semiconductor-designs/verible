@@ -268,14 +268,11 @@ verible::TokenInfo VerilogPreprocess::CreateMacroMarkerToken(
       macro_name,
       ">");
   
-  // Create token with appropriate enum
-  // Note: We use a static string storage to keep the string_view valid
-  // This is a simplified approach for PoC; production may need better memory management
-  static std::vector<std::string> marker_storage;
-  marker_storage.push_back(marker_text);
+  // Store in deque for stable addresses (deque doesn't reallocate on push_back)
+  preprocess_data_.marker_text_storage.push_back(marker_text);
   
   const int token_enum = is_start ? TK_MACRO_BOUNDARY_START : TK_MACRO_BOUNDARY_END;
-  return verible::TokenInfo(token_enum, marker_storage.back());
+  return verible::TokenInfo(token_enum, preprocess_data_.marker_text_storage.back());
 }
 
 // Parses a callable macro actual parameters, and saves it into a MacroCall
