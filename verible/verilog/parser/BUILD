@@ -236,6 +236,17 @@ cc_test(
     ],
 )
 
+cc_test(
+    name = "verilog-arrow-disambiguation_test",
+    size = "medium",
+    srcs = ["verilog-arrow-disambiguation_test.cc"],
+    deps = [
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
 cc_library(
     name = "verilog-token-classifications",
     srcs = ["verilog-token-classifications.cc"],
