@@ -76,7 +76,7 @@ TEST(PreprocessMacroMarkersTest, SimpleMacroExpansionWithMarkers) {
   VerilogAnalyzer analyzer(code, "test.sv", config);
   auto status = analyzer.Analyze();
   
-  EXPECT_TRUE(status.ok()) << "Should parse with macro expansion and markers";
+  EXPECT_TRUE(status.ok()) << "Should parse with macro expansion and markers. Error: " << status.message();
 }
 
 // Test 3: Nested Macro Expansion with Markers
