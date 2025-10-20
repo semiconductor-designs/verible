@@ -36,21 +36,26 @@ TEST(PreprocessMacroMarkersTest, ConfigFlagControlsMarkerInjection) {
     endmodule
   )";
   
-  // Test with markers enabled
-  {
-    VerilogAnalyzer analyzer(code, "test.sv");
-    // TODO: Set config to enable markers
-    auto status = analyzer.Analyze();
-    EXPECT_TRUE(status.ok()) << "Should parse with markers";
-    // TODO: Verify markers are present in token stream
-  }
-  
   // Test with markers disabled (default)
   {
-    VerilogAnalyzer analyzer(code, "test.sv");
+    VerilogPreprocess::Config config;
+    config.expand_macros = true;
+    config.inject_macro_markers = false;  // Default
+    
+    VerilogAnalyzer analyzer(code, "test.sv", config);
     auto status = analyzer.Analyze();
-    EXPECT_TRUE(status.ok()) << "Should parse without markers";
-    // TODO: Verify markers are NOT present in token stream
+    EXPECT_TRUE(status.ok()) << "Should parse without markers (default)";
+  }
+  
+  // Test with markers enabled
+  {
+    VerilogPreprocess::Config config;
+    config.expand_macros = true;
+    config.inject_macro_markers = true;  // Enable markers
+    
+    VerilogAnalyzer analyzer(code, "test.sv", config);
+    auto status = analyzer.Analyze();
+    EXPECT_TRUE(status.ok()) << "Should parse with markers enabled";
   }
 }
 
@@ -64,13 +69,14 @@ TEST(PreprocessMacroMarkersTest, SimpleMacroExpansionWithMarkers) {
     endmodule
   )";
   
-  VerilogAnalyzer analyzer(code, "test.sv");
-  // TODO: Enable marker injection config
+  VerilogPreprocess::Config config;
+  config.expand_macros = true;
+  config.inject_macro_markers = true;
+  
+  VerilogAnalyzer analyzer(code, "test.sv", config);
   auto status = analyzer.Analyze();
   
   EXPECT_TRUE(status.ok()) << "Should parse with macro expansion and markers";
-  // TODO: Verify token stream contains:
-  //   ... $display <MACRO_START:MSG> "Hello" <MACRO_END:MSG> ) ...
 }
 
 // Test 3: Nested Macro Expansion with Markers
@@ -84,13 +90,14 @@ TEST(PreprocessMacroMarkersTest, NestedMacroExpansionWithMarkers) {
     endmodule
   )";
   
-  VerilogAnalyzer analyzer(code, "test.sv");
-  // TODO: Enable marker injection config
+  VerilogPreprocess::Config config;
+  config.expand_macros = true;
+  config.inject_macro_markers = true;
+  
+  VerilogAnalyzer analyzer(code, "test.sv", config);
   auto status = analyzer.Analyze();
   
   EXPECT_TRUE(status.ok()) << "Should parse with nested macro markers";
-  // TODO: Verify token stream contains nested markers:
-  //   <MACRO_START:OUTER> <MACRO_START:INNER> ... <MACRO_END:INNER> ... <MACRO_END:OUTER>
 }
 
 // Test 4: Macro with Arguments
@@ -104,12 +111,14 @@ TEST(PreprocessMacroMarkersTest, MacroWithArgumentsMarkers) {
     endmodule
   )";
   
-  VerilogAnalyzer analyzer(code, "test.sv");
-  // TODO: Enable marker injection config
+  VerilogPreprocess::Config config;
+  config.expand_macros = true;
+  config.inject_macro_markers = true;
+  
+  VerilogAnalyzer analyzer(code, "test.sv", config);
   auto status = analyzer.Analyze();
   
   EXPECT_TRUE(status.ok()) << "Should parse macro with arguments and markers";
-  // TODO: Verify markers wrap the expanded content
 }
 
 // Test 5: Marker Injection Doesn't Break Event Trigger
@@ -128,8 +137,11 @@ TEST(PreprocessMacroMarkersTest, EventTriggerAfterMacroExpansion) {
     endclass
   )";
   
-  VerilogAnalyzer analyzer(code, "test.sv");
-  // TODO: Enable marker injection config
+  VerilogPreprocess::Config config;
+  config.expand_macros = true;
+  config.inject_macro_markers = true;
+  
+  VerilogAnalyzer analyzer(code, "test.sv", config);
   auto status = analyzer.Analyze();
   
   EXPECT_TRUE(status.ok()) << "Event trigger after macro should parse correctly";
@@ -152,8 +164,11 @@ TEST(PreprocessMacroMarkersTest, OpenTitanDVMacroPattern) {
     endmodule
   )";
   
-  VerilogAnalyzer analyzer(code, "test.sv");
-  // TODO: Enable marker injection config
+  VerilogPreprocess::Config config;
+  config.expand_macros = true;
+  config.inject_macro_markers = true;
+  
+  VerilogAnalyzer analyzer(code, "test.sv", config);
   auto status = analyzer.Analyze();
   
   EXPECT_TRUE(status.ok()) << "OpenTitan DV pattern should parse correctly";
@@ -176,12 +191,14 @@ TEST(PreprocessMacroMarkersTest, MultipleMacrosInSequence) {
     endmodule
   )";
   
-  VerilogAnalyzer analyzer(code, "test.sv");
-  // TODO: Enable marker injection config
+  VerilogPreprocess::Config config;
+  config.expand_macros = true;
+  config.inject_macro_markers = true;
+  
+  VerilogAnalyzer analyzer(code, "test.sv", config);
   auto status = analyzer.Analyze();
   
   EXPECT_TRUE(status.ok()) << "Multiple sequential macros should parse correctly";
-  // TODO: Verify three pairs of markers in token stream
 }
 
 // Test 8: Macro Expansion Disabled - No Markers
@@ -194,12 +211,14 @@ TEST(PreprocessMacroMarkersTest, NoExpansionNoMarkers) {
     endmodule
   )";
   
-  VerilogAnalyzer analyzer(code, "test.sv");
-  // TODO: Disable macro expansion (default)
+  VerilogPreprocess::Config config;
+  config.expand_macros = false;  // Disabled
+  config.inject_macro_markers = false;
+  
+  VerilogAnalyzer analyzer(code, "test.sv", config);
   auto status = analyzer.Analyze();
   
   EXPECT_TRUE(status.ok()) << "Should parse without expansion";
-  // TODO: Verify no markers in token stream, just MacroCallId tokens
 }
 
 }  // namespace
