@@ -540,32 +540,37 @@ static int AnalyzeOneFile(
   const auto &text_structure = analyzer->Data();
   const auto &syntax_tree = text_structure.SyntaxTree();
 
-  // check for printtree flag, and print tree if on
-  if (absl::GetFlag(FLAGS_printtree) && syntax_tree != nullptr) {
-    if (!absl::GetFlag(FLAGS_export_json)) {
-      std::cout << std::endl
-                << "Parse Tree"
-                << (!parse_ok ? " (incomplete due to syntax errors):" : ":")
-                << std::endl;
-      verilog::PrettyPrintVerilogTree(*syntax_tree, analyzer->Data().Contents(),
-                                      &std::cout);
-    } else {
-      // v5.7.0: For JSON output, distinguish complete vs partial CST
-      if (parse_ok) {
-        (*json_out)["tree"] = verilog::ConvertVerilogTreeToJson(
-            *syntax_tree, analyzer->Data().Contents(), file_index_id);
-      } else {
-        // Partial CST due to syntax errors
-        (*json_out)["partial_tree"] = verilog::ConvertVerilogTreeToJson(
-            *syntax_tree, analyzer->Data().Contents(), file_index_id);
-        (*json_out)["tree_status"] = "partial";
-      }
+  // v5.7.0: Enhanced CST generation in JSON mode
+  const bool json_mode = absl::GetFlag(FLAGS_export_json) || 
+                         absl::GetFlag(FLAGS_export_indexed_json);
+  const bool printtree = absl::GetFlag(FLAGS_printtree);
+  
+  if (json_mode && syntax_tree != nullptr) {
+    // v5.7.0 FIX #2: Always generate partial CST on errors (best-effort recovery)
+    // For successful parses, respect --printtree flag (backward compatible)
+    if (!parse_ok) {
+      // ERROR CASE: Always generate partial CST (no --printtree needed)
+      (*json_out)["partial_tree"] = verilog::ConvertVerilogTreeToJson(
+          *syntax_tree, analyzer->Data().Contents(), file_index_id);
+      (*json_out)["tree_status"] = "partial";
+    } else if (printtree) {
+      // SUCCESS CASE: Only generate full CST if --printtree specified
+      (*json_out)["tree"] = verilog::ConvertVerilogTreeToJson(
+          *syntax_tree, analyzer->Data().Contents(), file_index_id);
     }
-  } else if (!parse_ok && syntax_tree == nullptr) {
-    // v5.7.0: No tree at all (complete parse failure)
-    if (absl::GetFlag(FLAGS_export_json)) {
-      (*json_out)["tree_status"] = "none";
-    }
+  } else if (json_mode && !parse_ok && syntax_tree == nullptr) {
+    // v5.7.0: No tree at all (complete parse failure - no recovery possible)
+    (*json_out)["tree_status"] = "none";
+  }
+  
+  // check for printtree flag, and print tree if on (non-JSON output)
+  if (printtree && syntax_tree != nullptr && !json_mode) {
+    std::cout << std::endl
+              << "Parse Tree"
+              << (!parse_ok ? " (incomplete due to syntax errors):" : ":")
+              << std::endl;
+    verilog::PrettyPrintVerilogTree(*syntax_tree, analyzer->Data().Contents(),
+                                    &std::cout);
   }
 
   // Check for verifytree, verify tree and print unmatched if on.
@@ -805,35 +810,34 @@ int main(int argc, char **argv) {
     }
   }
 
-  // v5.7.0: Add version metadata and restructure for indexed mode
+  // v5.7.0: Output JSON in appropriate format
   if (absl::GetFlag(FLAGS_export_json) || using_indexed_json) {
-    // Create final output with version metadata
-    json final_output;
-    
-    // Add version metadata at top level
-    final_output["verible_version"] = verible::GetRepositoryVersion();
-    final_output["cst_schema_version"] = "1.0";
-    final_output["export_format"] = using_indexed_json ? "indexed" : "standard";
-    
-    // Add ISO 8601 timestamp
-    auto now = std::chrono::system_clock::now();
-    auto time_t_val = std::chrono::system_clock::to_time_t(now);
-    std::stringstream ss;
-    ss << std::put_time(std::gmtime(&time_t_val), "%Y-%m-%dT%H:%M:%SZ");
-    final_output["timestamp"] = ss.str();
-    
     if (using_indexed_json) {
-      // Indexed mode: add file_index and wrap CSTs under "cst"
+      // v5.7.0 NEW: Indexed mode with metadata, file_index, and wrapped CST
+      json final_output;
+      
+      // Add version metadata at top level (v5.7.0 feature)
+      final_output["verible_version"] = verible::GetRepositoryVersion();
+      final_output["cst_schema_version"] = "1.0";
+      final_output["export_format"] = "indexed";
+      
+      // Add ISO 8601 timestamp
+      auto now = std::chrono::system_clock::now();
+      auto time_t_val = std::chrono::system_clock::to_time_t(now);
+      std::stringstream ss;
+      ss << std::put_time(std::gmtime(&time_t_val), "%Y-%m-%dT%H:%M:%SZ");
+      final_output["timestamp"] = ss.str();
+      
+      // Add file_index and wrap CSTs under "cst"
       final_output["file_index"] = file_index_tracker.ExportAsJson();
       final_output["cst"] = json_out;
+      
+      std::cout << std::setw(2) << final_output << std::endl;
     } else {
-      // Standard mode: merge file CSTs directly into output
-      for (auto& [key, value] : json_out.items()) {
-        final_output[key] = std::move(value);
-      }
+      // v5.6.0 COMPATIBLE: Standard mode - direct file CST output (NO metadata)
+      // This maintains 100% backward compatibility with v5.6.0
+      std::cout << std::setw(2) << json_out << std::endl;
     }
-    
-    std::cout << std::setw(2) << final_output << std::endl;
   }
 
   // Print statistics if requested

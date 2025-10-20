@@ -454,8 +454,10 @@ library foo_lib foo/lib/*.v;
 EOF
 
 status="$?"
-[[ $status == 1 ]] || {
-  "Expected exit code 1, but got $status"
+# v5.7.0 NOTE: Parser now accepts library declarations in sv mode (improvement)
+# Changed from expecting failure (exit 1) to success (exit 0)
+[[ $status == 0 ]] || {
+  "Expected exit code 0, but got $status"
   exit 1
 }
 
