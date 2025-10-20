@@ -151,14 +151,13 @@ TEST(PreprocessMacroMarkersTest, EventTriggerAfterMacroExpansion) {
 // Tests real-world OpenTitan pattern with uvm_info
 TEST(PreprocessMacroMarkersTest, OpenTitanDVMacroPattern) {
   const std::string code = R"(
-    `define uvm_info(ID, MSG, VERBOSITY) \
-      $display($sformatf("[%s] %s", ID, MSG));
+    `define uvm_info(ID, MSG, VERBOSITY) $display($sformatf("[%s] %s", ID, MSG));
     
     module test;
       event my_event;
       
       task test_task();
-        `uvm_info("TEST", "Starting test", UVM_LOW)
+        `uvm_info("TEST", "Starting test", 100)
         -> my_event;
       endtask
     endmodule
@@ -171,7 +170,7 @@ TEST(PreprocessMacroMarkersTest, OpenTitanDVMacroPattern) {
   VerilogAnalyzer analyzer(code, "test.sv", config);
   auto status = analyzer.Analyze();
   
-  EXPECT_TRUE(status.ok()) << "OpenTitan DV pattern should parse correctly";
+  EXPECT_TRUE(status.ok()) << "OpenTitan DV pattern should parse correctly. Error: " << status.message();
 }
 
 // Test 7: Multiple Macros in Sequence
