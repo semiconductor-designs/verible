@@ -57,6 +57,7 @@
 #include "verible/verilog/parser/verilog-token-classifications.h"
 #include "verible/verilog/parser/verilog-token-enum.h"
 #include "verible/verilog/parser/verilog-token.h"
+#include "verible/verilog/tools/syntax/file-index-tracker.h"  // v5.7.0
 
 // Controls parser selection behavior
 enum class LanguageMode {
@@ -102,6 +103,21 @@ ABSL_FLAG(
 ABSL_FLAG(
     bool, export_json, false,
     "Uses JSON for output. Intended to be used as an input for other tools.");
+
+// v5.7.0: VeriPG enhancements - file index tracking and error recovery
+ABSL_FLAG(bool, export_indexed_json, false,
+          "v5.7.0: Export JSON with file index mapping for multi-file batch processing.\n"
+          "Includes 'file_index' mapping <indexed> placeholders to actual paths.\n"
+          "Output format: {\"file_index\": {\"0\": \"/path/file1.sv\", ...}, \"cst\": {...}}.\n"
+          "This is an alternative to --export_json with additional file tracking.\n"
+          "Mutually exclusive with --export_json.");
+
+ABSL_FLAG(bool, continue_on_error, false,
+          "v5.7.0: Continue processing remaining files even if some fail to parse.\n"
+          "Useful for batch processing large repositories (e.g., OpenTitan: 3,659 files).\n"
+          "Exit code: 1 if any errors occurred, 0 if all succeeded.\n"
+          "Works with both --export_json and --export_indexed_json.");
+
 ABSL_FLAG(bool, printtree, false, "Whether or not to print the tree");
 ABSL_FLAG(bool, printtokens, false, "Prints all lexed and filtered tokens");
 ABSL_FLAG(bool, printrawtokens, false,
@@ -556,6 +572,16 @@ int main(int argc, char **argv) {
   const auto usage =
       absl::StrCat("usage: ", argv[0], " [options] <file> [<file>...]");
   const auto args = verible::InitCommandLine(usage, &argc, &argv);
+
+  // v5.7.0: Validate mutually exclusive flags
+  if (absl::GetFlag(FLAGS_export_json) && 
+      absl::GetFlag(FLAGS_export_indexed_json)) {
+    std::cerr << "Error: --export_json and --export_indexed_json are mutually exclusive.\n"
+              << "Use --export_json for standard output (v5.6.0 compatible), or\n"
+              << "    --export_indexed_json for indexed output with file_index mapping (v5.7.0)."
+              << std::endl;
+    return 1;
+  }
 
   json json_out;
 

@@ -1,0 +1,16 @@
+FAIL: test_corpus/ibex/formal/data_ind_timing/formal_tb_frag.svh
+FAIL: test_corpus/ibex/formal/icache/formal_tb_frag.svh
+FAIL: test_corpus/ibex/dv/uvm/icache/dv/ibex_icache_core_agent/ibex_icache_core_if.sv
+FAIL: test_corpus/ibex/dv/uvm/core_ibex/riscv_dv_extension/riscv_core_setting.tpl.sv
+FAIL: test_corpus/ibex/dv/formal/check/protocol/irqs.sv
+FAIL: test_corpus/ibex/dv/formal/check/peek/compare_helper.sv
+FAIL: test_corpus/ibex/dv/formal/check/peek/mem.sv
+FAIL: test_corpus/ibex/vendor/lowrisc_ip/dv/sv/dv_lib/dv_base_env_cfg.sv
+FAIL: test_corpus/ibex/vendor/lowrisc_ip/dv/sv/mem_bkdr_util/mem_bkdr_util__flash.sv
+FAIL: test_corpus/ibex/vendor/lowrisc_ip/dv/sv/mem_bkdr_util/mem_bkdr_util__otp.sv
+FAIL: test_corpus/ibex/vendor/lowrisc_ip/dv/sv/mem_bkdr_util/mem_bkdr_util__sram.sv
+FAIL: test_corpus/ibex/vendor/lowrisc_ip/dv/sv/mem_bkdr_util/mem_bkdr_util__rom.sv
+FAIL: test_corpus/ibex/vendor/google_riscv-dv/src/isa/riscv_instr_cov.svh
+FAIL: test_corpus/ibex/vendor/google_riscv-dv/src/isa/custom/riscv_custom_instr_enum.sv
+FAIL: test_corpus/ibex/vendor/google_riscv-dv/src/riscv_instr_pkg.sv
+FAIL: test_corpus/ibex/vendor/google_riscv-dv/src/riscv_instr_cover_group.sv
