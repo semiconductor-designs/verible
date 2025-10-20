@@ -6,7 +6,7 @@ set -e
 
 # Configuration
 SYNTAX_TOOL="./bazel-bin/verible/verilog/tools/syntax/verible-verilog-syntax"
-OUTPUT_DIR="build/v560_validation"
+OUTPUT_DIR="v560_validation_output"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 
 # Colors for output
