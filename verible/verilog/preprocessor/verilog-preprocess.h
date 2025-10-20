@@ -115,6 +115,13 @@ class VerilogPreprocess {
 
     // Expand macro definition bodies, this will relexes the macro body.
     bool expand_macros = false;
+
+    // v5.6.0: Inject macro boundary markers during expansion for context preservation
+    // When enabled, inserts <MACRO_START:name> before and <MACRO_END:name> after
+    // macro expansion to help parser maintain context across macro boundaries.
+    // Only has effect when expand_macros = true.
+    bool inject_macro_markers = false;
+    
     // TODO(hzeller): Provide a map of command-line provided +define+'s
   };
 

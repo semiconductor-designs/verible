@@ -839,11 +839,14 @@ zi_zp { UpdateLocation(); return TK_zi_zp; }
 "<->" { UpdateLocation(); return TK_LOGEQUIV; }
 
   /* v5.6.0: Macro boundary markers for context preservation  
-   * Pattern: <MACRO_START:name> and <MACRO_END:name>
-   * Note: For PoC, we match a simplified pattern
+   * Patterns support both simple (<MACRO_START>) and named (<MACRO_START:name>) forms
+   * The simple form is for manual PoC testing
+   * The named form will be automatically injected by preprocessor
    */
 "<MACRO_START>"    { UpdateLocation(); return TK_MACRO_BOUNDARY_START; }
+"<MACRO_START:"[a-zA-Z_][a-zA-Z0-9_]*">" { UpdateLocation(); return TK_MACRO_BOUNDARY_START; }
 "<MACRO_END>"      { UpdateLocation(); return TK_MACRO_BOUNDARY_END; }
+"<MACRO_END:"[a-zA-Z_][a-zA-Z0-9_]*">"   { UpdateLocation(); return TK_MACRO_BOUNDARY_END; }
 "+:" { UpdateLocation(); return TK_PO_POS; }
 "-:" { UpdateLocation(); return TK_PO_NEG; }
 "<+" { UpdateLocation(); return TK_CONTRIBUTE; }
