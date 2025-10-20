@@ -551,7 +551,7 @@ static int AnalyzeOneFile(
                                       &std::cout);
     } else {
       (*json_out)["tree"] = verilog::ConvertVerilogTreeToJson(
-          *syntax_tree, analyzer->Data().Contents());
+          *syntax_tree, analyzer->Data().Contents(), file_index_id);
     }
   }
 
