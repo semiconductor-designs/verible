@@ -131,6 +131,11 @@ ABSL_FLAG(bool, expand_macros, false,
           "Default is false to preserve macros for knowledge graph building.\n"
           "Set to true if you want to see expanded macro bodies.");
 
+ABSL_FLAG(bool, inject_macro_markers, false,
+          "v5.6.0: Inject macro boundary markers for context preservation.\n"
+          "Experimental feature for improved context tracking across macro expansions.\n"
+          "Only active when expand_macros=true. Default is false.");
+
 ABSL_FLAG(std::vector<std::string>, pre_include, {},
           "List of files to include before parsing the main file.\n"
           "These files are processed first, making their macros available.\n"
@@ -641,10 +646,12 @@ int main(int argc, char **argv) {
     // expand_macros can work standalone or with include_files
     // include_files requires include_resolver (for resolving paths)
     const bool should_expand_macros = absl::GetFlag(FLAGS_expand_macros);
+    const bool should_inject_markers = absl::GetFlag(FLAGS_inject_macro_markers);
     const verilog::VerilogPreprocess::Config preprocess_config{
         .filter_branches = true,
         .include_files = enable_preprocessing && include_resolver != nullptr,
         .expand_macros = should_expand_macros,  // Controlled by --expand_macros flag (default: false)
+        .inject_macro_markers = should_inject_markers && should_expand_macros,  // v5.6.0: Only when expanding
     };
     
     // Create file_opener lambda if include resolver available
