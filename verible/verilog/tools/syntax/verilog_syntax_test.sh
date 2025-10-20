@@ -426,33 +426,7 @@ status="$?"
 }
 
 json_canonicalize_py > "$MY_EXPECT_FILE" <<EOF
-{ "-": {
-"tree": {
-  "children": [
-    {
-      "children": [
-        {
-          "children": [
-            {"start": 0, "end":  6, "tag": "module" },
-            null,
-            {"start": 7, "end":  9, "tag": "SymbolIdentifier", "text": "mm" },
-            null,null,null,null,
-            {"start": 9, "end": 10,"tag": ";" }
-          ],
-          "tag": "kModuleHeader"
-        },
-        {
-          "children": [],
-          "tag": "kModuleItemList"
-        },
-        {"start": 11, "end": 20,"tag": "endmodule"},
-        null
-      ],
-      "tag": "kModuleDeclaration"
-    }
-  ],
-  "tag": "kDescriptionList"
-}}}
+{"-":{"tree":{"children":[{"children":[{"children":[{"end":6,"location":{"end_column":7,"end_line":1,"start_column":1,"start_line":1},"start":0,"tag":"module"},null,{"end":9,"location":{"end_column":10,"end_line":1,"start_column":8,"start_line":1},"start":7,"tag":"SymbolIdentifier","text":"mm"},null,null,null,null,{"end":10,"location":{"end_column":11,"end_line":1,"start_column":10,"start_line":1},"start":9,"tag":";"}],"location":{"end_column":11,"end_line":1,"start_column":1,"start_line":1},"tag":"kModuleHeader","text":"module mm;"},{"children":[],"location":{},"tag":"kModuleItemList"},{"end":20,"location":{"end_column":10,"end_line":2,"start_column":1,"start_line":2},"start":11,"tag":"endmodule"},null],"location":{"end_column":10,"end_line":2,"start_column":1,"start_line":1},"tag":"kModuleDeclaration","text":"module mm;\nendmodule"}],"location":{"end_column":10,"end_line":2,"start_column":1,"start_line":1},"tag":"kDescriptionList","text":"module mm;\nendmodule"}}}
 EOF
 
 tr '\r\n' '\n' < $MY_OUTPUT_FILE | strip_version_metadata > "${MY_OUTPUT_FILE}.1"
