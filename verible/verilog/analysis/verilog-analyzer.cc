@@ -242,6 +242,8 @@ void VerilogAnalyzer::FilterTokensForSyntaxTree() {
 
 void VerilogAnalyzer::ContextualizeTokens() {
   LexicalContext context;
+  // v5.6.0 Week 7-8: Set disambiguation mode before token processing
+  context.SetDisambiguationMode(arrow_disambiguation_mode_);
   context.TransformVerilogSymbols(MutableData().MakeTokenStreamReferenceView());
 }
 

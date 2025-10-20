@@ -136,6 +136,11 @@ ABSL_FLAG(bool, inject_macro_markers, false,
           "Experimental feature for improved context tracking across macro expansions.\n"
           "Only active when expand_macros=true. Default is false.");
 
+ABSL_FLAG(std::string, arrow_disambiguation_mode, "macro_aware",
+          "v5.6.0 Week 7-8: Arrow operator disambiguation strategy.\n"
+          "Options: 'macro_aware' (use macro markers), 'enhanced_heuristic' (multi-token lookahead), 'both' (A/B test).\n"
+          "Default is 'macro_aware' which preserves context across macros.");
+
 ABSL_FLAG(std::vector<std::string>, pre_include, {},
           "List of files to include before parsing the main file.\n"
           "These files are processed first, making their macros available.\n"
