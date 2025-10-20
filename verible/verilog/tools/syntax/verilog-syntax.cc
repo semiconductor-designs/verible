@@ -550,8 +550,21 @@ static int AnalyzeOneFile(
       verilog::PrettyPrintVerilogTree(*syntax_tree, analyzer->Data().Contents(),
                                       &std::cout);
     } else {
-      (*json_out)["tree"] = verilog::ConvertVerilogTreeToJson(
-          *syntax_tree, analyzer->Data().Contents(), file_index_id);
+      // v5.7.0: For JSON output, distinguish complete vs partial CST
+      if (parse_ok) {
+        (*json_out)["tree"] = verilog::ConvertVerilogTreeToJson(
+            *syntax_tree, analyzer->Data().Contents(), file_index_id);
+      } else {
+        // Partial CST due to syntax errors
+        (*json_out)["partial_tree"] = verilog::ConvertVerilogTreeToJson(
+            *syntax_tree, analyzer->Data().Contents(), file_index_id);
+        (*json_out)["tree_status"] = "partial";
+      }
+    }
+  } else if (!parse_ok && syntax_tree == nullptr) {
+    // v5.7.0: No tree at all (complete parse failure)
+    if (absl::GetFlag(FLAGS_export_json)) {
+      (*json_out)["tree_status"] = "none";
     }
   }
 
