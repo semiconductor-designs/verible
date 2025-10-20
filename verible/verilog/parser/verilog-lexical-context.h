@@ -461,6 +461,9 @@ class LexicalContext {
   ContextState SaveCurrentContext() const;
   void RestoreContext(const ContextState &state);
 
+  // v5.6.0 Week 7-8: Enhanced heuristic for arrow disambiguation
+  int InterpretArrowEnhancedHeuristic() const;
+
   // v5.6.0 Week 7-8: Enhanced heuristic support
   internal::TokenHistory token_history_;
   DisambiguationMode disambiguation_mode_ = DisambiguationMode::kMacroAware;

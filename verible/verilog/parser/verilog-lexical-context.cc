@@ -474,6 +474,12 @@ void LexicalContext::AdvanceToken(TokenInfo *token) {
 
   // Maintain one token look-back.
   previous_token_ = token;
+  
+  // v5.6.0 Week 7-8: Feed token history for enhanced heuristic
+  if (disambiguation_mode_ == DisambiguationMode::kEnhancedHeuristic ||
+      disambiguation_mode_ == DisambiguationMode::kBoth) {
+    token_history_.AddToken(token);
+  }
 }
 
 void LexicalContext::UpdateState(const TokenInfo &token) {
@@ -693,8 +699,11 @@ int LexicalContext::InterpretToken(int token_enum) const {
     // '->' can be interpreted as logical implication, constraint implication,
     // or event-trigger.
     case _TK_RARROW: {
+      // v5.6.0 Week 7-8: Mode-based disambiguation
+      VLOG(1) << "InterpretToken: _TK_RARROW (mode=" 
+              << static_cast<int>(disambiguation_mode_) << ")";
+      
       // Diagnostic logging for event trigger disambiguation
-      VLOG(1) << "InterpretToken: _TK_RARROW";
       VLOG(1) << "  randomize_active=" << randomize_call_tracker_.IsActive();
       VLOG(1) << "  constraint_active=" << constraint_declaration_tracker_.IsActive();
       const bool expecting_stmt = ExpectingStatement();
@@ -726,6 +735,15 @@ int LexicalContext::InterpretToken(int token_enum) const {
         VLOG(1) << "  -> Interpreted as: TK_CONSTRAINT_IMPLIES (constraint context)";
         return constraint_declaration_tracker_.InterpretToken(token_enum);
       }
+      // v5.6.0 Week 7-8: Mode-based disambiguation dispatch
+      if (disambiguation_mode_ == DisambiguationMode::kEnhancedHeuristic) {
+        VLOG(1) << "  Using EnhancedHeuristic mode";
+        return InterpretArrowEnhancedHeuristic();
+      }
+      
+      // kMacroAware mode (default): Use context-based disambiguation
+      // This is the Week 5-6 implementation with macro boundary markers
+      
       if (expecting_stmt) {
         // e.g.
         //   task foo();
@@ -870,6 +888,59 @@ void LexicalContext::RestoreContext(const ContextState &state) {
   previous_token_ = state.previous_token;
   // Note: balance_depth is informational only, we don't restore balance_stack_
   // as it may have changed during macro expansion
+}
+
+// v5.6.0 Week 7-8: Enhanced heuristic for arrow disambiguation
+// Uses multi-token lookahead to improve accuracy
+int LexicalContext::InterpretArrowEnhancedHeuristic() const {
+  VLOG(2) << "==> EnhancedHeuristic for arrow operator";
+  
+  if (previous_token_ == nullptr) {
+    VLOG(2) << "    No previous token, default to LOGICAL_IMPLIES";
+    return TK_LOGICAL_IMPLIES;
+  }
+  
+  const int prev_enum = previous_token_->token_enum();
+  
+  // Check for statement-ending pattern: ); \n ->
+  // This is a strong indicator that -> is an event trigger
+  if (prev_enum == ')') {
+    // Look back 2 tokens to see if we had a semicolon before the )
+    const verible::TokenInfo* prev2 = token_history_.GetPreviousToken(2);
+    if (prev2 && prev2->token_enum() == ';') {
+      VLOG(2) << "    Pattern: ;) -> detected, likely event trigger";
+      return TK_TRIGGER;
+    }
+  }
+  
+  // Check for closing bracket followed by arrow
+  if (prev_enum == ']') {
+    // Array access followed by arrow is likely event trigger
+    // unless we're clearly in an expression context
+    const verible::TokenInfo* prev2 = token_history_.GetPreviousToken(2);
+    if (prev2 && prev2->token_enum() == ';') {
+      VLOG(2) << "    Pattern: ;]-> detected, likely event trigger";
+      return TK_TRIGGER;
+    }
+  }
+  
+  // If previous token is clearly part of an expression, use LOGICAL_IMPLIES
+  if (prev_enum == SymbolIdentifier || prev_enum == '=' ||
+      prev_enum == TK_LOR || prev_enum == TK_LAND ||
+      prev_enum == '(' || prev_enum == '[') {
+    VLOG(2) << "    Expression context detected, using LOGICAL_IMPLIES";
+    return TK_LOGICAL_IMPLIES;
+  }
+  
+  // In statement context (task/function body), prefer TK_TRIGGER
+  if (in_task_body_ || in_function_body_) {
+    VLOG(2) << "    Procedural context, prefer TK_TRIGGER";
+    return TK_TRIGGER;
+  }
+  
+  // Default to logical implication
+  VLOG(2) << "    Default: LOGICAL_IMPLIES";
+  return TK_LOGICAL_IMPLIES;
 }
 
 }  // namespace verilog
