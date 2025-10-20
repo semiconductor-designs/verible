@@ -137,3 +137,15 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+cc_test(
+    name = "verilog-preprocess-macro-markers_test",
+    size = "small",
+    srcs = ["verilog-preprocess-macro-markers_test.cc"],
+    deps = [
+        ":verilog-preprocess",
+        "//verible/verilog/analysis:verilog-analyzer",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
