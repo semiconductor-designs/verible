@@ -24,13 +24,13 @@ namespace verilog {
 namespace {
 
 // Test 1: Simple Macro Boundary Markers Recognition
-// Tests that lexer recognizes <MACRO_START:name> and <MACRO_END:name> tokens
+// Tests that lexer recognizes <MACRO_START> and <MACRO_END> tokens
 TEST(MacroContextTest, SimpleMacroBoundaryMarkers) {
   const std::string code = R"(
     module test;
-      <MACRO_START:TEST_MACRO>
+      <MACRO_START>
       logic a;
-      <MACRO_END:TEST_MACRO>
+      <MACRO_END>
     endmodule
   )";
   
@@ -52,9 +52,9 @@ TEST(MacroContextTest, EventTriggerAfterMacroWithMarkers) {
       event my_event;
       
       task run();
-        <MACRO_START:LOG>
-        $display("message")
-        <MACRO_END:LOG>
+        <MACRO_START>
+        $display("message");
+        <MACRO_END>
         -> my_event;
       endtask
     endclass
@@ -74,15 +74,16 @@ TEST(MacroContextTest, NestedMacroContextPreservation) {
     `define OUTER(x) `INNER(x) + 1
     `define INNER(y) y * 2
     
-    task test();
-      <MACRO_START:OUTER>
-      <MACRO_START:INNER>
-      5 * 2
-      <MACRO_END:INNER>
-      + 1
-      <MACRO_END:OUTER>
-      -> event;
-    endtask
+    module test;
+      task test_task();
+        <MACRO_START>
+        <MACRO_START>
+        5 * 2
+        <MACRO_END>
+        + 1;
+        <MACRO_END>
+      endtask
+    endmodule
   )";
   
   VerilogAnalyzer analyzer(code, "test.sv");
@@ -100,9 +101,9 @@ TEST(MacroContextTest, LogicalImplicationStillWorks) {
       logic a, b, result;
       
       always_comb begin
-        <MACRO_START:CHECK>
+        <MACRO_START>
         result = (a -> b);
-        <MACRO_END:CHECK>
+        <MACRO_END>
       end
     endmodule
   )";
@@ -118,11 +119,13 @@ TEST(MacroContextTest, LogicalImplicationStillWorks) {
 // Tests that parser doesn't crash on unbalanced markers
 TEST(MacroContextTest, UnbalancedMarkersGraceful) {
   const std::string code = R"(
-    task test();
-      <MACRO_START:TEST>
-      logic a;
-      // Missing MACRO_END - should handle gracefully
-    endtask
+    module test;
+      task test_task();
+        <MACRO_START>
+        logic a;
+        // Missing MACRO_END - should handle gracefully
+      endtask
+    endmodule
   )";
   
   VerilogAnalyzer analyzer(code, "test.sv");

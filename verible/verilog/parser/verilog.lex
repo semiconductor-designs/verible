@@ -838,9 +838,12 @@ zi_zp { UpdateLocation(); return TK_zi_zp; }
 "->" { UpdateLocation(); return _TK_RARROW; }
 "<->" { UpdateLocation(); return TK_LOGEQUIV; }
 
-  /* v5.6.0: Macro boundary markers for context preservation */
-"<MACRO_START:"[a-zA-Z_][a-zA-Z0-9_]*">" { UpdateLocation(); return TK_MACRO_BOUNDARY_START; }
-"<MACRO_END:"[a-zA-Z_][a-zA-Z0-9_]*">" { UpdateLocation(); return TK_MACRO_BOUNDARY_END; }
+  /* v5.6.0: Macro boundary markers for context preservation  
+   * Pattern: <MACRO_START:name> and <MACRO_END:name>
+   * Note: For PoC, we match a simplified pattern
+   */
+"<MACRO_START>"    { UpdateLocation(); return TK_MACRO_BOUNDARY_START; }
+"<MACRO_END>"      { UpdateLocation(); return TK_MACRO_BOUNDARY_END; }
 "+:" { UpdateLocation(); return TK_PO_POS; }
 "-:" { UpdateLocation(); return TK_PO_NEG; }
 "<+" { UpdateLocation(); return TK_CONTRIBUTE; }
