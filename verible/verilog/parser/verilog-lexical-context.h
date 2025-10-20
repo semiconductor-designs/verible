@@ -15,6 +15,7 @@
 #ifndef VERIBLE_VERILOG_PARSER_VERILOG_LEXICAL_CONTEXT_H_
 #define VERIBLE_VERILOG_PARSER_VERILOG_LEXICAL_CONTEXT_H_
 
+#include <array>
 #include <iosfwd>
 #include <stack>
 #include <vector>
@@ -204,6 +205,57 @@ class LastSemicolonStateMachine {
   // One token look-back.
   verible::TokenInfo *previous_token_ = nullptr;
 };
+
+// v5.6.0 Week 7-8: TokenHistory for enhanced heuristic with multi-token lookahead
+// Maintains a circular buffer of recent tokens for pattern matching
+class TokenHistory {
+ public:
+  static constexpr int kHistorySize = 5;
+
+  TokenHistory() : current_index_(0) {
+    history_.fill(nullptr);
+  }
+
+  // Add a token to the history buffer
+  void AddToken(const verible::TokenInfo* token) {
+    history_[current_index_] = token;
+    current_index_ = (current_index_ + 1) % kHistorySize;
+  }
+
+  // Check if previous N tokens match a specific pattern
+  // Pattern is given in reverse order (most recent first)
+  bool PreviousNTokensMatch(std::initializer_list<int> pattern) const {
+    if (pattern.size() > kHistorySize) return false;
+    
+    int check_index = (current_index_ - 1 + kHistorySize) % kHistorySize;
+    for (int expected_enum : pattern) {
+      const verible::TokenInfo* token = history_[check_index];
+      if (token == nullptr || token->token_enum() != expected_enum) {
+        return false;
+      }
+      check_index = (check_index - 1 + kHistorySize) % kHistorySize;
+    }
+    return true;
+  }
+
+  // Get the N-th previous token (1 = immediate previous, 2 = two back, etc.)
+  const verible::TokenInfo* GetPreviousToken(int n) const {
+    if (n <= 0 || n > kHistorySize) return nullptr;
+    int index = (current_index_ - n + kHistorySize) % kHistorySize;
+    return history_[index];
+  }
+
+  // Clear history
+  void Clear() {
+    history_.fill(nullptr);
+    current_index_ = 0;
+  }
+
+ private:
+  std::array<const verible::TokenInfo*, kHistorySize> history_;
+  int current_index_;
+};
+
 }  // namespace internal
    //
 // A structure for tracking context needed to disambiguate tokens.
@@ -225,12 +277,28 @@ class LastSemicolonStateMachine {
 // on certain keywords in certain states.
 class LexicalContext {
  public:
+  // v5.6.0 Week 7-8: Disambiguation modes for arrow operator
+  enum class DisambiguationMode {
+    kMacroAware,         // Use macro boundary markers (Week 5-6 implementation)
+    kEnhancedHeuristic,  // Use multi-token lookahead heuristic (Week 7-8)
+    kBoth                // Run both and compare (A/B testing)
+  };
+
   LexicalContext();
   ~LexicalContext() = default;
 
   // Not copy-able.
   LexicalContext(const LexicalContext &) = delete;
   LexicalContext &operator=(const LexicalContext &) = delete;
+
+  // v5.6.0 Week 7-8: Set disambiguation mode
+  void SetDisambiguationMode(DisambiguationMode mode) {
+    disambiguation_mode_ = mode;
+  }
+  
+  DisambiguationMode GetDisambiguationMode() const {
+    return disambiguation_mode_;
+  }
 
   // Re-writes some token enums in-place using context-sensitivity.
   // This function must re-tag tokens enumerated (_TK_*), see verilog.y and
@@ -392,6 +460,10 @@ class LexicalContext {
   // Helper methods for context save/restore
   ContextState SaveCurrentContext() const;
   void RestoreContext(const ContextState &state);
+
+  // v5.6.0 Week 7-8: Enhanced heuristic support
+  internal::TokenHistory token_history_;
+  DisambiguationMode disambiguation_mode_ = DisambiguationMode::kMacroAware;
 };
 
 }  // namespace verilog
