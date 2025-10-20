@@ -681,6 +681,10 @@ is not locally defined, so the grammar here uses only generic identifiers.
 %token PD_LIBRARY_SYNTAX_BEGIN "`____verible_verilog_library_begin____"
 %token PD_LIBRARY_SYNTAX_END "`____verible_verilog_library_end____"
 
+/* v5.6.0: Macro boundary markers for context preservation */
+%token TK_MACRO_BOUNDARY_START "<MACRO_START>"
+%token TK_MACRO_BOUNDARY_END "<MACRO_END>"
+
 /* most likely a lexical error */
 %token TK_OTHER
 // LINT.ThenChange(../formatting/verilog_token.cc)
