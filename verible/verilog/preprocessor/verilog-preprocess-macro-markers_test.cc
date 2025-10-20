@@ -28,7 +28,7 @@ namespace {
 // Tests that inject_macro_markers config flag enables/disables markers
 TEST(PreprocessMacroMarkersTest, ConfigFlagControlsMarkerInjection) {
   const std::string code = R"(
-    `define LOG(msg) $display(msg)
+    `define LOG(msg) $display(msg);
     module test;
       initial begin
         `LOG("Hello")
@@ -152,7 +152,7 @@ TEST(PreprocessMacroMarkersTest, EventTriggerAfterMacroExpansion) {
 TEST(PreprocessMacroMarkersTest, OpenTitanDVMacroPattern) {
   const std::string code = R"(
     `define uvm_info(ID, MSG, VERBOSITY) \
-      $display($sformatf("[%s] %s", ID, MSG))
+      $display($sformatf("[%s] %s", ID, MSG));
     
     module test;
       event my_event;
