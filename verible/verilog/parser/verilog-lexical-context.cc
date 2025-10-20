@@ -648,6 +648,48 @@ int LexicalContext::InterpretToken(int token_enum) const {
   // that must be transformed into a disambiguated enumeration (TK_*).
   // All other tokens pass through unmodified.
   switch (token_enum) {
+    // v5.6.0: Handle macro boundary markers for context preservation
+    case TK_MACRO_BOUNDARY_START: {
+      VLOG(2) << "==> MACRO_START (depth " << macro_depth_
+              << " → " << (macro_depth_ + 1) << ")";
+      
+      // Save context before entering macro (non-const operation)
+      // Note: This violates const-correctness but is necessary for context tracking
+      // We cast away const here - this is a known limitation that will be refactored
+      auto *mutable_this = const_cast<LexicalContext *>(this);
+      ContextState state = SaveCurrentContext();
+      mutable_this->saved_context_stack_.push(state);
+      mutable_this->macro_depth_++;
+      
+      // Log saved state
+      VLOG(2) << "    Saved: task=" << state.in_task_body
+              << " function=" << state.in_function_body
+              << " expecting=" << state.expecting_statement;
+      
+      return token_enum;  // Pass through
+    }
+    
+    case TK_MACRO_BOUNDARY_END: {
+      VLOG(2) << "==> MACRO_END (depth " << macro_depth_
+              << " → " << (macro_depth_ - 1) << ")";
+      
+      // Restore context after exiting macro (non-const operation)
+      auto *mutable_this = const_cast<LexicalContext *>(this);
+      if (!saved_context_stack_.empty()) {
+        ContextState state = saved_context_stack_.top();
+        mutable_this->saved_context_stack_.pop();
+        mutable_this->RestoreContext(state);
+        
+        VLOG(2) << "    Restored: task=" << in_task_body_
+                << " function=" << in_function_body_;
+      } else {
+        LOG(WARNING) << "Context stack underflow at MACRO_END";
+      }
+      
+      mutable_this->macro_depth_--;
+      return token_enum;  // Pass through
+    }
+
     // '->' can be interpreted as logical implication, constraint implication,
     // or event-trigger.
     case _TK_RARROW: {
@@ -807,6 +849,27 @@ WithReason<bool> LexicalContext::ExpectingBodyItemStart() const {
     return {true, "seen a delay value, expecting another statement"};
   }
   return {false, "all other cases (default)"};
+}
+
+// v5.6.0: Macro-aware context tracking helpers
+LexicalContext::ContextState LexicalContext::SaveCurrentContext() const {
+  ContextState state;
+  state.expecting_statement = ExpectingStatement();
+  state.in_task_body = in_task_body_;
+  state.in_function_body = in_function_body_;
+  state.in_initial_always_final_construct = in_initial_always_final_construct_;
+  state.balance_depth = static_cast<int>(balance_stack_.size());
+  state.previous_token = previous_token_;
+  return state;
+}
+
+void LexicalContext::RestoreContext(const ContextState &state) {
+  in_task_body_ = state.in_task_body;
+  in_function_body_ = state.in_function_body;
+  in_initial_always_final_construct_ = state.in_initial_always_final_construct;
+  previous_token_ = state.previous_token;
+  // Note: balance_depth is informational only, we don't restore balance_stack_
+  // as it may have changed during macro expansion
 }
 
 }  // namespace verilog

@@ -363,6 +363,35 @@ class LexicalContext {
 
   // Tracks open-close paired tokens like parentheses and brackets and braces.
   std::vector<const verible::TokenInfo *> balance_stack_;
+
+  // v5.6.0: Macro-aware context tracking
+  // Tracks macro nesting depth for context preservation
+  int macro_depth_ = 0;
+
+  // Context state for save/restore across macro boundaries
+  struct ContextState {
+    bool expecting_statement;
+    bool in_task_body;
+    bool in_function_body;
+    bool in_initial_always_final_construct;
+    int balance_depth;
+    const verible::TokenInfo *previous_token;
+
+    ContextState()
+        : expecting_statement(false),
+          in_task_body(false),
+          in_function_body(false),
+          in_initial_always_final_construct(false),
+          balance_depth(0),
+          previous_token(nullptr) {}
+  };
+
+  // Stack to save context when entering macro expansions
+  std::stack<ContextState> saved_context_stack_;
+
+  // Helper methods for context save/restore
+  ContextState SaveCurrentContext() const;
+  void RestoreContext(const ContextState &state);
 };
 
 }  // namespace verilog
