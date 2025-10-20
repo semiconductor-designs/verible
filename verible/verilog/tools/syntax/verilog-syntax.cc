@@ -434,6 +434,7 @@ static int AnalyzeOneFile(
     VerilogAnalyzer::FileOpener file_opener,
     const verilog::VerilogPreprocessData* preloaded_data,
     verilog::LexicalContext::DisambiguationMode arrow_mode,
+    const std::string& file_index_id,  // v5.7.0: For indexed JSON mode
     json *json_out) {
   int exit_status = 0;
   
@@ -585,6 +586,11 @@ int main(int argc, char **argv) {
 
   json json_out;
 
+  // v5.7.0: Initialize file index tracker for indexed JSON mode
+  verilog::FileIndexTracker file_index_tracker;
+  const bool using_indexed_json = absl::GetFlag(FLAGS_export_indexed_json);
+  const bool continue_on_error = absl::GetFlag(FLAGS_continue_on_error);
+
   // Create include file resolver if paths provided
   const auto include_paths = absl::GetFlag(FLAGS_include_paths);
   const bool enable_preprocessing = absl::GetFlag(FLAGS_preprocess);
@@ -662,9 +668,17 @@ int main(int argc, char **argv) {
   }
 
   int exit_status = 0;
+  
   // All positional arguments are file names.  Exclude program name.
   for (std::string_view filename :
        verible::make_range(args.begin() + 1, args.end())) {
+    // v5.7.0: Track file index for indexed JSON mode
+    std::string file_index_id;
+    if (using_indexed_json) {
+      file_index_id = file_index_tracker.AddFile(filename);
+    }
+    
+
     auto content_status = verible::file::GetContentAsMemBlock(filename);
     if (!content_status.status().ok()) {
       std::cerr << content_status.status().message() << std::endl;
@@ -743,16 +757,45 @@ int main(int argc, char **argv) {
     
     json file_json;
     int file_status =
-        AnalyzeOneFile(content, filename, preprocess_config, file_opener, final_preload_data, arrow_mode, &file_json);
+        AnalyzeOneFile(content, filename, preprocess_config, file_opener, final_preload_data, arrow_mode, file_index_id, &file_json);
     exit_status = std::max(exit_status, file_status);
-    if (absl::GetFlag(FLAGS_export_json)) {
+    
+    // v5.7.0: Store file JSON for both export modes
+    if (absl::GetFlag(FLAGS_export_json) || using_indexed_json) {
       json_out[std::string{filename.begin(), filename.end()}] =
           std::move(file_json);
     }
   }
 
-  if (absl::GetFlag(FLAGS_export_json)) {
-    std::cout << std::setw(2) << json_out << std::endl;
+  // v5.7.0: Add version metadata and restructure for indexed mode
+  if (absl::GetFlag(FLAGS_export_json) || using_indexed_json) {
+    // Create final output with version metadata
+    json final_output;
+    
+    // Add version metadata at top level
+    final_output["verible_version"] = verible::GetRepositoryVersion();
+    final_output["cst_schema_version"] = "1.0";
+    final_output["export_format"] = using_indexed_json ? "indexed" : "standard";
+    
+    // Add ISO 8601 timestamp
+    auto now = std::chrono::system_clock::now();
+    auto time_t_val = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::gmtime(&time_t_val), "%Y-%m-%dT%H:%M:%SZ");
+    final_output["timestamp"] = ss.str();
+    
+    if (using_indexed_json) {
+      // Indexed mode: add file_index and wrap CSTs under "cst"
+      final_output["file_index"] = file_index_tracker.ExportAsJson();
+      final_output["cst"] = json_out;
+    } else {
+      // Standard mode: merge file CSTs directly into output
+      for (auto& [key, value] : json_out.items()) {
+        final_output[key] = std::move(value);
+      }
+    }
+    
+    std::cout << std::setw(2) << final_output << std::endl;
   }
 
   // Print statistics if requested
