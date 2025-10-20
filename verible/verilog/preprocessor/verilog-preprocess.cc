@@ -258,6 +258,26 @@ std::unique_ptr<VerilogPreprocessError> VerilogPreprocess::ParseMacroDefinition(
   return nullptr;
 }
 
+// v5.6.0: Creates a macro boundary marker token
+// Format: <MACRO_START:name> or <MACRO_END:name>
+verible::TokenInfo VerilogPreprocess::CreateMacroMarkerToken(
+    bool is_start, std::string_view macro_name) {
+  // Build marker text: <MACRO_START:name> or <MACRO_END:name>
+  const std::string marker_text = absl::StrCat(
+      is_start ? "<MACRO_START:" : "<MACRO_END:",
+      macro_name,
+      ">");
+  
+  // Create token with appropriate enum
+  // Note: We use a static string storage to keep the string_view valid
+  // This is a simplified approach for PoC; production may need better memory management
+  static std::vector<std::string> marker_storage;
+  marker_storage.push_back(marker_text);
+  
+  const int token_enum = is_start ? TK_MACRO_BOUNDARY_START : TK_MACRO_BOUNDARY_END;
+  return verible::TokenInfo(token_enum, marker_storage.back());
+}
+
 // Parses a callable macro actual parameters, and saves it into a MacroCall
 absl::Status VerilogPreprocess::ConsumeAndParseMacroCall(
     TokenStreamView::const_iterator iter,
@@ -372,7 +392,20 @@ absl::Status VerilogPreprocess::HandleMacroIdentifier(
     verible::MacroCall macro_call;
     RETURN_IF_ERROR(
         ConsumeAndParseMacroCall(iter, generator, &macro_call, *found));
+    
+    // v5.6.0: Inject start marker if enabled
+    if (config_.inject_macro_markers) {
+      preprocess_data_.lexed_macros_backup.back().push_back(
+          CreateMacroMarkerToken(true, macro_name));
+    }
+    
     RETURN_IF_ERROR(ExpandMacro(macro_call, found));
+    
+    // v5.6.0: Inject end marker if enabled
+    if (config_.inject_macro_markers) {
+      preprocess_data_.lexed_macros_backup.back().push_back(
+          CreateMacroMarkerToken(false, macro_name));
+    }
   }
   auto &lexed = preprocess_data_.lexed_macros_backup.back();
   if (!forward) return absl::OkStatus();

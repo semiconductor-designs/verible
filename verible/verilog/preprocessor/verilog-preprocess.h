@@ -194,6 +194,10 @@ class VerilogPreprocess {
       TokenStreamView::const_iterator, const StreamIteratorGenerator &,
       verible::MacroCall *, const verible::MacroDefinition &);
 
+  // v5.6.0: Helper to create macro boundary marker tokens
+  static verible::TokenInfo CreateMacroMarkerToken(
+      bool is_start, std::string_view macro_name);
+
   // The following functions return nullptr when there is no error:
   absl::Status ConsumeMacroDefinition(const StreamIteratorGenerator &,
                                       TokenStreamView *);
