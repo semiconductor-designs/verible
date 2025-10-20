@@ -75,12 +75,14 @@ TEST(MacroContextTest, NestedMacroContextPreservation) {
     `define INNER(y) y * 2
     
     module test;
+      event e;
       task test_task();
         <MACRO_START>
+        $display("outer");
         <MACRO_START>
-        5 * 2
+        $display("inner");
         <MACRO_END>
-        + 1;
+        -> e;
         <MACRO_END>
       endtask
     endmodule
