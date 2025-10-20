@@ -741,6 +741,45 @@ int LexicalContext::InterpretToken(int token_enum) const {
         return InterpretArrowEnhancedHeuristic();
       }
       
+      if (disambiguation_mode_ == DisambiguationMode::kBoth) {
+        // A/B testing: Run both modes and compare results
+        VLOG(1) << "  A/B Testing: Running both disambiguation modes";
+        
+        // Run enhanced heuristic
+        int heuristic_result = InterpretArrowEnhancedHeuristic();
+        
+        // Run macro-aware logic (inline for comparison)
+        int macro_aware_result;
+        if (expecting_stmt) {
+          macro_aware_result = TK_TRIGGER;
+        } else if ((in_task_body_ || in_function_body_) && previous_token_ != nullptr) {
+          const int prev_enum = previous_token_->token_enum();
+          if (prev_enum == SymbolIdentifier || prev_enum == '=' ||
+              prev_enum == TK_LOR || prev_enum == TK_LAND ||
+              prev_enum == '(' || prev_enum == '[') {
+            macro_aware_result = TK_LOGICAL_IMPLIES;
+          } else {
+            macro_aware_result = TK_TRIGGER;
+          }
+        } else {
+          macro_aware_result = TK_LOGICAL_IMPLIES;
+        }
+        
+        // Compare and log
+        if (heuristic_result != macro_aware_result) {
+          LOG(INFO) << "A/B MISMATCH: Enhanced=" 
+                    << (heuristic_result == TK_TRIGGER ? "TRIGGER" : "IMPLIES")
+                    << " MacroAware=" 
+                    << (macro_aware_result == TK_TRIGGER ? "TRIGGER" : "IMPLIES")
+                    << " context: task=" << in_task_body_
+                    << " func=" << in_function_body_
+                    << " expecting=" << expecting_stmt;
+        }
+        
+        // For A/B testing, prefer macro-aware result (it's the baseline)
+        return macro_aware_result;
+      }
+      
       // kMacroAware mode (default): Use context-based disambiguation
       // This is the Week 5-6 implementation with macro boundary markers
       
