@@ -1277,6 +1277,11 @@ class_item
   | preprocessor_action
     { $$ = std::move($1); }
     /* error-recovery rules */
+  /* v5.6.0: Macro boundary markers for context preservation */
+  | TK_MACRO_BOUNDARY_START
+    { $$ = std::move($1); }
+  | TK_MACRO_BOUNDARY_END
+    { $$ = std::move($1); }
   | error ';'
     { yyerrok; $$ = Recover(); }
   | error TK_endfunction
@@ -3100,6 +3105,10 @@ module_item_directive
   : DR_protect
     { $$ = std::move($1); }
   | DR_endprotect
+    { $$ = std::move($1); }
+  | TK_MACRO_BOUNDARY_START
+    { $$ = std::move($1); }
+  | TK_MACRO_BOUNDARY_END
     { $$ = std::move($1); }
   ;
 port_direction
@@ -7211,6 +7220,11 @@ statement_item
   | preprocessor_balanced_statements
     { $$ = std::move($1); }
   | preprocessor_action
+    { $$ = std::move($1); }
+  /* v5.6.0: Macro boundary markers for context preservation */
+  | TK_MACRO_BOUNDARY_START
+    { $$ = std::move($1); }
+  | TK_MACRO_BOUNDARY_END
     { $$ = std::move($1); }
   ;
 
