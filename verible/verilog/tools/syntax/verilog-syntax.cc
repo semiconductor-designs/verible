@@ -758,7 +758,32 @@ int main(int argc, char **argv) {
     json file_json;
     int file_status =
         AnalyzeOneFile(content, filename, preprocess_config, file_opener, final_preload_data, arrow_mode, file_index_id, &file_json);
-    exit_status = std::max(exit_status, file_status);
+    
+    // v5.7.0: Handle errors based on continue_on_error flag
+    if (file_status != 0) {
+      // File failed to parse
+      if (continue_on_error) {
+        // Log error but continue processing remaining files
+        std::cerr << "Error processing " << filename 
+                  << " (continuing with remaining files)" << std::endl;
+        exit_status = 1;  // Remember there was an error
+        
+        // Add status marker to JSON
+        file_json["status"] = "failed";
+      } else {
+        // Stop immediately (v5.6.0 behavior - backward compatible)
+        exit_status = file_status;
+        // For non-JSON modes, exit early
+        if (!absl::GetFlag(FLAGS_export_json) && !using_indexed_json) {
+          return exit_status;
+        }
+        file_json["status"] = "failed";
+      }
+    } else {
+      // File parsed successfully
+      file_json["status"] = "success";
+      exit_status = std::max(exit_status, file_status);
+    }
     
     // v5.7.0: Store file JSON for both export modes
     if (absl::GetFlag(FLAGS_export_json) || using_indexed_json) {
